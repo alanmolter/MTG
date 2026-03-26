@@ -38,6 +38,7 @@ export interface CardData {
   colors: string | null; // ex: "WU", "R", "BG"
   rarity: string | null;
   imageUrl: string | null;
+  isArena?: number | null;
 }
 
 export interface ArchetypeTemplate {
@@ -57,6 +58,7 @@ export interface GenerateByArchetypeOptions {
   tribes?: string[];
   cardTypes?: string[];
   useScoring?: boolean;
+  onlyArena?: boolean;
 }
 
 export interface GeneratedDeckResult {
@@ -167,8 +169,7 @@ export function classifyCard(card: CardData): string[] {
   if (type.includes("artifact")) tags.push("artifact");
   if (type.includes("planeswalker")) tags.push("planeswalker");
 
-  // Funções
-  if (text.includes("destroy") || text.includes("exile")) tags.push("removal");
+  if (text.includes("destroy") || text.includes("exile") || (text.includes("deals") && text.includes("damage"))) tags.push("removal");
   if (text.includes("draw a card") || text.includes("draw cards") || text.includes("draw two") || text.includes("draw three")) tags.push("draw");
   if (text.includes("counter target")) tags.push("counter");
   if (text.includes("add {") || text.includes("search your library for a basic land")) tags.push("ramp");
@@ -206,9 +207,12 @@ export function filterCards(
     tribes?: string[];
     cardTypes?: string[];
     excludeLands?: boolean;
+    onlyArena?: boolean;
   } = {}
 ): CardData[] {
   return cards.filter((card) => {
+    if (options.onlyArena && !card.isArena) return false;
+
     const type = (card.type || "").toLowerCase();
     const cardColors = card.colors || "";
 
@@ -293,6 +297,7 @@ export function generateDeckByArchetype(
     tribes: options.tribes,
     cardTypes: options.cardTypes,
     excludeLands: false,
+    onlyArena: options.onlyArena,
   });
 
   if (filteredPool.length < 20) {
@@ -328,13 +333,17 @@ export function generateDeckByArchetype(
   const landsToAdd = allLands.length > 0 ? shuffleAndPick(allLands, targetLands) : generateBasicLands(options.colors, targetLands);
 
   for (const land of landsToAdd) {
+    const isBasic = (land.type || "").toLowerCase().includes("basic");
     const existing = deck.find((d) => d.name === land.name);
     if (existing) {
-      if (existing.quantity < maxCopies) existing.quantity++;
+      if (isBasic || existing.quantity < maxCopies) {
+        existing.quantity++;
+        totalCards++;
+      }
     } else {
       deck.push({ ...land, quantity: 1, role: "land" });
+      totalCards++;
     }
-    totalCards++;
   }
 
   if (landsToAdd.length < targetLands) {
@@ -393,10 +402,11 @@ export function generateDeckByArchetype(
       const existing = deck.find((d) => d.name === land.name);
       if (existing) {
         existing.quantity += 1;
+        totalCards++;
       } else {
         deck.push({ ...land, quantity: 1, role: "land" });
+        totalCards++;
       }
-      totalCards++;
     }
   }
 

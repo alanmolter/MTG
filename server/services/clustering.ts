@@ -2,6 +2,7 @@ import { getDb } from "../db";
 import { competitiveDecks, competitiveDeckCards, CompetitiveDeck, CompetitiveDeckCard, cards } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { getCardEmbedding } from "./embeddings";
+import { kmeans } from "ml-kmeans";
 
 export interface DeckVector {
   deckId: number;
@@ -290,46 +291,9 @@ function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { ar
   };
 }
 
-/**
- * Inicializa centróides usando K-means++ (melhor inicialização que aleatória)
- */
-function initializeCentroidsKMeansPlusPlus(vectors: DeckVector[], k: number): number[][] {
-  const centroids: number[][] = [];
-  
-  // Escolher primeiro centróide aleatoriamente
-  const firstIdx = Math.floor(Math.random() * vectors.length);
-  centroids.push([...vectors[firstIdx].vector]);
-
-  // Escolher os próximos k-1 centróides
-  for (let i = 1; i < k; i++) {
-    let maxDistance = 0;
-    let nextCentroidIdx = 0;
-
-    // Para cada ponto, calcular a distância para o centróide mais próximo
-    vectors.forEach((vector, idx) => {
-      let minDistToCentroid = Infinity;
-
-      centroids.forEach(centroid => {
-        const dist = euclideanDistance(vector.vector, centroid);
-        minDistToCentroid = Math.min(minDistToCentroid, dist);
-      });
-
-      // Probabilidade de escolher este ponto é proporcional à sua distância
-      const probability = minDistToCentroid * minDistToCentroid;
-      if (probability > maxDistance) {
-        maxDistance = probability;
-        nextCentroidIdx = idx;
-      }
-    });
-
-    centroids.push([...vectors[nextCentroidIdx].vector]);
-  }
-
-  return centroids;
-}
 
 /**
- * Implementação do algoritmo K-Means com K-means++ (inicialização melhorada)
+ * Implementação do algoritmo K-Means usando a biblioteca 'ml-kmeans' (real library)
  */
 export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: number = 150): { clusters: ClusterResult[]; stats: ClusteringStats } {
   if (vectors.length === 0 || k <= 0) {
@@ -338,64 +302,22 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
 
   // Limite máximo de K
   const adjustedK = Math.min(k, vectors.length);
+  
+  // Extrair apenas os dados numéricos para a biblioteca
+  const data = vectors.map(v => v.vector);
 
-  // Inicializar centróides usando K-means++
-  let centroids = initializeCentroidsKMeansPlusPlus(vectors, adjustedK);
+  console.log(`[KMeans] Running ml-kmeans with k=${adjustedK}, max_iterations=${maxIterations}`);
 
-  let hasConverged = false;
-  let iteration = 0;
-  let assignments: number[] = [];
+  // Executar a biblioteca real
+  const result = kmeans(data, adjustedK, {
+    maxIterations,
+    initialization: 'kmeans++',
+  });
 
-  console.log(`[KMeans] Starting K-Means++ with k=${adjustedK}, max_iterations=${maxIterations}`);
+  const assignments = result.clusters;
+  const centroids = result.centroids;
 
-  while (!hasConverged && iteration < maxIterations) {
-    // Atribuir vetores aos clusters mais próximos
-    const newAssignments: number[] = [];
-    vectors.forEach(vector => {
-      let minDistance = Infinity;
-      let closestCluster = 0;
-
-      centroids.forEach((centroid, idx) => {
-        const distance = euclideanDistance(vector.vector, centroid);
-        if (distance < minDistance) {
-          minDistance = distance;
-          closestCluster = idx;
-        }
-      });
-
-      newAssignments.push(closestCluster);
-    });
-
-    // Verificar convergência
-    hasConverged = assignments.length > 0 && 
-                   assignments.every((val, idx) => val === newAssignments[idx]);
-    
-    assignments = newAssignments;
-
-    // Recalcular centróides
-    const newCentroids: number[][] = [];
-    for (let i = 0; i < adjustedK; i++) {
-      const clusterVectors = vectors
-        .filter((_, idx) => assignments[idx] === i)
-        .map(v => v.vector);
-
-      if (clusterVectors.length > 0) {
-        newCentroids.push(calculateCentroid(clusterVectors));
-      } else {
-        // Se cluster ficar vazio, manter centróide anterior
-        newCentroids.push([...centroids[i]]);
-      }
-    }
-
-    centroids = newCentroids;
-    iteration++;
-
-    if (iteration % 10 === 0) {
-      console.log(`[KMeans] Iteration ${iteration}...`);
-    }
-  }
-
-  console.log(`[KMeans] Converged in ${iteration} iterations`);
+  console.log(`[KMeans] Clustering complete! Converged: ${result.converged}. Iterations: ${result.iterations}`);
 
   // Construir clusters com metadados
   const clusterMap = new Map<number, number[]>();

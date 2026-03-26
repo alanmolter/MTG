@@ -45,7 +45,7 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
   const [jobRow] = await db
     .insert(trainingJobs)
     .values({ status: "running", jobType: "embeddings" })
-    .$returningId();
+    .returning({ id: trainingJobs.id });
   const jobId = jobRow.id;
 
   try {
@@ -148,7 +148,8 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
           vectorJson,
           modelVersion: MODEL_VERSION,
         })
-        .onDuplicateKeyUpdate({
+        .onConflictDoUpdate({
+          target: embeddingsCache.cardId,
           set: { vectorJson, modelVersion: MODEL_VERSION },
         });
 
@@ -197,7 +198,8 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
             weight,
             coOccurrenceRate: count,
           })
-          .onDuplicateKeyUpdate({
+          .onConflictDoUpdate({
+            target: [cardSynergies.card1Id, cardSynergies.card2Id],
             set: { weight, coOccurrenceRate: count },
           });
 

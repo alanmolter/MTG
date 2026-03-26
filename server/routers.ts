@@ -122,6 +122,7 @@ export const appRouter = router({
           tribes: z.array(z.string()).optional(),
           cardTypes: z.array(z.string()).optional(),
           useScoring: z.boolean().optional(),
+          onlyArena: z.boolean().optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -133,6 +134,7 @@ export const appRouter = router({
         // Carregar pool de cartas do banco
         const cardPool = await searchCards({
           colors: input.colors?.join("") || undefined,
+          isArena: input.onlyArena,
         });
 
         if (cardPool.length === 0) {
@@ -156,6 +158,7 @@ export const appRouter = router({
           tribes: input.tribes,
           cardTypes: input.cardTypes,
           useScoring: input.useScoring ?? true,
+          onlyArena: input.onlyArena,
         });
 
         // Avaliar com Game Feature Engine
@@ -392,6 +395,22 @@ export const appRouter = router({
           throw new Error("Share not found");
         }
         return generateShareUrls(shareData);
+      }),
+  }),
+
+  meta: router({
+    analyze: publicProcedure
+      .input(z.object({ format: z.string() }))
+      .mutation(async ({ input }) => {
+        const { performMetaAnalysis } = await import("./services/metaAnalysis");
+        return await performMetaAnalysis(input.format);
+      }),
+
+    getStats: publicProcedure
+      .input(z.object({ format: z.string() }))
+      .query(async ({ input }) => {
+        const { getMetaStats } = await import("./services/metaAnalysis");
+        return await getMetaStats(input.format);
       }),
   }),
 });

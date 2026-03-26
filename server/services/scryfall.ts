@@ -17,6 +17,7 @@ interface ScryfallCard {
   power?: string;
   toughness?: string;
   oracle_text?: string;
+  games?: string[];
 }
 
 export async function searchScryfallCards(query: string): Promise<ScryfallCard[]> {
@@ -61,6 +62,7 @@ export async function syncCardFromScryfall(scryfallCard: ScryfallCard): Promise<
     power: scryfallCard.power || null,
     toughness: scryfallCard.toughness || null,
     text: scryfallCard.oracle_text || null,
+    isArena: scryfallCard.games?.includes("arena") ? 1 : 0,
   };
 
   try {
@@ -103,33 +105,50 @@ export async function searchCards(filters: {
   colors?: string;
   cmc?: number;
   rarity?: string;
+  isArena?: boolean;
 }): Promise<Card[]> {
   const db = await getDb();
   if (!db) return [];
 
-  let baseQuery = db.select().from(cards);
-  const results = await baseQuery.limit(100);
+  const { and, ilike, eq, or } = await import("drizzle-orm");
+
+  const conditions = [];
+
+  if (filters.isArena) {
+    conditions.push(eq(cards.isArena, 1));
+  }
+
+  if (filters.name) {
+    conditions.push(ilike(cards.name, `%${filters.name}%`));
+  }
+  if (filters.type) {
+    conditions.push(ilike(cards.type, `%${filters.type}%`));
+  }
+  if (filters.colors) {
+    // Se várias cores forem passadas, buscar qualquer uma delas (simplificado)
+    const colorConditions = filters.colors
+      .split("")
+      .map((c) => ilike(cards.colors, `%${c}%`));
+    if (colorConditions.length > 0) {
+      conditions.push(or(...colorConditions));
+    }
+  }
+  if (filters.cmc !== undefined) {
+    conditions.push(eq(cards.cmc, filters.cmc));
+  }
+  if (filters.rarity) {
+    conditions.push(eq(cards.rarity, filters.rarity));
+  }
+
+  const query = db.select().from(cards);
   
-  // Client-side filtering for now (can be optimized with raw SQL later)
-  return results.filter((card) => {
-    if (filters.name && !card.name.toLowerCase().includes(filters.name.toLowerCase())) {
-      return false;
-    }
-    if (filters.type && card.type && !card.type.toLowerCase().includes(filters.type.toLowerCase())) {
-      return false;
-    }
-    if (filters.colors && card.colors) {
-      const hasColor = filters.colors.split("").some((color) => card.colors?.includes(color));
-      if (!hasColor) return false;
-    }
-    if (filters.cmc !== undefined && card.cmc !== filters.cmc) {
-      return false;
-    }
-    if (filters.rarity && card.rarity !== filters.rarity) {
-      return false;
-    }
-    return true;
-  });
+  if (conditions.length > 0) {
+    query.where(and(...conditions));
+  }
+
+  // Removemos o limite de 200 para o gerador de arquétipo ter mais variedade
+  // Porém limitamos em 2000 para não quebrar a memória caso não haja filtros
+  return await query.limit(2000);
 }
 
 export async function getCardById(cardId: number): Promise<Card | null> {

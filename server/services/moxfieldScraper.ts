@@ -106,6 +106,7 @@ export async function fetchMoxfieldDecks(
  * Busca detalhes de um deck específico do Moxfield
  */
 export async function fetchMoxfieldDeckDetail(publicId: string): Promise<MoxfieldDeckDetail | null> {
+  if (publicId.startsWith("fallback")) return null;
   try {
     const url = `${MOXFIELD_API}/decks/all/${publicId}`;
     const response = await fetch(url, {
@@ -189,7 +190,7 @@ export async function importMoxfieldDecks(
         rawJson: detail ? JSON.stringify(detail).substring(0, 65000) : null,
       };
 
-      const [insertedDeck] = await db.insert(competitiveDecks).values(deckInsert).$returningId();
+      const [insertedDeck] = await db.insert(competitiveDecks).values(deckInsert).returning({ id: competitiveDecks.id });
       const deckId = insertedDeck.id;
 
       // Salvar cartas do deck
@@ -206,7 +207,10 @@ export async function importMoxfieldDecks(
           await db
             .insert(competitiveDeckCards)
             .values(cardInsert)
-            .onDuplicateKeyUpdate({ set: { quantity: entry.quantity } });
+            .onConflictDoUpdate({ 
+              target: [competitiveDeckCards.deckId, competitiveDeckCards.cardName, competitiveDeckCards.section],
+              set: { quantity: entry.quantity } 
+            });
 
           cardCount++;
         } catch (cardError) {

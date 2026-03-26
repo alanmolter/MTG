@@ -61,21 +61,21 @@
 
 ## Bugs e Melhorias Futuras
 - [x] Integração com dados reais de Scryfall (seed inicial)
-- [ ] Implementar clustering KMeans real
-- [ ] Otimizar busca de cartas com índices de banco de dados
-- [ ] Adicionar visualização de grafos Cytoscape
-- [ ] Integrar APIs de torneios (MTGTop8, MTGGoldfish)
-- [ ] Implementar compartilhamento de decks
-- [ ] Adicionar análise de meta por formato
+- [x] Implementar clustering KMeans real
+- [x] Otimizar busca de cartas com índices de banco de dados
+- [x] Adicionar visualização de grafos Cytoscape
+- [x] Integrar APIs de torneios (MTGTop8, MTGGoldfish)
+- [x] Implementar compartilhamento de decks
+- [x] Adicionar análise de meta por formato
 
 
 ## Fase 4: Integração com Dados Reais (Nova)
 
 ### Backend
 - [x] Criar job de sincronização com Scryfall API (busca por formato/cores)
-- [ ] Implementar importador de decks reais (Moxfield/MTGGoldfish)
-- [ ] Treinar embeddings automaticamente com dados reais
-- [ ] Atualizar grafo de sinergia com dados competitivos
+- [x] Implementar importador de decks reais (Moxfield/MTGGoldfish)
+- [x] Treinar embeddings automaticamente com dados reais
+- [x] Atualizar grafo de sinergia com dados competitivos
 - [x] Criar endpoint de sincronização manual
 
 ### Frontend
@@ -85,8 +85,8 @@
 
 ### Testes
 - [x] Testes de sincronização com Scryfall
-- [ ] Testes de importação de decks
-- [ ] Testes de treino de embeddings
+- [x] Testes de importação de decks
+- [x] Testes de treino de embeddings
 
 ## Fase 5: Pipeline Moxfield + Embeddings + Geração (Nova)
 
@@ -135,23 +135,47 @@
 ## Fase 7: Gerador por Arquétipo com Filtros Avançados
 
 ### Backend
-- [ ] archetypeGenerator.ts: templates ARCHETYPES (aggro/control/combo/midrange/ramp/burn/tempo)
-- [ ] Classificador de cartas por função (classify_card com tags)
-- [ ] Filtro avançado por cor, tribo e tipo (filter_cards)
-- [ ] Score por arquétipo (score_card com prioridades + curva + CMC)
-- [ ] Gerador principal: lands → creatures → spells por slot
-- [ ] Suporte a formatos (standard/historic/commander/legacy/modern)
-- [ ] Endpoint tRPC generator.generateByArchetype com parâmetros completos
+- [x] archetypeGenerator.ts: templates ARCHETYPES (aggro/control/combo/midrange/ramp/burn/tempo)
+- [x] Classificador de cartas por função (classify_card com tags)
+- [x] Filtro avançado por cor, tribo e tipo (filter_cards)
+- [x] Score por arquétipo (score_card com prioridades + curva + CMC)
+- [x] Gerador principal: lands → creatures → spells por slot
+- [x] Suporte a formatos (standard/historic/commander/legacy/modern/pioneer)
+- [x] Endpoint tRPC generator.generateByArchetype com parâmetros completos
 
 ### Frontend
-- [ ] Filtros de cor (W/U/B/R/G com ícones de mana)
-- [ ] Filtro de tribo (Elf, Goblin, Zombie, Human, Dragon, etc.)
-- [ ] Filtro de tipo (creature, instant, sorcery, enchantment, artifact)
-- [ ] Seletor de formato atualizado (standard/historic/commander/legacy/modern)
-- [ ] Preview do template do arquétipo (slots esperados: lands/creatures/spells)
-- [ ] Integração com métricas da Game Feature Engine
+- [x] Filtros de cor (W/U/B/R/G com ícones de mana)
+- [x] Filtro de tribo (Elf, Goblin, Zombie, Human, Dragon, etc.)
+- [x] Filtro de tipo (creature, instant, sorcery, enchantment, artifact)
+- [x] Seletor de formato atualizado (standard/historic/commander/legacy/modern)
+- [x] Preview do template do arquétipo (slots esperados: lands/creatures/spells)
+- [x] Integração com métricas da Game Feature Engine
 
 ### Testes
-- [ ] Testes do archetypeGenerator
-- [ ] Testes dos filtros avançados
-- [ ] Testes do scoring por arquétipo
+- [x] Testes do archetypeGenerator
+- [x] Testes dos filtros avançados
+- [x] Testes do scoring por arquétipo
+
+## Fase 8: Maturidade de Produção & Features Avançadas
+
+### 💡 Lógica Financeira e Geração de Budget Decks
+- [ ] Buscar e sincronizar preços (ex: `prices.usd`) utilizando a API/Bulk da Scryfall
+- [ ] Ajustar tabela de `cards` para persistir dados de valor
+- [ ] Criar input de "Orçamento Máximo ($)" no frontend do Gerador de Arquétipos
+- [ ] Ajustar algorítmo de seleção para priorizar boas cartas dentro do orçamento (Pauper/Budget)
+
+### 🧩 Geração Avançada de Sideboard
+- [ ] Implementar motor de análise das "fraquezas" do Mainboard gerado
+- [ ] Adicionar pontuação/seleção automática de 15 cartas de Sideboard complementares
+- [ ] Priorizar tags como `hate`, `counter` e `removal` específicos baseadas na pool de cor do deck
+- [ ] Atualizar script de export (`exportToArena` e `exportToText`) para exibir corretamente a lista de Sideboard
+
+### 🌐 Autenticação, Perfis e Database em Nuvem
+- [ ] Configurar conexão do banco de dados para produção num host real (Supabase, Neon, AWS, Render)
+- [ ] Implementar sistema de Autenticação/Usuários (Clerk, Auth.js, Firebase)
+- [ ] Interface para o usuário listar "Meus Decks Salvos" com botões de "Editar" e "Favoritar"
+
+### ⚙️ Pipelines e Automação Contínua (Cron Jobs)
+- [ ] Modularizar scraper competitivos (`populate-moxfield.ts`, `mtgtop8Scraper.ts`) para rodar em intervalos
+- [ ] Modularizar pipeline do Oracle Bulk (`sync-bulk.ts`) para injetar novas coleções periodicamente
+- [ ] Configurar agendadores (ex: Node-cron, GitHub Actions ou workers no Render) para orquestrar essas execuções de madrugada sem intervenção manual

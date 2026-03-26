@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Network, Search, Zap } from "lucide-react";
+import CytoscapeComponent from "react-cytoscapejs";
 
 interface SynergyNode {
   id: string;
@@ -85,112 +86,115 @@ export default function SynergyGraph() {
     setSearchQuery("");
   };
 
-  const renderSimpleGraph = () => {
+  const renderCytoscapeGraph = () => {
     if (graphData.nodes.length === 0) return null;
 
+    const elements = [
+      ...graphData.nodes.map(node => ({
+        data: { 
+          id: node.id, 
+          label: node.label,
+          color: node.color,
+          size: node.size * 2
+        }
+      })),
+      ...graphData.edges.map(edge => ({
+        data: { 
+          id: edge.id, 
+          source: edge.source, 
+          target: edge.target, 
+          weight: edge.weight,
+          label: edge.label
+        }
+      }))
+    ];
+
+    const stylesheet: any = [
+      {
+        selector: 'node',
+        style: {
+          'background-color': 'data(color)',
+          'label': 'data(label)',
+          'width': 'data(size)',
+          'height': 'data(size)',
+          'color': '#fff',
+          'font-size': '10px',
+          'text-valign': 'center',
+          'text-halign': 'center',
+          'border-width': 2,
+          'border-color': '#fff'
+        }
+      },
+      {
+        selector: 'edge',
+        style: {
+          'width': 'mapData(weight, 0, 1, 1, 8)',
+          'line-color': '#8b5cf6',
+          'target-arrow-color': '#8b5cf6',
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'bezier',
+          'opacity': 'mapData(weight, 0, 1, 0.3, 0.8)',
+          'label': 'data(label)',
+          'font-size': '8px',
+          'color': '#a78bfa',
+          'text-rotation': 'autorotate',
+          'text-margin-y': -10
+        }
+      },
+      {
+        selector: ':selected',
+        style: {
+          'border-width': 4,
+          'border-color': '#f59e0b'
+        }
+      }
+    ];
+
     return (
-      <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Synergy Network</h3>
+      <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-white">Interactive Synergy Network</h3>
+          <Badge variant="outline" className="text-purple-400 border-purple-400/30">
+            Powered by Cytoscape.js
+          </Badge>
+        </div>
 
-        {/* Simple node-link diagram using CSS */}
-        <div className="relative h-96 bg-slate-800/50 rounded border overflow-hidden">
-          {graphData.nodes.map((node, index) => {
-            // Position nodes in a circle
-            const angle = (index / graphData.nodes.length) * 2 * Math.PI;
-            const radius = 120;
-            const centerX = 200;
-            const centerY = 150;
-            const x = centerX + Math.cos(angle) * radius;
-            const y = centerY + Math.sin(angle) * radius;
-
-            return (
-              <div
-                key={node.id}
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer hover:scale-110 transition-transform"
-                style={{
-                  left: `${x}px`,
-                  top: `${y}px`,
-                }}
-                onClick={() => node.id !== `card-${selectedCardId}` && console.log("Node clicked:", node.id)}
-              >
-                <div
-                  className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-medium text-xs"
-                  style={{
-                    width: `${node.size * 2}px`,
-                    height: `${node.size * 2}px`,
-                    backgroundColor: node.color,
-                  }}
-                >
-                  {node.label}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Draw edges */}
-          <svg className="absolute inset-0 pointer-events-none">
-            {graphData.edges.map((edge) => {
-              const sourceNode = graphData.nodes.find(n => n.id === edge.source);
-              const targetNode = graphData.nodes.find(n => n.id === edge.target);
-
-              if (!sourceNode || !targetNode) return null;
-
-              const sourceIndex = graphData.nodes.indexOf(sourceNode);
-              const targetIndex = graphData.nodes.indexOf(targetNode);
-
-              const sourceAngle = (sourceIndex / graphData.nodes.length) * 2 * Math.PI;
-              const targetAngle = (targetIndex / graphData.nodes.length) * 2 * Math.PI;
-
-              const radius = 120;
-              const centerX = 200;
-              const centerY = 150;
-
-              const x1 = centerX + Math.cos(sourceAngle) * radius;
-              const y1 = centerY + Math.sin(sourceAngle) * radius;
-              const x2 = centerX + Math.cos(targetAngle) * radius;
-              const y2 = centerY + Math.sin(targetAngle) * radius;
-
-              const strokeWidth = Math.max(1, edge.weight / 20);
-              const opacity = Math.max(0.3, edge.weight / 100);
-
-              return (
-                <line
-                  key={edge.id}
-                  x1={x1}
-                  y1={y1}
-                  x2={x2}
-                  y2={y2}
-                  stroke="#8b5cf6"
-                  strokeWidth={strokeWidth}
-                  opacity={opacity}
-                />
-              );
-            })}
-          </svg>
+        <div className="h-[500px] bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
+          <CytoscapeComponent
+            elements={elements}
+            style={{ width: '100%', height: '100%' }}
+            stylesheet={stylesheet}
+            layout={{
+              name: 'cose',
+              animate: true,
+              refresh: 20,
+              fit: true,
+              padding: 50,
+              nodeRepulsion: 4000,
+              idealEdgeLength: 100,
+            }}
+            cy={(cy) => {
+              cy.on('tap', 'node', (evt) => {
+                const node = evt.target;
+                console.log('Tapped node:', node.id());
+              });
+            }}
+          />
         </div>
 
         {/* Legend */}
-        <div className="mt-4 flex gap-4 text-sm">
+        <div className="mt-4 flex flex-wrap gap-4 text-sm bg-slate-800/50 p-3 rounded">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
             <span className="text-gray-300">Selected Card</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-green-500"></div>
-            <span className="text-gray-300">Similar Cards</span>
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <span className="text-gray-300">Synergistic Connection</span>
           </div>
-        </div>
-
-        {/* Edge weights */}
-        <div className="mt-4">
-          <h4 className="text-sm font-medium text-white mb-2">Connection Strengths:</h4>
-          <div className="grid grid-cols-2 gap-2">
-            {graphData.edges.map((edge) => (
-              <div key={edge.id} className="flex justify-between text-xs">
-                <span className="text-gray-400">Connection {edge.id.split('-')[3]}</span>
-                <Badge variant="secondary">{edge.weight.toFixed(2)}</Badge>
-              </div>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-0.5 bg-purple-500"></div>
+            <span className="text-gray-300 ml-1">Similarity Weight</span>
           </div>
         </div>
       </div>
@@ -273,7 +277,7 @@ export default function SynergyGraph() {
                   <span className="ml-2 text-gray-400">Loading synergy data...</span>
                 </div>
               ) : synergyQuery.data && synergyQuery.data.length > 0 ? (
-                renderSimpleGraph()
+                renderCytoscapeGraph()
               ) : (
                 <div className="text-center py-12">
                   <Zap className="w-12 h-12 text-gray-600 mx-auto mb-4" />

@@ -1,4 +1,4 @@
-import { integer, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /**
  * Core user table backing auth flow.
@@ -28,21 +28,34 @@ export const users = pgTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-export const cards = pgTable("cards", {
-  id: serial("id").primaryKey(),
-  scryfallId: varchar("scryfall_id", { length: 64 }).notNull().unique(),
-  name: varchar("name", { length: 255 }).notNull(),
-  type: text("type"),
-  colors: varchar("colors", { length: 10 }),
-  cmc: integer("cmc"),
-  rarity: varchar("rarity", { length: 20 }),
-  imageUrl: text("image_url"),
-  power: varchar("power", { length: 10 }),
-  toughness: varchar("toughness", { length: 10 }),
-  text: text("text"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+export const cards = pgTable(
+  "cards",
+  {
+    id: serial("id").primaryKey(),
+    scryfallId: varchar("scryfall_id", { length: 64 }).notNull().unique(),
+    oracleId: varchar("oracle_id", { length: 64 }),
+    name: varchar("name", { length: 255 }).notNull(),
+    type: text("type"),
+    colors: varchar("colors", { length: 10 }),
+    cmc: integer("cmc"),
+    rarity: varchar("rarity", { length: 20 }),
+    imageUrl: text("image_url"),
+    power: varchar("power", { length: 10 }),
+    toughness: varchar("toughness", { length: 10 }),
+    text: text("text"),
+    isArena: integer("is_arena").default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    nameIdx: index("name_idx").on(table.name),
+    typeIdx: index("type_idx").on(table.type),
+    colorsIdx: index("colors_idx").on(table.colors),
+    cmcIdx: index("cmc_idx").on(table.cmc),
+    rarityIdx: index("rarity_idx").on(table.rarity),
+    oracleIdx: index("oracle_idx").on(table.oracleId),
+  })
+);
 
 export type Card = typeof cards.$inferSelect;
 export type InsertCard = typeof cards.$inferInsert;
@@ -182,3 +195,20 @@ export const trainingJobs = pgTable("training_jobs", {
 
 export type TrainingJob = typeof trainingJobs.$inferSelect;
 export type InsertTrainingJob = typeof trainingJobs.$inferInsert;
+
+export const deckShares = pgTable("deck_shares", {
+  id: serial("id").primaryKey(),
+  shareId: varchar("share_id", { length: 255 }).notNull().unique(),
+  deckId: integer("deck_id").notNull().references(() => decks.id),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  decklist: text("decklist").notNull(),
+  format: varchar("format", { length: 50 }).notNull(),
+  colors: text("colors"), 
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"),
+});
+
+export type DeckShare = typeof deckShares.$inferSelect;
+export type InsertDeckShare = typeof deckShares.$inferInsert;

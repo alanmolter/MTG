@@ -128,6 +128,8 @@ export default function ArchetypeGenerator() {
   const [selectedColors, setSelectedColors] = useState<ManaColor[]>(["R"]);
   const [selectedTribes, setSelectedTribes] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [onlyArena, setOnlyArena] = useState<boolean>(true);
+
 
   // Resultado
   const [result, setResult] = useState<any>(null);
@@ -173,7 +175,9 @@ export default function ArchetypeGenerator() {
       colors: selectedColors.length > 0 ? selectedColors : undefined,
       tribes: selectedTribes.length > 0 ? selectedTribes : undefined,
       cardTypes: selectedTypes.length > 0 ? selectedTypes : undefined,
+      onlyArena,
     });
+
   };
 
   const copyToClipboard = (text: string) => {
@@ -249,8 +253,22 @@ export default function ArchetypeGenerator() {
                     ))}
                   </SelectContent>
                 </Select>
+                
+                <div className="mt-4 flex items-center gap-2 px-1">
+                  <input
+                    type="checkbox"
+                    id="arena-toggle"
+                    checked={onlyArena}
+                    onChange={(e) => setOnlyArena(e.target.checked)}
+                    className="w-4 h-4 rounded appearance-none border border-slate-600 bg-slate-800/50 checked:bg-purple-600 checked:border-purple-500 cursor-pointer relative after:content-['✓'] after:absolute after:text-white after:text-xs after:w-full after:h-full after:flex after:items-center after:justify-center after:opacity-0 checked:after:opacity-100 transition-colors"
+                  />
+                  <Label htmlFor="arena-toggle" className="text-sm text-gray-300 font-medium cursor-pointer">
+                    Apenas cartas no MTG Arena
+                  </Label>
+                </div>
               </CardContent>
             </Card>
+
 
             {/* Cores */}
             <Card className="bg-slate-900/50 border-purple-500/30">

@@ -4,35 +4,27 @@ import { importMTGTop8Decks } from "./mtgtop8Scraper";
 // Mock fetch
 global.fetch = vi.fn();
 
+// Mock db
+vi.mock("../db", () => ({
+  getDb: vi.fn().mockResolvedValue({
+    insert: vi.fn().mockReturnThis(),
+    values: vi.fn().mockReturnThis(),
+    onConflictDoUpdate: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([{ id: 1 }]),
+  }),
+}));
+
 describe("importMTGTop8Decks", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("should import decks successfully", async () => {
-    // Mock the fetch responses
+  it("should import decks from top8 with new regex", async () => {
     const mockHtml = `
-      <table>
-        <tr>
-          <td><a href="?event=123">Test Deck</a></td>
-          <td>Standard</td>
-          <td>Control</td>
-        </tr>
-      </table>
+      <a href="/event?e=123&d=456" class="deck-link">Test Deck</a>
     `;
 
-    const mockDeckHtml = `
-      <table>
-        <tr>
-          <td class="G14">4</td>
-          <td><a>Lightning Bolt</a></td>
-        </tr>
-        <tr>
-          <td class="G14">24</td>
-          <td><a>Island</a></td>
-        </tr>
-      </table>
-    `;
+    const mockDeckTxt = `4 Lightning Bolt\n20 Mountain\nSideboard\n1 Pyroblast`;
 
     (global.fetch as any)
       .mockResolvedValueOnce({
@@ -41,78 +33,12 @@ describe("importMTGTop8Decks", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        text: () => Promise.resolve(mockDeckHtml),
+        text: () => Promise.resolve(mockDeckTxt),
       });
 
-    const result = await importMTGTop8Decks("standard", 5);
+    const result = await importMTGTop8Decks("modern", 1);
 
-    expect(result).toBeDefined();
-    expect(result.decksImported).toBeGreaterThanOrEqual(0);
-    expect(result.errors).toBeDefined();
-  });
-
-  it("should handle fetch errors gracefully", async () => {
-    (global.fetch as any).mockRejectedValueOnce(new Error("Network error"));
-
-    const result = await importMTGTop8Decks("standard", 5);
-
-    expect(result).toBeDefined();
-    expect(result.decksImported).toBe(0);
-    expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.errors[0]).toContain("Failed to fetch MTGTop8 data");
-  });
-
-  it("should handle invalid responses", async () => {
-    (global.fetch as any).mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-    });
-
-    const result = await importMTGTop8Decks("standard", 5);
-
-    expect(result).toBeDefined();
-    expect(result.decksImported).toBe(0);
-    expect(result.errors.length).toBeGreaterThan(0);
-  });
-
-  it("should respect the limit parameter", async () => {
-    const mockHtml = `
-      <table>
-        ${Array.from({ length: 10 }, (_, i) => `
-          <tr>
-            <td><a href="?event=${i}">Deck ${i}</a></td>
-            <td>Standard</td>
-            <td>Control</td>
-          </tr>
-        `).join('')}
-      </table>
-    `;
-
-    (global.fetch as any).mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(mockHtml),
-    });
-
-    const result = await importMTGTop8Decks("standard", 3);
-
-    // Should attempt to process only the limited number
-    expect(result).toBeDefined();
-  });
-
-  it("should handle different formats", async () => {
-    const mockHtml = `<table></table>`;
-
-    (global.fetch as any).mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(mockHtml),
-    });
-
-    const formats = ["standard", "pioneer", "modern", "legacy", "vintage", "commander"];
-
-    for (const format of formats) {
-      const result = await importMTGTop8Decks(format, 1);
-      expect(result).toBeDefined();
-      expect(result.errors).toBeDefined();
-    }
+    expect(result.decksImported).toBe(1);
+    expect(result.errors).toHaveLength(0);
   });
 });

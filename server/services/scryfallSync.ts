@@ -18,12 +18,14 @@ interface ScryfallCard {
   toughness?: string;
   oracle_text?: string;
   mana_cost?: string;
+  games?: string[];
 }
 
 interface SyncOptions {
   format?: "standard" | "modern" | "commander" | "legacy" | "all";
   colors?: string[];
   limit?: number;
+  arenaOnly?: boolean;
 }
 
 /**
@@ -39,9 +41,13 @@ export async function syncCardsFromScryfall(options: SyncOptions = {}): Promise<
 
   let query = "";
 
+  if (options.arenaOnly !== false) {
+    query = "game:arena";
+  }
+
   // Construir query Scryfall
   if (format !== "all") {
-    query = `legal:${format}`;
+    query += query ? ` legal:${format}` : `legal:${format}`;
   }
 
   if (colors.length > 0) {
@@ -91,6 +97,7 @@ export async function syncCardsFromScryfall(options: SyncOptions = {}): Promise<
             power: scryfallCard.power || null,
             toughness: scryfallCard.toughness || null,
             text: scryfallCard.oracle_text || null,
+            isArena: scryfallCard.games?.includes("arena") ? 1 : 0,
           };
 
           const db = await getDb();
