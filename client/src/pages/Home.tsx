@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, Wand2, Search, BarChart3, Download } from "lucide-react";
+import { Sparkles, Wand2, Search, BarChart3, Brain } from "lucide-react";
 import { useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
 
@@ -57,6 +57,10 @@ export default function Home() {
               <BarChart3 className="w-5 h-5 mr-2" />
               Sync Data
             </Button>
+            <Button size="lg" onClick={() => setLocation("/pipeline")} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+              <Brain className="w-5 h-5 mr-2" />
+              Full Pipeline
+            </Button>
           </div>
         </div>
 
@@ -92,13 +96,13 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500/60 transition-colors">
+          <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500/60 transition-colors cursor-pointer" onClick={() => setLocation("/pipeline")}>
             <CardHeader>
-              <Sparkles className="w-8 h-8 text-yellow-400 mb-2" />
-              <CardTitle className="text-white">Synergy Analysis</CardTitle>
+              <Brain className="w-8 h-8 text-green-400 mb-2" />
+              <CardTitle className="text-white">AI Pipeline</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-400">Discover card synergies and build more cohesive deck strategies</p>
+              <p className="text-gray-400">Import Moxfield decks, train Word2Vec embeddings, and generate optimized decks</p>
             </CardContent>
           </Card>
         </div>

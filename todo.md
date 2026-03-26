@@ -87,3 +87,22 @@
 - [x] Testes de sincronização com Scryfall
 - [ ] Testes de importação de decks
 - [ ] Testes de treino de embeddings
+
+## Fase 5: Pipeline Moxfield + Embeddings + Geração (Nova)
+
+### Backend
+- [x] Scraper de decks do Moxfield (API pública + fallback HTML)
+- [x] Salvar decks importados no banco (competitive_decks, competitive_deck_cards)
+- [x] Treinamento automático de embeddings Word2Vec com co-ocorrência real
+- [x] Endpoint tRPC para geração de decks
+- [ ] Job de re-treinamento agendado (cron)
+
+### Frontend
+- [x] Página Pipeline (importação + treinamento + geração em um fluxo)
+- [x] Painel de treinamento de embeddings (status, progresso, histórico)
+- [x] Botão de execução individual de cada etapa
+
+### Testes
+- [x] Testes do scraper Moxfield (11 testes)
+- [x] Testes de treinamento de embeddings (14 testes)
+- [x] 50 testes passando no total

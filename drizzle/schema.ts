@@ -123,3 +123,57 @@ export const embeddingsCache = mysqlTable("embeddings_cache", {
 
 export type EmbeddingsCache = typeof embeddingsCache.$inferSelect;
 export type InsertEmbeddingsCache = typeof embeddingsCache.$inferInsert;
+
+// Decks competitivos importados de fontes externas (Moxfield, MTGGoldfish, etc.)
+export const competitiveDecks = mysqlTable("competitive_decks", {
+  id: int("id").autoincrement().primaryKey(),
+  sourceId: varchar("source_id", { length: 128 }).notNull().unique(),
+  source: varchar("source", { length: 50 }).notNull().default("moxfield"),
+  name: varchar("name", { length: 255 }).notNull(),
+  format: varchar("format", { length: 50 }).notNull(),
+  archetype: varchar("archetype", { length: 100 }),
+  author: varchar("author", { length: 128 }),
+  likes: int("likes").default(0),
+  views: int("views").default(0),
+  colors: varchar("colors", { length: 10 }),
+  rawJson: text("raw_json"),
+  importedAt: timestamp("imported_at").defaultNow().notNull(),
+});
+
+export type CompetitiveDeck = typeof competitiveDecks.$inferSelect;
+export type InsertCompetitiveDeck = typeof competitiveDecks.$inferInsert;
+
+// Cartas de cada deck competitivo
+export const competitiveDeckCards = mysqlTable(
+  "competitive_deck_cards",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    deckId: int("deck_id").notNull().references(() => competitiveDecks.id),
+    cardName: varchar("card_name", { length: 255 }).notNull(),
+    quantity: int("quantity").notNull().default(1),
+    section: varchar("section", { length: 20 }).default("mainboard"),
+  },
+  (table) => ({
+    deckCardUnique: { unique: true, columns: [table.deckId, table.cardName, table.section] },
+  })
+);
+
+export type CompetitiveDeckCard = typeof competitiveDeckCards.$inferSelect;
+export type InsertCompetitiveDeckCard = typeof competitiveDeckCards.$inferInsert;
+
+// Log de jobs de treinamento de embeddings
+export const trainingJobs = mysqlTable("training_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
+  jobType: varchar("job_type", { length: 50 }).notNull().default("embeddings"),
+  totalDecks: int("total_decks").default(0),
+  totalCards: int("total_cards").default(0),
+  embeddingsTrained: int("embeddings_trained").default(0),
+  synergiesUpdated: int("synergies_updated").default(0),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export type TrainingJob = typeof trainingJobs.$inferSelect;
+export type InsertTrainingJob = typeof trainingJobs.$inferInsert;

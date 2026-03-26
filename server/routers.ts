@@ -151,6 +151,37 @@ export const appRouter = router({
       return await getCardStats();
     }),
   }),
+
+  moxfield: router({
+    importDecks: publicProcedure
+      .input(
+        z.object({
+          format: z.enum(["standard", "modern", "commander", "legacy"]).optional(),
+          limit: z.number().min(1).max(100).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { importMoxfieldDecks } = await import("./services/moxfieldScraper");
+        return await importMoxfieldDecks(input.format || "standard", input.limit || 50);
+      }),
+
+    getStats: publicProcedure.query(async () => {
+      const { getCompetitiveDeckStats } = await import("./services/moxfieldScraper");
+      return await getCompetitiveDeckStats();
+    }),
+  }),
+
+  training: router({
+    trainEmbeddings: publicProcedure.mutation(async () => {
+      const { trainEmbeddingsFromDecks } = await import("./services/embeddingTrainer");
+      return await trainEmbeddingsFromDecks();
+    }),
+
+    getHistory: publicProcedure.query(async () => {
+      const { getTrainingJobHistory } = await import("./services/embeddingTrainer");
+      return await getTrainingJobHistory(10);
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

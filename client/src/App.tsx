@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import CardSearch from "./pages/CardSearch";
 import DeckGenerator from "./pages/DeckGenerator";
 import SyncData from "./pages/SyncData";
+import Pipeline from "./pages/Pipeline";
 
 function Router() {
   return (
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/search" component={CardSearch} />
       <Route path="/generator" component={DeckGenerator} />
       <Route path="/sync" component={SyncData} />
+      <Route path="/pipeline" component={Pipeline} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
