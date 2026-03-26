@@ -2,6 +2,7 @@ import { Card } from "../../drizzle/schema";
 import { getCardById, getCardsByIds } from "./scryfall";
 import { findSimilarCardsForDeck } from "./embeddings";
 import { getCardSynergy } from "./synergy";
+import { evaluateDeck, optimizeDeckRL, extractCardFeatures, type DeckMetrics } from "./gameFeatureEngine";
 
 interface DeckGeneratorOptions {
   format: "standard" | "modern" | "commander" | "legacy";
@@ -199,92 +200,62 @@ export async function optimizeDeck(
 }
 
 /**
- * Simula uma partida simplificada entre dois decks
- * Retorna 1 se deck1 vence, 0 se deck2 vence
+ * Avalia um deck usando a Game Feature Engine (curva + terrenos + sinergia + simulação).
  */
-export async function simulateMatch(
-  deck1: (Card & { quantity: number })[],
-  deck2: (Card & { quantity: number })[]
-): Promise<number> {
-  // Cálculo simplificado de força do deck
-  let score1 = 0;
-  let score2 = 0;
-
-  for (const card of deck1) {
-    // CMC como proxy de força
-    score1 += (card.cmc || 2) * card.quantity;
+export function evaluateDeckWithEngine(
+  deck: (Card & { quantity: number })[],
+  archetype: string = "default"
+): DeckMetrics {
+  // Expandir deck com quantidades para avaliação
+  const expanded: { name: string; type?: string | null; text?: string | null; cmc?: number | null }[] = [];
+  for (const card of deck) {
+    for (let i = 0; i < card.quantity; i++) {
+      expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc });
+    }
   }
-
-  for (const card of deck2) {
-    score2 += (card.cmc || 2) * card.quantity;
-  }
-
-  // Adicionar aleatoriedade
-  score1 += Math.random() * 50;
-  score2 += Math.random() * 50;
-
-  return score1 > score2 ? 1 : 0;
+  return evaluateDeck(expanded, archetype);
 }
 
 /**
- * Treina um deck através de simulações (RL simplificado)
+ * Treina um deck usando RL melhorado com Game Feature Engine.
+ * Substitui o RL antigo baseado apenas em simulação de partidas.
  */
 export async function trainDeckWithRL(
   initialDeck: (Card & { quantity: number })[],
   options: DeckGeneratorOptions,
-  iterations: number = 10,
-  simulationsPerIteration: number = 5
-): Promise<(Card & { quantity: number })[]> {
-  let bestDeck = [...initialDeck];
-  let bestWinRate = 0;
+  cardPool?: Card[],
+  iterations: number = 200
+): Promise<{ deck: (Card & { quantity: number })[]; metrics: DeckMetrics; improvements: number }> {
+  // Usar pool fornecido ou gerar um básico
+  const pool: Card[] = cardPool || [];
 
-  for (let iter = 0; iter < iterations; iter++) {
-    // Criar variação do deck
-    const mutatedDeck = mutateDeck(bestDeck, options);
+  const expanded: { name: string; type?: string | null; text?: string | null; cmc?: number | null; quantity?: number }[] = [];
+  for (const card of initialDeck) {
+    expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc, quantity: card.quantity });
+  }
 
-    // Simular partidas
-    let wins = 0;
-    for (let sim = 0; sim < simulationsPerIteration; sim++) {
-      // Simular contra deck aleatório
-      const randomDeck = await generateInitialDeck(options);
-      const result = await simulateMatch(mutatedDeck, randomDeck);
-      wins += result;
+  const { deck: optimizedExpanded, initialScore, finalScore, improvements } = optimizeDeckRL(
+    expanded,
+    pool,
+    options.archetype || "default",
+    iterations
+  );
+
+  // Reconstruir deck com objetos Card completos
+  const cardMap = new Map(initialDeck.map((c) => [c.name, c]));
+  const poolMap = new Map((cardPool || []).map((c) => [c.name, c]));
+
+  const resultDeck: (Card & { quantity: number })[] = [];
+  for (const entry of optimizedExpanded) {
+    const card = cardMap.get(entry.name) || poolMap.get(entry.name);
+    if (card) {
+      resultDeck.push({ ...card, quantity: entry.quantity ?? 1 });
     }
-
-    const winRate = wins / simulationsPerIteration;
-
-    // Manter se melhor
-    if (winRate > bestWinRate) {
-      bestWinRate = winRate;
-      bestDeck = mutatedDeck;
-    }
   }
 
-  return bestDeck;
-}
+  const metrics = evaluateDeckWithEngine(resultDeck, options.archetype || "default");
 
-/**
- * Cria uma mutação do deck (remove/adiciona cartas)
- */
-function mutateDeck(
-  deck: (Card & { quantity: number })[],
-  options: DeckGeneratorOptions
-): (Card & { quantity: number })[] {
-  const mutated = [...deck];
-  const maxCopies = options.format === "commander" ? 1 : 4;
+  console.log(`[RL] Score: ${initialScore.toFixed(1)} → ${finalScore.toFixed(1)} (${improvements} melhorias)`);
 
-  // Remover uma carta aleatória
-  if (Math.random() < 0.5 && mutated.length > 1) {
-    const idx = Math.floor(Math.random() * mutated.length);
-    mutated.splice(idx, 1);
-  }
-
-  // Modificar quantidade de uma carta
-  if (mutated.length > 0 && Math.random() < 0.5) {
-    const idx = Math.floor(Math.random() * mutated.length);
-    const newQuantity = Math.floor(Math.random() * maxCopies) + 1;
-    mutated[idx] = { ...mutated[idx], quantity: newQuantity };
-  }
-
-  return mutated;
+  return { deck: resultDeck, metrics, improvements };
 }

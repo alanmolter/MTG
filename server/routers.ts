@@ -119,16 +119,57 @@ export const appRouter = router({
           format: z.enum(["standard", "modern", "commander", "legacy"]),
           archetype: z.string().optional(),
           seedCards: z.array(z.number()).optional(),
+          useRL: z.boolean().optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const { generateInitialDeck, optimizeDeck, validateDeck } = await import(
+        const { generateInitialDeck, validateDeck, evaluateDeckWithEngine, trainDeckWithRL } = await import(
           "./services/deckGenerator"
         );
         const deck = await generateInitialDeck(input, input.seedCards);
-        const optimized = await optimizeDeck(deck, input, 3);
-        const validation = validateDeck(optimized, input.format);
-        return { deck: optimized, validation };
+        const validation = validateDeck(deck, input.format);
+
+        // Avaliar deck com Game Feature Engine
+        const metrics = evaluateDeckWithEngine(deck, input.archetype || "default");
+
+        // Otimizar com RL melhorado se solicitado
+        if (input.useRL) {
+          const { deck: rlDeck, metrics: rlMetrics, improvements } = await trainDeckWithRL(
+            deck,
+            { format: input.format, archetype: input.archetype },
+            undefined,
+            200
+          );
+          const rlValidation = validateDeck(rlDeck, input.format);
+          return { deck: rlDeck, validation: rlValidation, metrics: rlMetrics, improvements };
+        }
+
+        return { deck, validation, metrics, improvements: 0 };
+      }),
+
+    evaluate: publicProcedure
+      .input(
+        z.object({
+          cards: z.array(z.object({
+            name: z.string(),
+            type: z.string().optional(),
+            text: z.string().optional(),
+            cmc: z.number().optional(),
+            quantity: z.number(),
+          })),
+          archetype: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { evaluateDeck } = await import("./services/gameFeatureEngine");
+        // Expandir cartas com quantidades
+        const expanded: { name: string; type?: string; text?: string; cmc?: number }[] = [];
+        for (const card of input.cards) {
+          for (let i = 0; i < card.quantity; i++) {
+            expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc });
+          }
+        }
+        return evaluateDeck(expanded, input.archetype || "default");
       }),
   }),
 

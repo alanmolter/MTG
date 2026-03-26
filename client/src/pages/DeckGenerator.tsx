@@ -4,20 +4,95 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Wand2, Download } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Wand2, Download, Brain, BarChart3, Zap, Shield, Swords, TrendingUp } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function ScoreBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const pct = Math.max(0, Math.min(100, ((value - max * -0.5) / (max * 1.5)) * 100));
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs text-gray-400">
+        <span>{label}</span>
+        <span className={value >= 0 ? "text-green-400" : "text-red-400"}>{value.toFixed(1)}</span>
+      </div>
+      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ManaCurveChart({ curve }: { curve: Record<number, number> }) {
+  const maxVal = Math.max(1, ...Object.values(curve));
+  const cmcs = [0, 1, 2, 3, 4, 5, 6, 7];
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Mana Curve</p>
+      <div className="flex items-end gap-1 h-20">
+        {cmcs.map((cmc) => {
+          const count = curve[cmc] || 0;
+          const height = count > 0 ? Math.max(8, (count / maxVal) * 72) : 4;
+          return (
+            <div key={cmc} className="flex-1 flex flex-col items-center gap-1">
+              <span className="text-xs text-gray-500">{count > 0 ? count : ""}</span>
+              <div
+                className="w-full rounded-t transition-all bg-gradient-to-t from-purple-600 to-purple-400"
+                style={{ height: `${height}px`, opacity: count > 0 ? 1 : 0.2 }}
+              />
+              <span className="text-xs text-gray-500">{cmc === 7 ? "7+" : cmc}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TagBadge({ tag, count }: { tag: string; count: number }) {
+  const colors: Record<string, string> = {
+    removal: "bg-red-900/50 text-red-300 border-red-500/30",
+    draw: "bg-blue-900/50 text-blue-300 border-blue-500/30",
+    ramp: "bg-green-900/50 text-green-300 border-green-500/30",
+    token: "bg-yellow-900/50 text-yellow-300 border-yellow-500/30",
+    sacrifice: "bg-orange-900/50 text-orange-300 border-orange-500/30",
+    counter: "bg-purple-900/50 text-purple-300 border-purple-500/30",
+    graveyard: "bg-gray-900/50 text-gray-300 border-gray-500/30",
+    counterspell: "bg-cyan-900/50 text-cyan-300 border-cyan-500/30",
+    lifegain: "bg-pink-900/50 text-pink-300 border-pink-500/30",
+    tutor: "bg-indigo-900/50 text-indigo-300 border-indigo-500/30",
+  };
+  const cls = colors[tag] || "bg-slate-800 text-gray-300 border-slate-600";
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${cls}`}>
+      {tag} <span className="opacity-70">×{count}</span>
+    </span>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DeckGenerator() {
   const [, setLocation] = useLocation();
   const [format, setFormat] = useState<"standard" | "modern" | "commander" | "legacy">("standard");
-  const [archetype, setArchetype] = useState("");
+  const [archetype, setArchetype] = useState("aggro");
+  const [useRL, setUseRL] = useState(false);
   const [generatedDeck, setGeneratedDeck] = useState<any>(null);
 
   const generateMutation = trpc.generator.generate.useMutation({
     onSuccess: (data) => {
       setGeneratedDeck(data);
-      toast.success("Deck generated successfully!");
+      const improvements = data.improvements ?? 0;
+      toast.success(
+        improvements > 0
+          ? `Deck generated! RL made ${improvements} improvements.`
+          : "Deck generated successfully!"
+      );
     },
     onError: () => {
       toast.error("Failed to generate deck");
@@ -25,100 +100,119 @@ export default function DeckGenerator() {
   });
 
   const handleGenerate = () => {
-    generateMutation.mutate({
-      format,
-      archetype: archetype || undefined,
-    });
+    generateMutation.mutate({ format, archetype: archetype || undefined, useRL });
   };
 
   const exportDeckAsText = () => {
     if (!generatedDeck?.deck) return;
-
     const deckList = generatedDeck.deck
-      .map((card: any) => `${card.quantity}x ${card.name}`)
+      .map((card: any) => `${card.quantity} ${card.name}`)
       .join("\n");
-
-    const text = `MTG Deck - ${format.toUpperCase()}\n${archetype ? `Archetype: ${archetype}\n` : ""}\n${deckList}`;
-
-    const element = document.createElement("a");
-    element.setAttribute("href", `data:text/plain;charset=utf-8,${encodeURIComponent(text)}`);
-    element.setAttribute("download", `deck-${Date.now()}.txt`);
-    element.style.display = "none";
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-
-    toast.success("Deck exported as text");
+    const text = `// MTG Deck — ${format.toUpperCase()} ${archetype ? `(${archetype})` : ""}\n// Generated by MTG Deck Engine\n\n${deckList}`;
+    const el = document.createElement("a");
+    el.setAttribute("href", `data:text/plain;charset=utf-8,${encodeURIComponent(text)}`);
+    el.setAttribute("download", `deck-${archetype || format}-${Date.now()}.txt`);
+    el.style.display = "none";
+    document.body.appendChild(el);
+    el.click();
+    document.body.removeChild(el);
+    toast.success("Deck exported");
   };
 
-  const archetypes = [
-    "Aggro",
-    "Control",
-    "Midrange",
-    "Combo",
-    "Ramp",
-    "Tempo",
-    "Burn",
-  ];
+  const exportArena = () => {
+    if (!generatedDeck?.deck) return;
+    const deckList = generatedDeck.deck
+      .map((card: any) => `${card.quantity} ${card.name}`)
+      .join("\n");
+    const el = document.createElement("a");
+    el.setAttribute("href", `data:text/plain;charset=utf-8,${encodeURIComponent(deckList)}`);
+    el.setAttribute("download", `deck-arena-${Date.now()}.txt`);
+    el.style.display = "none";
+    document.body.appendChild(el);
+    el.click();
+    document.body.removeChild(el);
+    toast.success("Arena format exported");
+  };
+
+  const archetypes = ["aggro", "burn", "tempo", "midrange", "control", "ramp", "combo"];
+
+  const metrics = generatedDeck?.metrics;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Deck Generator</h1>
-          <p className="text-gray-400">Generate optimized decks based on format and archetype</p>
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2">Deck Generator</h1>
+            <p className="text-gray-400">AI-powered deck generation with Game Feature Engine</p>
+          </div>
+          <Button variant="outline" onClick={() => setLocation("/")} className="border-purple-500/30 text-purple-300">
+            ← Home
+          </Button>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Generator Panel */}
-          <div className="lg:col-span-1">
+          {/* ── Left Panel: Controls ── */}
+          <div className="lg:col-span-1 space-y-4">
             <Card className="bg-slate-900/50 border-purple-500/30 sticky top-8">
               <CardHeader>
-                <CardTitle className="text-white">Generate Deck</CardTitle>
-                <CardDescription className="text-gray-400">Select format and archetype</CardDescription>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Wand2 className="w-5 h-5 text-purple-400" />
+                  Generate Deck
+                </CardTitle>
+                <CardDescription className="text-gray-400">Configure format and archetype</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="format" className="text-gray-300">Format</Label>
-                  <Select value={format} onValueChange={(value: any) => setFormat(value)}>
+                  <Label className="text-gray-300">Format</Label>
+                  <Select value={format} onValueChange={(v: any) => setFormat(v)}>
                     <SelectTrigger className="bg-slate-800 border-purple-500/30 text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-purple-500/30">
-                      <SelectItem value="standard" className="text-white">Standard</SelectItem>
-                      <SelectItem value="modern" className="text-white">Modern</SelectItem>
-                      <SelectItem value="commander" className="text-white">Commander</SelectItem>
-                      <SelectItem value="legacy" className="text-white">Legacy</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="archetype" className="text-gray-300">Archetype</Label>
-                  <Select value={archetype} onValueChange={setArchetype}>
-                    <SelectTrigger className="bg-slate-800 border-purple-500/30 text-white">
-                      <SelectValue placeholder="Select archetype" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-purple-500/30">
-                      <SelectItem value="" className="text-white">Random</SelectItem>
-                      {archetypes.map((arch) => (
-                        <SelectItem key={arch} value={arch} className="text-white">
-                          {arch}
-                        </SelectItem>
+                      {["standard", "modern", "commander", "legacy"].map((f) => (
+                        <SelectItem key={f} value={f} className="text-white capitalize">{f}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label className="text-gray-300">Archetype</Label>
+                  <Select value={archetype} onValueChange={setArchetype}>
+                    <SelectTrigger className="bg-slate-800 border-purple-500/30 text-white">
+                      <SelectValue placeholder="Select archetype" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-purple-500/30">
+                      {archetypes.map((a) => (
+                        <SelectItem key={a} value={a} className="text-white capitalize">{a}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* RL Toggle */}
+                <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-purple-500/20">
+                  <div>
+                    <p className="text-white text-sm font-medium flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-green-400" />
+                      RL Optimization
+                    </p>
+                    <p className="text-gray-500 text-xs mt-0.5">200 iterations of hill-climbing</p>
+                  </div>
+                  <Switch checked={useRL} onCheckedChange={setUseRL} />
+                </div>
+
                 <Button
                   onClick={handleGenerate}
                   disabled={generateMutation.isPending}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
                 >
                   {generateMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Generating...
+                      {useRL ? "Optimizing with RL..." : "Generating..."}
                     </>
                   ) : (
                     <>
@@ -129,53 +223,125 @@ export default function DeckGenerator() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Metrics Panel */}
+            {metrics && (
+              <Card className="bg-slate-900/50 border-purple-500/30">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2 text-base">
+                    <BarChart3 className="w-4 h-4 text-blue-400" />
+                    Deck Metrics
+                  </CardTitle>
+                  {generatedDeck.improvements > 0 && (
+                    <Badge className="bg-green-900/50 text-green-300 border-green-500/30 w-fit">
+                      RL: {generatedDeck.improvements} improvements
+                    </Badge>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Total Score */}
+                  <div className="p-3 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center">
+                    <p className="text-xs text-gray-400 mb-1">Total Score</p>
+                    <p className={`text-3xl font-bold ${metrics.totalScore >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {metrics.totalScore.toFixed(1)}
+                    </p>
+                  </div>
+
+                  {/* Score Breakdown */}
+                  <div className="space-y-3">
+                    <ScoreBar label="Mana Curve" value={metrics.breakdown.curve} max={30} color="bg-purple-500" />
+                    <ScoreBar label="Land Ratio" value={metrics.breakdown.lands} max={20} color="bg-blue-500" />
+                    <ScoreBar label="Synergy" value={metrics.breakdown.synergy} max={50} color="bg-green-500" />
+                    <ScoreBar label="Simulation" value={metrics.breakdown.simulation} max={20} color="bg-yellow-500" />
+                  </div>
+
+                  {/* Composition */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2 bg-slate-800/50 rounded">
+                      <Swords className="w-4 h-4 text-red-400 mx-auto mb-1" />
+                      <p className="text-white font-bold text-sm">{metrics.creatureCount}</p>
+                      <p className="text-gray-500 text-xs">Creatures</p>
+                    </div>
+                    <div className="p-2 bg-slate-800/50 rounded">
+                      <Zap className="w-4 h-4 text-yellow-400 mx-auto mb-1" />
+                      <p className="text-white font-bold text-sm">{metrics.spellCount}</p>
+                      <p className="text-gray-500 text-xs">Spells</p>
+                    </div>
+                    <div className="p-2 bg-slate-800/50 rounded">
+                      <Shield className="w-4 h-4 text-green-400 mx-auto mb-1" />
+                      <p className="text-white font-bold text-sm">{metrics.landCount}</p>
+                      <p className="text-gray-500 text-xs">Lands</p>
+                    </div>
+                  </div>
+
+                  {/* Functional Roles */}
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="p-2 bg-red-900/20 rounded border border-red-500/20">
+                      <p className="text-red-300 font-bold">{metrics.removalCount}</p>
+                      <p className="text-gray-500">Removal</p>
+                    </div>
+                    <div className="p-2 bg-blue-900/20 rounded border border-blue-500/20">
+                      <p className="text-blue-300 font-bold">{metrics.drawCount}</p>
+                      <p className="text-gray-500">Draw</p>
+                    </div>
+                    <div className="p-2 bg-green-900/20 rounded border border-green-500/20">
+                      <p className="text-green-300 font-bold">{metrics.rampCount}</p>
+                      <p className="text-gray-500">Ramp</p>
+                    </div>
+                  </div>
+
+                  {/* Mana Curve Chart */}
+                  <ManaCurveChart curve={metrics.manaCurve} />
+
+                  {/* Mechanic Tags */}
+                  {Object.keys(metrics.mechanicTagCounts).length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Mechanic Tags</p>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(metrics.mechanicTagCounts)
+                          .sort(([, a], [, b]) => (b as number) - (a as number))
+                          .map(([tag, count]) => (
+                            <TagBadge key={tag} tag={tag} count={count as number} />
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
-          {/* Results Panel */}
+          {/* ── Right Panel: Deck List ── */}
           <div className="lg:col-span-2">
             {!generatedDeck && (
               <Card className="bg-slate-900/50 border-purple-500/30 h-96 flex items-center justify-center">
                 <CardContent className="text-center">
-                  <p className="text-gray-400">Generate a deck to see results</p>
+                  <Wand2 className="w-12 h-12 text-purple-400/40 mx-auto mb-4" />
+                  <p className="text-gray-400 text-lg">Configure and generate a deck to see results</p>
+                  <p className="text-gray-600 text-sm mt-2">Enable RL Optimization for smarter deck building</p>
                 </CardContent>
               </Card>
             )}
 
             {generatedDeck && (
-              <div className="space-y-6">
-                {/* Validation */}
+              <div className="space-y-4">
+                {/* Validation Banner */}
                 {generatedDeck.validation && (
                   <Card className={`border-l-4 ${
                     generatedDeck.validation.isValid
                       ? "bg-green-900/20 border-l-green-500 border-green-500/30"
                       : "bg-red-900/20 border-l-red-500 border-red-500/30"
                   }`}>
-                    <CardHeader>
-                      <CardTitle className={generatedDeck.validation.isValid ? "text-green-300" : "text-red-300"}>
+                    <CardContent className="py-3 px-4">
+                      <p className={`font-semibold ${generatedDeck.validation.isValid ? "text-green-300" : "text-red-300"}`}>
                         {generatedDeck.validation.isValid ? "✓ Valid Deck" : "✗ Invalid Deck"}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      {generatedDeck.validation.errors.length > 0 && (
-                        <div>
-                          <p className="text-red-300 font-semibold mb-2">Errors:</p>
-                          <ul className="space-y-1">
-                            {generatedDeck.validation.errors.map((error: string, idx: number) => (
-                              <li key={idx} className="text-red-200 text-sm">• {error}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {generatedDeck.validation.warnings.length > 0 && (
-                        <div>
-                          <p className="text-yellow-300 font-semibold mb-2">Warnings:</p>
-                          <ul className="space-y-1">
-                            {generatedDeck.validation.warnings.map((warning: string, idx: number) => (
-                              <li key={idx} className="text-yellow-200 text-sm">• {warning}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                      </p>
+                      {generatedDeck.validation.errors.map((e: string, i: number) => (
+                        <p key={i} className="text-red-200 text-sm mt-1">• {e}</p>
+                      ))}
+                      {generatedDeck.validation.warnings.map((w: string, i: number) => (
+                        <p key={i} className="text-yellow-200 text-sm mt-1">⚠ {w}</p>
+                      ))}
                     </CardContent>
                   </Card>
                 )}
@@ -186,34 +352,72 @@ export default function DeckGenerator() {
                     <div>
                       <CardTitle className="text-white">Generated Deck</CardTitle>
                       <CardDescription className="text-gray-400">
-                        {generatedDeck.deck?.reduce((sum: number, card: any) => sum + card.quantity, 0)} cards total
+                        {generatedDeck.deck?.reduce((s: number, c: any) => s + c.quantity, 0)} cards
+                        {archetype && ` · ${archetype.charAt(0).toUpperCase() + archetype.slice(1)}`}
+                        {` · ${format.charAt(0).toUpperCase() + format.slice(1)}`}
                       </CardDescription>
                     </div>
-                    <Button
-                      onClick={exportDeckAsText}
-                      variant="outline"
-                      size="sm"
-                      className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Export
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={exportArena}
+                        variant="outline"
+                        size="sm"
+                        className="border-blue-500/30 text-blue-300 hover:bg-blue-500/10"
+                      >
+                        Arena
+                      </Button>
+                      <Button
+                        onClick={exportDeckAsText}
+                        variant="outline"
+                        size="sm"
+                        className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Export
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {generatedDeck.deck?.map((card: any, idx: number) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-800/50 rounded border border-purple-500/10 hover:border-purple-500/30 transition-colors">
-                          <div className="flex-1">
-                            <p className="text-white font-medium">{card.name}</p>
-                            <p className="text-gray-400 text-sm">{card.type}</p>
+                    {/* Group by type */}
+                    {(() => {
+                      const deck = generatedDeck.deck || [];
+                      const lands = deck.filter((c: any) => c.type?.includes("Land") || c.type?.includes("land"));
+                      const creatures = deck.filter((c: any) => c.type?.includes("Creature") && !c.type?.includes("Land"));
+                      const spells = deck.filter((c: any) => !c.type?.includes("Creature") && !c.type?.includes("Land"));
+
+                      const renderGroup = (title: string, cards: any[], color: string) =>
+                        cards.length > 0 && (
+                          <div key={title} className="mb-4">
+                            <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${color}`}>
+                              {title} ({cards.reduce((s: number, c: any) => s + c.quantity, 0)})
+                            </p>
+                            <div className="space-y-1">
+                              {cards.map((card: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border border-purple-500/10 hover:border-purple-500/30 transition-colors">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-white text-sm font-medium truncate">{card.name}</p>
+                                    <p className="text-gray-500 text-xs truncate">{card.type}</p>
+                                  </div>
+                                  <div className="flex items-center gap-3 ml-3 shrink-0">
+                                    {card.cmc != null && (
+                                      <span className="text-gray-400 text-xs">CMC {card.cmc}</span>
+                                    )}
+                                    <span className="text-purple-300 font-bold text-sm w-6 text-right">{card.quantity}×</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-purple-300 font-semibold">{card.quantity}x</p>
-                            {card.cmc && <p className="text-gray-400 text-sm">CMC {card.cmc}</p>}
-                          </div>
+                        );
+
+                      return (
+                        <div className="max-h-[600px] overflow-y-auto pr-1">
+                          {renderGroup("Creatures", creatures, "text-red-400")}
+                          {renderGroup("Spells", spells, "text-blue-400")}
+                          {renderGroup("Lands", lands, "text-green-400")}
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               </div>

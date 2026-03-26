@@ -106,3 +106,28 @@
 - [x] Testes do scraper Moxfield (11 testes)
 - [x] Testes de treinamento de embeddings (14 testes)
 - [x] 50 testes passando no total
+
+## Fase 6: Game Feature Engine + RL Melhorado
+
+### Backend
+- [x] Engine de features de jogo (is_creature, is_removal, is_draw, is_ramp, is_token, etc.)
+- [x] Score de curva de mana ideal (IDEAL_CURVE calibrado por arquétipo: aggro/burn/tempo/midrange/control/ramp/combo)
+- [x] Score de proporção de terrenos (land_ratio_score por arquétipo)
+- [x] Score de sinergia por mecânica (mechanic_tags + tag stacking com recompensa exponencial)
+- [x] Simulação de turnos 1-6 (flood/screw/curva detection, 20 iterações)
+- [x] Função evaluate_deck composta (curve + land + synergy + simulation)
+- [x] RL melhorado com hill-climbing guiado por features (200 iterações)
+- [x] Calibração automática com médias dos decks reais do banco
+
+### Frontend
+- [x] Painel de métricas do deck gerado (score breakdown visual)
+- [x] Gráfico de curva de mana (barras por CMC com contagem)
+- [x] Exibição de tags mecânicas das cartas com badges coloridos
+- [x] Score total e componentes (curve/land/synergy/simulation com barras)
+- [x] Toggle de RL Optimization na UI
+- [x] Exportação Arena + texto
+- [x] Lista de deck agrupada por tipo (Creatures/Spells/Lands)
+
+### Testes
+- [x] 26 testes da Game Feature Engine (extractCardFeatures, manaCurveScore, landRatioScore, mechanicSynergyScore, simulateTurns, evaluateDeck, calibrateFromRealDecks)
+- [x] 76 testes passando no total em 7 arquivos
