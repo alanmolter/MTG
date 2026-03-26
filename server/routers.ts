@@ -277,16 +277,122 @@ export const appRouter = router({
     }),
   }),
 
+  mtgtop8: router({
+    importDecks: publicProcedure
+      .input(
+        z.object({
+          format: z.enum(["standard", "pioneer", "modern", "legacy", "vintage", "commander"]).optional(),
+          limit: z.number().min(1).max(100).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { importMTGTop8Decks } = await import("./services/mtgtop8Scraper");
+        return await importMTGTop8Decks(input.format || "standard", input.limit || 50);
+      }),
+  }),
+
+  mtggoldfish: router({
+    importDecks: publicProcedure
+      .input(
+        z.object({
+          format: z.enum(["standard", "pioneer", "modern", "legacy", "vintage", "commander"]).optional(),
+          limit: z.number().min(1).max(100).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { importMTGGoldfishDecks } = await import("./services/mtggoldfishScraper");
+        return await importMTGGoldfishDecks(input.format || "standard", input.limit || 50);
+      }),
+  }),
+
   training: router({
     trainEmbeddings: publicProcedure.mutation(async () => {
       const { trainEmbeddingsFromDecks } = await import("./services/embeddingTrainer");
       return await trainEmbeddingsFromDecks();
     }),
 
+    clusterDecks: publicProcedure
+      .input(z.object({ k: z.number().min(2).max(20).optional() }))
+      .mutation(async ({ input }) => {
+        const { clusterCompetitiveDecks, getClusterStatsByArchetype } = await import("./services/clustering");
+
+        // Executar clustering com a nova implementação
+        const { clusters, stats } = await clusterCompetitiveDecks(input.k || 8);
+
+        // Obter estatísticas por arquétipo
+        const archetypeStats = getClusterStatsByArchetype(clusters);
+
+        return {
+          clusters,
+          stats,
+          archetypeStats,
+          totalClusters: clusters.length,
+          totalDecksClustered: clusters.reduce((sum, c) => sum + c.deckIds.length, 0),
+        };
+      }),
+
     getHistory: publicProcedure.query(async () => {
       const { getTrainingJobHistory } = await import("./services/embeddingTrainer");
       return await getTrainingJobHistory(10);
     }),
+  }),
+
+  visualization: router({
+    generateDeckArt: publicProcedure
+      .input(
+        z.object({
+          deckId: z.number(),
+          style: z.enum(["fantasy", "minimalist", "abstract", "realistic"]).optional(),
+          includeCardNames: z.boolean().optional(),
+          customPrompt: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { generateDeckVisualization } = await import("./services/deckVisualization");
+        return await generateDeckVisualization(input);
+      }),
+
+    generateDeckArtSet: publicProcedure
+      .input(z.object({ deckId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { generateDeckVisualizationSet } = await import("./services/deckVisualization");
+        return await generateDeckVisualizationSet(input.deckId);
+      }),
+  }),
+
+  sharing: router({
+    createShare: publicProcedure
+      .input(
+        z.object({
+          deckId: z.number(),
+          title: z.string().optional(),
+          description: z.string().optional(),
+          includeImage: z.boolean().optional(),
+          expiresInDays: z.number().min(1).max(365).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { createDeckShare } = await import("./services/deckSharing");
+        return await createDeckShare(input);
+      }),
+
+    getSharedDeck: publicProcedure
+      .input(z.object({ shareId: z.string() }))
+      .query(async ({ input }) => {
+        const { getSharedDeck } = await import("./services/deckSharing");
+        return await getSharedDeck(input.shareId);
+      }),
+
+    getShareUrls: publicProcedure
+      .input(z.object({ shareId: z.string() }))
+      .query(async ({ input }) => {
+        const { getSharedDeck, generateShareUrls } = await import("./services/deckSharing");
+        const shareData = await getSharedDeck(input.shareId);
+        if (!shareData) {
+          throw new Error("Share not found");
+        }
+        return generateShareUrls(shareData);
+      }),
   }),
 });
 

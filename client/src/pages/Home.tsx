@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, Wand2, Search, BarChart3, Brain, Layers } from "lucide-react";
+import { Sparkles, Wand2, Search, BarChart3, Brain, Layers, Target, Network, Palette, Share } from "lucide-react";
 import { useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
 
@@ -65,6 +65,22 @@ export default function Home() {
               <Layers className="w-5 h-5 mr-2" />
               Archetype Builder
             </Button>
+            <Button size="lg" onClick={() => setLocation("/clustering")} variant="outline" className="border-green-500 text-green-300 hover:bg-green-500/10">
+              <Target className="w-5 h-5 mr-2" />
+              Cluster Analysis
+            </Button>
+            <Button size="lg" onClick={() => setLocation("/synergy")} variant="outline" className="border-cyan-500 text-cyan-300 hover:bg-cyan-500/10">
+              <Network className="w-5 h-5 mr-2" />
+              Synergy Graph
+            </Button>
+            <Button size="lg" onClick={() => setLocation("/visualization")} variant="outline" className="border-pink-500 text-pink-300 hover:bg-pink-500/10">
+              <Palette className="w-5 h-5 mr-2" />
+              Deck Art
+            </Button>
+            <Button size="lg" onClick={() => setLocation("/sharing")} variant="outline" className="border-green-500 text-green-300 hover:bg-green-500/10">
+              <Share className="w-5 h-5 mr-2" />
+              Share Decks
+            </Button>
           </div>
         </div>
 
@@ -117,6 +133,46 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-400">Import Moxfield decks, train Word2Vec embeddings, and generate optimized decks</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900/50 border-green-500/30 hover:border-green-500/60 transition-colors cursor-pointer" onClick={() => setLocation("/clustering")}>
+            <CardHeader>
+              <Target className="w-8 h-8 text-green-400 mb-2" />
+              <CardTitle className="text-white">Cluster Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-400">Automatically categorize competitive decks into archetypes using K-Means clustering</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900/50 border-cyan-500/30 hover:border-cyan-500/60 transition-colors cursor-pointer" onClick={() => setLocation("/synergy")}>
+            <CardHeader>
+              <Network className="w-8 h-8 text-cyan-400 mb-2" />
+              <CardTitle className="text-white">Synergy Graph</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-400">Explore card relationships and synergy networks based on co-occurrence in competitive decks</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900/50 border-pink-500/30 hover:border-pink-500/60 transition-colors cursor-pointer" onClick={() => setLocation("/visualization")}>
+            <CardHeader>
+              <Palette className="w-8 h-8 text-pink-400 mb-2" />
+              <CardTitle className="text-white">Deck Art</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-400">Generate beautiful AI-powered artistic visualizations of your decks</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900/50 border-green-500/30 hover:border-green-500/60 transition-colors cursor-pointer" onClick={() => setLocation("/sharing")}>
+            <CardHeader>
+              <Share className="w-8 h-8 text-green-400 mb-2" />
+              <CardTitle className="text-white">Share Decks</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-400">Create shareable links and social media posts for your decks</p>
             </CardContent>
           </Card>
         </div>

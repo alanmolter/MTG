@@ -14,13 +14,13 @@
 - [x] Página Home com resumo
 - [x] Página CardSearch com filtros avançados
 - [x] Componente CardCard para exibição
-- [ ] Página DeckBuilder com editor
+- [x] Página DeckBuilder com editor
 - [x] Exportação de decks (texto simples)
 
 ### Testes
 - [x] Testes de validação de regras MTG
-- [ ] Testes de busca de cartas
-- [ ] Testes de CRUD de decks
+- [x] Testes de busca de cartas
+- [x] Testes de CRUD de decks
 
 ## Fase 2: Análise e Sinergia
 
@@ -28,39 +28,39 @@
 - [x] Implementar motor de sinergia (grafo co-ocorrência)
 - [x] Implementar Word2Vec embeddings (versão simplificada)
 - [x] Criar endpoints para busca de cartas similares
-- [ ] Implementar clustering KMeans para arquétipos
+- [x] Implementar clustering KMeans para arquétipos
 - [ ] Dashboard de meta (top cards, frequência)
 
 ### Frontend
-- [ ] Página SynergyGraph com visualização interativa
+- [x] Página SynergyGraph com visualização interativa
 - [ ] Página MetaDashboard com gráficos
 - [x] Seletor de arquétipos
 - [ ] Visualização de estatísticas de meta
 
 ### Testes
-- [ ] Testes de motor de sinergia
+- [x] Testes de motor de sinergia
 - [x] Testes de embeddings
-- [ ] Testes de clustering
+- [x] Testes de clustering
 
 ## Fase 3: Otimização e Avançado
 
 ### Backend
 - [x] Implementar gerador de decks com RL simplificado
-- [ ] Importador de decks competitivos
-- [ ] Integração com APIs de torneios (MTGTop8, MTGGoldfish)
-- [ ] Visualizações artísticas de decks
+- [x] Importador de decks competitivos
+- [x] Integração com APIs de torneios (MTGTop8, MTGGoldfish)
+- [x] Visualizações artísticas de decks
 
 ### Frontend
 - [x] Página DeckGenerator com opções de otimização
-- [ ] Visualizações artísticas de decks
-- [ ] Compartilhamento de decks
+- [x] Visualizações artísticas de decks
+- [x] Compartilhamento de decks
 
 ### Testes
-- [ ] Testes de gerador de decks
-- [ ] Testes de importador
+- [x] Testes de gerador de decks
+- [x] Testes de importador
 
 ## Bugs e Melhorias Futuras
-- [ ] Integração com dados reais de Scryfall (seed inicial)
+- [x] Integração com dados reais de Scryfall (seed inicial)
 - [ ] Implementar clustering KMeans real
 - [ ] Otimizar busca de cartas com índices de banco de dados
 - [ ] Adicionar visualização de grafos Cytoscape
