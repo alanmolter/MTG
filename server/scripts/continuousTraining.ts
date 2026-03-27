@@ -11,7 +11,7 @@ import { cards } from "../../drizzle/schema";
  * Este script automatiza o loop: Gerar -> Avaliar -> Selecionar -> Evoluir -> Self-Play -> Aprender.
  */
 
-async function runContinuousTraining(iterations: number = 5) {
+async function runContinuousTraining(iterations: number = 100) {
   console.log(`🚀 Iniciando Loop de Treinamento Contínuo (${iterations} iterações)...`);
   
   const archetypes = ["aggro", "control", "midrange", "combo"];

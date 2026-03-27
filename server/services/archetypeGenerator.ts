@@ -454,8 +454,9 @@ export function scoreCommanderForArchetype(
   // FATOR DE APRENDIZADO (Brain): Se a IA já viu essa carta ganhar, o peso aumenta
   if (options.learnedWeights && options.learnedWeights[card.name]) {
     const learnedBoost = options.learnedWeights[card.name];
-    // Scale the boost (normal weights are around 1.0, but can grow)
-    score += Math.max(0, learnedBoost * 5); 
+    // Dampened boost: log-scaled to prevent "winner takes all" behavior
+    // normal scores are 10-50, we want weights to help but not dominate.
+    score += Math.sqrt(Math.max(0, learnedBoost)) * 2; 
   }
 
   // Bônus massivo por prioridades mecânicas do arquétipo (+10 por cada tag coincidente)
@@ -602,13 +603,16 @@ export function generateDeckByArchetype(
     );
     
     if (legendaryCreatures.length > 0) {
-      // Ordenar por score específico de Comandante (Sinergia Total com a estratégia e APRENDIZADO)
       const bestCommanders = [...legendaryCreatures].sort((a, b) => 
         scoreCommanderForArchetype(b, template, { tribes: options.tribes, learnedWeights: options.learnedWeights }) - 
         scoreCommanderForArchetype(a, template, { tribes: options.tribes, learnedWeights: options.learnedWeights })
       );
 
-      const commander = bestCommanders[0];
+      // EXPLORAÇÃO: Pegamos aleatoriamente entre os top candidatos (weighted selection simplificada)
+      const diversity = 5; // Escolher entre as top 5 melhores opções
+      const topCount = Math.min(diversity, bestCommanders.length);
+      const commander = bestCommanders[Math.floor(Math.random() * topCount)];
+
       deck.push({ ...commander, quantity: 1, role: "commander" });
       totalCards++;
       

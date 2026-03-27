@@ -10,10 +10,10 @@ import { evaluateDeckWithBrain } from "../services/deckGenerator";
  * Este script foca exclusivamente em evoluir a escolha do Comandante
  * através de ciclos de geração, simulação e reforço.
  */
-async function trainCommander(iterations = 10) {
+async function trainCommander(iterations = 100) {
   console.log(`\n🎓 Iniciando Treinamento de Comandantes (${iterations} iterações)...\n`);
   
-  const cardPool = await searchCards({ format: "standard", isArena: true });
+  const cardPool = await searchCards({ isArena: true });
   if (cardPool.length === 0) {
     console.error("❌ Erro: Banco de dados vazio. Sincronize o Scryfall primeiro.");
     return;
