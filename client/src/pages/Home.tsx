@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, Wand2, Search, BarChart3, Brain, Layers, Target, Network, Palette, Share } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sparkles, Search, Layers, Network } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { getLoginUrl } from "@/const";
 
@@ -23,8 +23,8 @@ export default function Home() {
           {isAuthenticated ? (
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-300">Welcome, {user?.name}</span>
-              <Button variant="outline" size="sm" onClick={() => setLocation("/decks")}>
-                My Decks
+              <Button variant="outline" size="sm" onClick={() => setLocation("/archetype")}>
+                Dashboard
               </Button>
             </div>
           ) : (
@@ -44,164 +44,63 @@ export default function Home() {
           <p className="text-xl text-gray-300 mb-8">
             Discover synergies, analyze the meta, and build winning decks powered by machine learning and data-driven insights.
           </p>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <Link href="/search">
-              <Button size="lg" className="bg-purple-600 hover:bg-purple-700">
-                <Search className="w-5 h-5 mr-2" />
-                Search Cards
-              </Button>
-            </Link>
-            <Link href="/generator">
-              <Button size="lg" variant="outline" className="border-purple-500 text-purple-300 hover:bg-purple-500/10">
-                <Wand2 className="w-5 h-5 mr-2" />
-                Generate Deck
-              </Button>
-            </Link>
-            <Link href="/sync">
-              <Button size="lg" variant="outline" className="border-blue-500 text-blue-300 hover:bg-blue-500/10">
-                <BarChart3 className="w-5 h-5 mr-2" />
-                Sync Data
-              </Button>
-            </Link>
-            <Link href="/pipeline">
-              <Button size="lg" className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-                <Brain className="w-5 h-5 mr-2" />
-                Full Pipeline
-              </Button>
-            </Link>
+          
+          <div className="flex gap-6 justify-center flex-wrap">
             <Link href="/archetype">
-              <Button size="lg" className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700">
-                <Layers className="w-5 h-5 mr-2" />
+              <Button size="lg" className="h-16 px-8 text-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-lg shadow-orange-500/20">
+                <Layers className="w-6 h-6 mr-3" />
                 Archetype Builder
               </Button>
             </Link>
-            <Link href="/clustering">
-              <Button size="lg" variant="outline" className="border-green-500 text-green-300 hover:bg-green-500/10">
-                <Target className="w-5 h-5 mr-2" />
-                Cluster Analysis
+            <Link href="/search">
+              <Button size="lg" className="h-16 px-8 text-lg bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-500/20">
+                <Search className="w-6 h-6 mr-3" />
+                Search Cards
               </Button>
             </Link>
             <Link href="/synergy">
-              <Button size="lg" variant="outline" className="border-cyan-500 text-cyan-300 hover:bg-cyan-500/10">
-                <Network className="w-5 h-5 mr-2" />
+              <Button size="lg" variant="outline" className="h-16 px-8 text-lg border-cyan-500 text-cyan-300 hover:bg-cyan-500/10 shadow-lg shadow-cyan-500/10">
+                <Network className="w-6 h-6 mr-3" />
                 Synergy Graph
-              </Button>
-            </Link>
-            <Link href="/visualization">
-              <Button size="lg" variant="outline" className="border-pink-500 text-pink-300 hover:bg-pink-500/10">
-                <Palette className="w-5 h-5 mr-2" />
-                Deck Art
-              </Button>
-            </Link>
-            <Link href="/sharing">
-              <Button size="lg" variant="outline" className="border-green-500 text-green-300 hover:bg-green-500/10">
-                <Share className="w-5 h-5 mr-2" />
-                Share Decks
               </Button>
             </Link>
           </div>
         </div>
 
         {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-20">
-          <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500/60 transition-colors">
-            <CardHeader>
-              <Search className="w-8 h-8 text-purple-400 mb-2" />
-              <CardTitle className="text-white">Card Search</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-400">Find cards by name, type, colors, and mana cost with advanced filters</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500/60 transition-colors">
-            <CardHeader>
-              <Wand2 className="w-8 h-8 text-pink-400 mb-2" />
-              <CardTitle className="text-white">Deck Generator</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-400">Automatically generate decks optimized for synergy and meta performance</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500/60 transition-colors">
-            <CardHeader>
-              <BarChart3 className="w-8 h-8 text-blue-400 mb-2" />
-              <CardTitle className="text-white">Meta Analytics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-400">View deck archetypes, card frequencies, and win rates across formats</p>
-            </CardContent>
-          </Card>
-
-          <Link href="/archetype" className="block h-full">
-            <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500/60 transition-colors h-full">
+        <div className="grid md:grid-cols-3 gap-8 mt-20">
+          <Link href="/archetype" className="block h-full group">
+            <Card className="bg-slate-900/50 border-amber-500/30 group-hover:border-amber-500/60 transition-all transform group-hover:-translate-y-1 h-full">
               <CardHeader>
-                <Layers className="w-8 h-8 text-amber-400 mb-2" />
-                <CardTitle className="text-white">Archetype Builder</CardTitle>
+                <Layers className="w-10 h-10 text-amber-400 mb-2" />
+                <CardTitle className="text-white text-xl">Archetype Builder</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-400">Gere decks por arquétipo com filtros de cor, tribo, tipo e scoring por prioridades</p>
+                <p className="text-gray-400">Generate decks by archetype with color filters, tribe/type selection, and priority-based scoring.</p>
               </CardContent>
             </Card>
           </Link>
 
-          <Link href="/pipeline" className="block h-full">
-            <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500/60 transition-colors h-full">
+          <Link href="/search" className="block h-full group">
+            <Card className="bg-slate-900/50 border-purple-500/30 group-hover:border-purple-500/60 transition-all transform group-hover:-translate-y-1 h-full">
               <CardHeader>
-                <Brain className="w-8 h-8 text-green-400 mb-2" />
-                <CardTitle className="text-white">AI Pipeline</CardTitle>
+                <Search className="w-10 h-10 text-purple-400 mb-2" />
+                <CardTitle className="text-white text-xl">Card Search</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-400">Import Moxfield decks, train Word2Vec embeddings, and generate optimized decks</p>
+                <p className="text-gray-400">Advanced search for cards by name, type, colors, and mana cost with meta data insights.</p>
               </CardContent>
             </Card>
           </Link>
 
-          <Link href="/clustering" className="block h-full">
-            <Card className="bg-slate-900/50 border-green-500/30 hover:border-green-500/60 transition-colors h-full">
+          <Link href="/synergy" className="block h-full group">
+            <Card className="bg-slate-900/50 border-cyan-500/30 group-hover:border-cyan-500/60 transition-all transform group-hover:-translate-y-1 h-full">
               <CardHeader>
-                <Target className="w-8 h-8 text-green-400 mb-2" />
-                <CardTitle className="text-white">Cluster Analysis</CardTitle>
+                <Network className="w-10 h-10 text-cyan-400 mb-2" />
+                <CardTitle className="text-white text-xl">Synergy Graph</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-400">Automatically categorize competitive decks into archetypes using K-Means clustering</p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/synergy" className="block h-full">
-            <Card className="bg-slate-900/50 border-cyan-500/30 hover:border-cyan-500/60 transition-colors h-full">
-              <CardHeader>
-                <Network className="w-8 h-8 text-cyan-400 mb-2" />
-                <CardTitle className="text-white">Synergy Graph</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-400">Explore card relationships and synergy networks based on co-occurrence in competitive decks</p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/visualization" className="block h-full">
-            <Card className="bg-slate-900/50 border-pink-500/30 hover:border-pink-500/60 transition-colors h-full">
-              <CardHeader>
-                <Palette className="w-8 h-8 text-pink-400 mb-2" />
-                <CardTitle className="text-white">Deck Art</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-400">Generate beautiful AI-powered artistic visualizations of your decks</p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/sharing" className="block h-full">
-            <Card className="bg-slate-900/50 border-green-500/30 hover:border-green-500/60 transition-colors h-full">
-              <CardHeader>
-                <Share className="w-8 h-8 text-green-400 mb-2" />
-                <CardTitle className="text-white">Share Decks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-400">Create shareable links and social media posts for your decks</p>
+                <p className="text-gray-400">Explore complex card relationships and synergy networks discovered by our AI engines.</p>
               </CardContent>
             </Card>
           </Link>

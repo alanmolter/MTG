@@ -164,9 +164,9 @@ export const appRouter = router({
         const { generateDeckByArchetype, exportToText, exportToArena } =
           await import("./services/archetypeGenerator");
         const { searchCards } = await import("./services/scryfall");
-        const { evaluateDeckWithEngine, evaluateDeckWithBrain } =
+        const { evaluateDeckWithEngine, evaluateDeckWithBrain, validateDeck } =
           await import("./services/deckGenerator");
-        const { validateDeck } = await import("./services/deckGenerator");
+        const { modelLearningService } = await import("./services/modelLearning");
 
         // Carregar pool de cartas do banco
         const cardPool = await searchCards({
@@ -174,6 +174,8 @@ export const appRouter = router({
           isArena: input.onlyArena,
           maxPrice: input.maxPrice,
         });
+
+        const learnedWeights = await modelLearningService.getCardWeights();
 
         if (cardPool.length === 0) {
           return {
@@ -202,6 +204,7 @@ export const appRouter = router({
           colorMode: input.colorMode,
           powerLevel: input.powerLevel,
           consistency: input.consistency,
+          learnedWeights,
         });
 
         // Avaliar com Game Feature Engine
@@ -219,6 +222,18 @@ export const appRouter = router({
             ? "standard"
             : input.format
         );
+
+        // ── ENSINAR O MODELO (User-Driven Learning) ──────────────────────────
+        // Cada vez que um usuário gera um deck, as cartas recebem um pequeno boost 
+        // de "validação" (voto popular), alimentando o cérebro da IA. 
+        const userWeightUpdates: Record<string, { weightDelta: number, win: boolean }> = {};
+        result.cards.forEach(c => {
+          userWeightUpdates[c.name] = { 
+            weightDelta: 0.01, 
+            win: true 
+          };
+        });
+        await modelLearningService.updateWeights(userWeightUpdates);
 
         return {
           deck: result.cards,

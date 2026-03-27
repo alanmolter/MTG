@@ -1175,17 +1175,19 @@ export default function ArchetypeGenerator() {
                     {/* Tab: Lista */}
                     {activeTab === "list" && (
                       <div className="max-h-[600px] overflow-y-auto space-y-4 pr-1">
-                        {(["land", "creature", "spell"] as const).map(role => {
+                        {(["commander", "land", "creature", "spell"] as const).map(role => {
                           const cards =
                             result.deck?.filter((c: any) => c.role === role) ||
                             [];
                           if (cards.length === 0) return null;
                           const roleLabels = {
+                            commander: "👑 Comandante",
                             land: "🌍 Terrenos",
                             creature: "⚔️ Criaturas",
                             spell: "✨ Spells",
                           };
                           const roleColors = {
+                            commander: "text-amber-400 font-black",
                             land: "text-green-400",
                             creature: "text-red-400",
                             spell: "text-blue-400",
@@ -1206,7 +1208,11 @@ export default function ArchetypeGenerator() {
                                 {cards.map((card: any, idx: number) => (
                                   <div
                                     key={idx}
-                                    className="flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border border-purple-500/10 hover:border-purple-500/30 transition-colors"
+                                    className={`flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border transition-colors ${
+                                      role === "commander" 
+                                        ? "border-amber-500/50 bg-amber-950/20" 
+                                        : "border-purple-500/10 hover:border-purple-500/30"
+                                    }`}
                                   >
                                     <div className="flex-1 min-w-0">
                                       <p className="text-white text-sm font-medium truncate">

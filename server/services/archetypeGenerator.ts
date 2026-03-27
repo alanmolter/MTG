@@ -75,6 +75,7 @@ export interface GenerateByArchetypeOptions {
   colorMode?: ColorMode;
   powerLevel?: PowerLevel;
   consistency?: Consistency;
+  learnedWeights?: Record<string, number>;
 }
 
 export interface GeneratedDeckResult {
@@ -435,6 +436,45 @@ export function scoreCardForArchetype(
   return Math.max(0, score);
 }
 
+/**
+ * Pontua especificamente para o posto de Comandante.
+ * Foca 100% em sinergia com as mecânicas-chave e tribo do arquétipo.
+ */
+export function scoreCommanderForArchetype(
+  card: CardData,
+  template: ArchetypeTemplate,
+  options: { tribes?: string[]; learnedWeights?: Record<string, number> } = {}
+): number {
+  const tags = classifyCard(card);
+  const type = (card.type || "").toLowerCase();
+  
+  // Começamos com o score base da carta para o arquétipo
+  let score = scoreCardForArchetype(card, template); 
+
+  // FATOR DE APRENDIZADO (Brain): Se a IA já viu essa carta ganhar, o peso aumenta
+  if (options.learnedWeights && options.learnedWeights[card.name]) {
+    const learnedBoost = options.learnedWeights[card.name];
+    // Scale the boost (normal weights are around 1.0, but can grow)
+    score += Math.max(0, learnedBoost * 5); 
+  }
+
+  // Bônus massivo por prioridades mecânicas do arquétipo (+10 por cada tag coincidente)
+  for (const priority of template.priorities) {
+    if (tags.includes(priority)) score += 10;
+  }
+
+  // Bônus por Sinergia Tribal (+15) - Vital para comandantes tribais
+  if (options.tribes && options.tribes.length > 0) {
+    const hasTribe = options.tribes.some(t => type.includes(t.toLowerCase()));
+    if (hasTribe) score += 15;
+  }
+
+  // Comandantes míticos tendem a ter efeitos mais complexos de "build-around"
+  if (card.rarity === "mythic") score += 5;
+
+  return score;
+}
+
 // ─── Gerador Principal ────────────────────────────────────────────────────────
 
 /**
@@ -553,6 +593,32 @@ export function generateDeckByArchetype(
 
   const deck: (CardData & { quantity: number; role: string })[] = [];
   let totalCards = 0;
+
+  // ── 0. Commander (for Commander format) ──────────────────────────────────────
+  if (options.format === "commander") {
+    const legendaryCreatures = scoredCreatures.filter(c => 
+      (c.type || "").toLowerCase().includes("legendary") && 
+      (c.type || "").toLowerCase().includes("creature")
+    );
+    
+    if (legendaryCreatures.length > 0) {
+      // Ordenar por score específico de Comandante (Sinergia Total com a estratégia e APRENDIZADO)
+      const bestCommanders = [...legendaryCreatures].sort((a, b) => 
+        scoreCommanderForArchetype(b, template, { tribes: options.tribes, learnedWeights: options.learnedWeights }) - 
+        scoreCommanderForArchetype(a, template, { tribes: options.tribes, learnedWeights: options.learnedWeights })
+      );
+
+      const commander = bestCommanders[0];
+      deck.push({ ...commander, quantity: 1, role: "commander" });
+      totalCards++;
+      
+      // Remover do pool para não duplicar se houver outras vagas
+      const idx = scoredCreatures.findIndex(c => c.id === commander.id);
+      if (idx !== -1) scoredCreatures.splice(idx, 1);
+    } else {
+      warnings.push("Nenhuma criatura lendária encontrada para ser o Comandante. O deck pode ser inválido.");
+    }
+  }
 
   // ── 1. Terrenos ──────────────────────────────────────────────────────────────
   const targetLands = Math.min(template.lands, deckSize);
@@ -711,7 +777,15 @@ function generateBasicLands(
 /**
  * Exporta deck no formato Arena (1 CardName por linha).
  */
-export function exportToArena(cards: (CardData & { quantity: number })[]) {
+export function exportToArena(cards: (CardData & { quantity: number; role?: string })[]) {
+  const commander = cards.find(c => c.role === "commander");
+  const deck = cards.filter(c => c.role !== "commander");
+
+  if (commander) {
+    return `Commander\n1 ${commander.name}\n\nDeck\n${deck
+      .map(c => `${c.quantity} ${c.name}`)
+      .join("\n")}`;
+  }
   return cards.map(c => `${c.quantity} ${c.name}`).join("\n");
 }
 
@@ -722,31 +796,37 @@ export function exportToText(
   cards: (CardData & { quantity: number; role?: string })[],
   meta: { archetype: string; format: string }
 ) {
+  const commander = cards.find(c => c.role === "commander");
   const lands = cards.filter(
     c => c.role === "land" || (c.type || "").toLowerCase().includes("land")
   );
   const creatures = cards.filter(
     c =>
-      c.role === "creature" ||
+      (c.role === "creature" ||
       ((c.type || "").toLowerCase().includes("creature") &&
-        !(c.type || "").toLowerCase().includes("land"))
+        !(c.type || "").toLowerCase().includes("land"))) &&
+      c.role !== "commander"
   );
   const spells = cards.filter(
     c =>
-      c.role === "spell" ||
+      (c.role === "spell" ||
       (!(c.type || "").toLowerCase().includes("creature") &&
-        !(c.type || "").toLowerCase().includes("land"))
+        !(c.type || "").toLowerCase().includes("land"))) &&
+      c.role !== "commander"
   );
 
   const section = (title: string, list: typeof cards) =>
     list.length > 0
-      ? `// ${title} (${list.reduce((s, c) => s + c.quantity, 0)})\n${list.map(c => `${c.quantity} ${c.name}`).join("\n")}`
+      ? `// ${title} (${list.reduce((s, c) => s + c.quantity, 0)})\n${list
+          .map(c => `${c.quantity} ${c.name}`)
+          .join("\n")}`
       : "";
 
   return [
     `// MTG Deck — ${meta.archetype.toUpperCase()} | ${meta.format.toUpperCase()}`,
     `// Generated by MTG Deck Engine`,
     "",
+    commander ? `// Commander\n1 ${commander.name}\n` : "",
     section("Creatures", creatures),
     section("Spells", spells),
     section("Lands", lands),

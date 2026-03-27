@@ -12,7 +12,9 @@
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "seed:scryfall": "cross-env NODE_ENV=development tsx server/seed-scryfall.ts",
-    "test:model": "cross-env NODE_ENV=development tsx server/scripts/regressionTest.ts"
+    "test:model": "cross-env NODE_ENV=development tsx server/scripts/regressionTest.ts",
+    "teach": "cross-env NODE_ENV=development tsx server/scripts/fullBrainTraining.ts",
+    "check:learn": "cross-env NODE_ENV=development tsx server/scripts/checkCommanderWeights.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
