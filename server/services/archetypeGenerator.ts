@@ -292,13 +292,16 @@ export function generateDeckByArchetype(
   const warnings: string[] = [];
 
   // Pool filtrado por cor/tribo/tipo (excluindo terrenos para a seleção de spells)
-  const filteredPool = filterCards(cardPool, {
+  const baseFilteredPool = filterCards(cardPool, {
     colors: options.colors,
     tribes: options.tribes,
     cardTypes: options.cardTypes,
     excludeLands: false,
     onlyArena: options.onlyArena,
   });
+  const filteredPool = options.format === "commander"
+    ? baseFilteredPool.filter((c) => (c.cmc ?? 0) <= 6)
+    : baseFilteredPool;
 
   if (filteredPool.length < 20) {
     warnings.push(`Pool muito pequeno (${filteredPool.length} cartas). Sincronize mais cartas do Scryfall.`);

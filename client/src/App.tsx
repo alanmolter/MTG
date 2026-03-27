@@ -20,7 +20,7 @@ import SharedDeck from "./pages/SharedDeck";
 function Router() {
   return (
     <Switch>
-      <Route path="" component={Home} />
+      <Route path="/" component={Home} />
       <Route path="/search" component={CardSearch} />
       <Route path="/decks" component={DeckBuilder} />
       <Route path="/generator" component={DeckGenerator} />

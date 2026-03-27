@@ -123,6 +123,7 @@ export const appRouter = router({
           cardTypes: z.array(z.string()).optional(),
           useScoring: z.boolean().optional(),
           onlyArena: z.boolean().optional(),
+          maxPrice: z.number().optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -135,6 +136,7 @@ export const appRouter = router({
         const cardPool = await searchCards({
           colors: input.colors?.join("") || undefined,
           isArena: input.onlyArena,
+          maxPrice: input.maxPrice,
         });
 
         if (cardPool.length === 0) {

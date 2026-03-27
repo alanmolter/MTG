@@ -1,4 +1,4 @@
-import { index, integer, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, pgEnum, pgTable, serial, text, timestamp, varchar, real } from "drizzle-orm/pg-core";
 
 /**
  * Core user table backing auth flow.
@@ -43,6 +43,7 @@ export const cards = pgTable(
     power: varchar("power", { length: 10 }),
     toughness: varchar("toughness", { length: 10 }),
     text: text("text"),
+    priceUsd: real("price_usd"),
     isArena: integer("is_arena").default(0),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -106,16 +106,21 @@ export async function searchCards(filters: {
   cmc?: number;
   rarity?: string;
   isArena?: boolean;
+  maxPrice?: number;
 }): Promise<Card[]> {
   const db = await getDb();
   if (!db) return [];
 
-  const { and, ilike, eq, or } = await import("drizzle-orm");
+  const { and, ilike, eq, or, lte } = await import("drizzle-orm");
 
   const conditions = [];
 
   if (filters.isArena) {
     conditions.push(eq(cards.isArena, 1));
+  }
+
+  if (filters.maxPrice !== undefined) {
+    conditions.push(lte(cards.priceUsd, filters.maxPrice));
   }
 
   if (filters.name) {

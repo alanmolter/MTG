@@ -65,6 +65,7 @@ async function syncBulkOracleCards() {
           power: card.power || null,
           toughness: card.toughness || null,
           text: card.oracle_text || null,
+          priceUsd: card.prices?.usd ? parseFloat(card.prices.usd) : null,
           isArena: card.games?.includes("arena") ? 1 : 0,
         });
       }
@@ -84,6 +85,7 @@ async function syncBulkOracleCards() {
             power: sql`EXCLUDED.power`,
             toughness: sql`EXCLUDED.toughness`,
             text: sql`EXCLUDED.text`,
+            priceUsd: sql`EXCLUDED.price_usd`,
             isArena: sql`EXCLUDED.is_arena`,
             updatedAt: sql`NOW()`,
           }

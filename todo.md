@@ -94,7 +94,7 @@
 - [x] Scraper de decks do Moxfield (API pública + fallback HTML)
 - [x] Salvar decks importados no banco (competitive_decks, competitive_deck_cards)
 - [x] Treinamento automático de embeddings Word2Vec com co-ocorrência real
-- [x] Endpoint tRPC para geração de decks
+- [x] Endpoint tRPC para generation de decks
 - [ ] Job de re-treinamento agendado (cron)
 
 ### Frontend
@@ -153,16 +153,14 @@
 
 ### Testes
 - [x] Testes do archetypeGenerator
-- [x] Testes dos filtros avançados
-- [x] Testes do scoring por arquétipo
 
 ## Fase 8: Maturidade de Produção & Features Avançadas
 
 ### 💡 Lógica Financeira e Geração de Budget Decks
-- [ ] Buscar e sincronizar preços (ex: `prices.usd`) utilizando a API/Bulk da Scryfall
-- [ ] Ajustar tabela de `cards` para persistir dados de valor
-- [ ] Criar input de "Orçamento Máximo ($)" no frontend do Gerador de Arquétipos
-- [ ] Ajustar algorítmo de seleção para priorizar boas cartas dentro do orçamento (Pauper/Budget)
+- [x] Buscar e sincronizar preços (ex: `prices.usd`) utilizando a API/Bulk da Scryfall
+- [x] Ajustar tabela de `cards` para persistir dados de valor
+- [x] Criar input de "Orçamento Máximo ($)" no frontend do Gerador de Arquétipos
+- [x] Ajustar algorítmo de seleção para priorizar boas cartas dentro do orçamento (Pauper/Budget)
 
 ### 🧩 Geração Avançada de Sideboard
 - [ ] Implementar motor de análise das "fraquezas" do Mainboard gerado

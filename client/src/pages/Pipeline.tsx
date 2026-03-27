@@ -145,7 +145,7 @@ export default function Pipeline() {
                       <SelectValue placeholder="Qualquer" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-purple-500/30">
-                      <SelectItem value="" className="text-white">Qualquer</SelectItem>
+                      <SelectItem value="none" className="text-white">Qualquer</SelectItem>
                       {["Aggro", "Control", "Midrange", "Combo", "Burn", "Tempo", "Ramp"].map((a) => (
                         <SelectItem key={a} value={a} className="text-white">{a}</SelectItem>
                       ))}

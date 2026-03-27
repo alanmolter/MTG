@@ -129,6 +129,8 @@ export default function ArchetypeGenerator() {
   const [selectedTribes, setSelectedTribes] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [onlyArena, setOnlyArena] = useState<boolean>(true);
+  const [enableBudget, setEnableBudget] = useState<boolean>(false);
+  const [maxPrice, setMaxPrice] = useState<number>(50);
 
 
   // Resultado
@@ -176,6 +178,7 @@ export default function ArchetypeGenerator() {
       tribes: selectedTribes.length > 0 ? selectedTribes : undefined,
       cardTypes: selectedTypes.length > 0 ? selectedTypes : undefined,
       onlyArena,
+      maxPrice: enableBudget ? maxPrice : undefined,
     });
 
   };
@@ -265,6 +268,39 @@ export default function ArchetypeGenerator() {
                   <Label htmlFor="arena-toggle" className="text-sm text-gray-300 font-medium cursor-pointer">
                     Apenas cartas no MTG Arena
                   </Label>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-purple-500/20">
+                  <div className="flex items-center gap-2 px-1 mb-3">
+                    <input
+                      type="checkbox"
+                      id="budget-toggle"
+                      checked={enableBudget}
+                      onChange={(e) => setEnableBudget(e.target.checked)}
+                      className="w-4 h-4 rounded appearance-none border border-slate-600 bg-slate-800/50 checked:bg-purple-600 checked:border-purple-500 cursor-pointer relative after:content-['✓'] after:absolute after:text-white after:text-xs after:w-full after:h-full after:flex after:items-center after:justify-center after:opacity-0 checked:after:opacity-100 transition-colors"
+                    />
+                    <Label htmlFor="budget-toggle" className="text-sm text-gray-300 font-medium cursor-pointer">
+                      Limite de Preço (Budget)
+                    </Label>
+                  </div>
+                  {enableBudget && (
+                    <div className="px-1 space-y-2">
+                      <div className="flex justify-between text-xs text-gray-400">
+                        <span>US$ 0</span>
+                        <span className="text-purple-300 font-bold">Máx: US$ {maxPrice.toFixed(2)} / carta</span>
+                        <span>US$ 100+</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={maxPrice}
+                        onChange={(e) => setMaxPrice(parseFloat(e.target.value))}
+                        className="w-full accent-purple-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

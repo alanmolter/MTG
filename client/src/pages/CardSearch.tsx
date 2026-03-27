@@ -13,13 +13,19 @@ export default function CardSearch() {
   const [filters, setFilters] = useState({
     name: "",
     type: "",
-    colors: "",
+    colors: "any",
     cmc: undefined as number | undefined,
-    rarity: "",
+    rarity: "any",
   });
 
-  const searchQuery = trpc.cards.search.useQuery(filters, {
-    enabled: filters.name.length > 0 || filters.type.length > 0 || filters.colors.length > 0,
+  const queryFilters = {
+    ...filters,
+    colors: filters.colors === "any" ? "" : filters.colors,
+    rarity: filters.rarity === "any" ? "" : filters.rarity,
+  };
+
+  const searchQuery = trpc.cards.search.useQuery(queryFilters, {
+    enabled: filters.name.length > 0 || filters.type.length > 0 || filters.colors !== "any" || filters.rarity !== "any",
   });
 
   const handleSearch = (e: React.FormEvent) => {
@@ -28,7 +34,7 @@ export default function CardSearch() {
   };
 
   const colorOptions = [
-    { value: "", label: "All Colors" },
+    { value: "any", label: "All Colors" },
     { value: "W", label: "White" },
     { value: "U", label: "Blue" },
     { value: "B", label: "Black" },
@@ -37,7 +43,7 @@ export default function CardSearch() {
   ];
 
   const rarityOptions = [
-    { value: "", label: "All Rarities" },
+    { value: "any", label: "All Rarities" },
     { value: "common", label: "Common" },
     { value: "uncommon", label: "Uncommon" },
     { value: "rare", label: "Rare" },
