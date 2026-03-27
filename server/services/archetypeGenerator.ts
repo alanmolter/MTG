@@ -311,15 +311,17 @@ export function classifyCard(card: CardData): string[] {
 function matchesColorMode(
   cardColors: string,
   selectedColors: ManaColor[],
-  mode: ColorMode
+  mode: ColorMode,
+  isLand: boolean = false
 ): boolean {
   if (!selectedColors || selectedColors.length === 0) return true;
 
   const colors = cardColors || "";
   const isColorless = colors === "" || colors === "C";
-  const isLand = false; // will be passed as param
 
-  if (isColorless || isLand) return true;
+  // Se for terreno e incolor (ex: Evolving Wilds, Reliquary Tower), é sempre permitido
+  if (isLand && (isColorless || colors === "C")) return true;
+  if (isColorless) return true;
 
   const hasPrimary = selectedColors.some(c => colors.includes(c));
   if (!hasPrimary) return false;
@@ -369,11 +371,12 @@ export function filterCards(
     const cardColors = card.colors || "";
     const isLand = type.includes("land");
 
-    // Filtro de cor por modo
+    // Filtro de cor por modo (MELHORADO: Terrenos agora respeitam a cor do deck)
     if (options.colors && options.colors.length > 0) {
       const isColorless = cardColors === "" || cardColors === "C";
-      if (!isColorless && !isLand) {
-        if (!matchesColorMode(cardColors, options.colors, mode)) {
+      // Se não for incolor, verificamos se as cores batem (inclusive para terrenos)
+      if (!isColorless) {
+        if (!matchesColorMode(cardColors, options.colors, mode, isLand)) {
           return false;
         }
       }
@@ -516,6 +519,18 @@ export function generateDeckByArchetype(
     };
   }
 
+  // ── ESCALONAMENTO DE FORMATO (Commander fix: 100 cartas) ────────────────────
+  if (options.format === "commander") {
+    template = {
+      ...template,
+      lands: 37, // Alinhado com LigaMagic/Reddit para decks de 100 cartas
+      creatures: Math.round(template.creatures * 1.5),
+      spells: Math.round(template.spells * 1.5),
+      // No Commander, Ramp e Draw são mandatórios para qualquer arquétipo
+      priorities: Array.from(new Set([...template.priorities, "ramp", "draw"]))
+    };
+  }
+
   // Ajustar template baseado em powerLevel e consistency
   if (options.powerLevel || options.consistency) {
     const powerLevel = options.powerLevel || "ranked";
@@ -527,9 +542,10 @@ export function generateDeckByArchetype(
     const creaturesAdjust =
       powerLevel === "meta" ? 2 : powerLevel === "casual" ? -2 : 0;
 
-    // Consistency modifica a curva (high = mais consistente = mais low cmc)
+    // Consistency modifica a curva (high = mais consistente = MAIS low cmc)
+    // Se high: shift -1. Se greedy: shift +1.
     const curveShift =
-      consistency === "high" ? -1 : consistency === "greedy" ? 1 : 0;
+      consistency === "high" ? 1 : consistency === "greedy" ? -1 : 0;
 
     template = {
       ...template,
@@ -538,21 +554,30 @@ export function generateDeckByArchetype(
       curve: Object.fromEntries(
         Object.entries(template.curve).map(([cmc, count]) => [
           cmc,
+          // Se curveShift > 0 (high consistency), aumentamos cartas de custo baixo (<= 2)
           Math.max(0, count + curveShift * (parseInt(cmc) <= 2 ? 2 : -1)),
         ])
       ),
     };
   }
 
-  // Pool filtrado por cor/tribo/tipo (excluindo terrenos para a seleção de spells)
+  // ── 1. Pool de Terrenos (Apenas cores, ignorando tipos/tribos do usuário) ────
+  const manaPool = filterCards(cardPool, {
+    colors: options.colors,
+    onlyArena: options.onlyArena,
+    colorMode: options.colorMode,
+  }).filter(c => (c.type || "").toLowerCase().includes("land"));
+
+  // ── 2. Pool de Spells/Creaturas (Respeita TODOS os filtros: tipo, tribo, cores) ──
   const baseFilteredPool = filterCards(cardPool, {
     colors: options.colors,
     tribes: options.tribes,
     cardTypes: options.cardTypes,
-    excludeLands: false,
+    excludeLands: true, // Tiramos terrenos daqui para não inflar o pool de spells
     onlyArena: options.onlyArena,
     colorMode: options.colorMode,
   });
+
   const filteredPool =
     options.format === "commander"
       ? baseFilteredPool.filter(c => (c.cmc ?? 0) <= 6)
@@ -560,23 +585,17 @@ export function generateDeckByArchetype(
 
   if (filteredPool.length < 20) {
     warnings.push(
-      `Pool muito pequeno (${filteredPool.length} cartas). Sincronize mais cartas do Scryfall.`
+      `Pool de estratégia muito pequeno (${filteredPool.length} cartas). Remova filtros ou sincronize mais cartas.`
     );
   }
 
   // Separar terrenos, criaturas e spells
-  const allLands = filteredPool.filter(c =>
-    (c.type || "").toLowerCase().includes("land")
+  const allLands = manaPool;
+  const allCreatures = filteredPool.filter(c =>
+      (c.type || "").toLowerCase().includes("creature")
   );
-  const allCreatures = filteredPool.filter(
-    c =>
-      (c.type || "").toLowerCase().includes("creature") &&
-      !(c.type || "").toLowerCase().includes("land")
-  );
-  const allSpells = filteredPool.filter(
-    c =>
-      !(c.type || "").toLowerCase().includes("creature") &&
-      !(c.type || "").toLowerCase().includes("land")
+  const allSpells = filteredPool.filter(c =>
+      !(c.type || "").toLowerCase().includes("creature")
   );
 
   // Ordenar por score

@@ -297,125 +297,130 @@ const MANA_COLORS: {
 ];
 
 const TRIBES = [
-  "Elf",
-  "Goblin",
-  "Zombie",
-  "Human",
-  "Dragon",
-  "Merfolk",
-  "Vampire",
-  "Angel",
-  "Wizard",
-  "Warrior",
-  "Soldier",
-  "Shaman",
-  "Rogue",
-  "Cleric",
-  "Beast",
+  "Elf", "Goblin", "Zombie", "Human", "Dragon", 
+  "Merfolk", "Vampire", "Angel", "Wizard", "Warrior", 
+  "Soldier", "Shaman", "Rogue", "Cleric", "Beast"
 ];
+
 const CARD_TYPES = [
-  "creature",
-  "instant",
-  "sorcery",
-  "enchantment",
-  "artifact",
-  "planeswalker",
+  "creature", "instant", "sorcery", "enchantment", "artifact", "planeswalker"
 ];
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function TemplatePreview({ archetype }: { archetype: ArchetypeName }) {
-  const templates: Record<
-    ArchetypeName,
-    {
-      curve: Record<number, number>;
-      lands: number;
-      creatures: number;
-      spells: number;
-    }
-  > = {
-    aggro: {
-      curve: { 1: 12, 2: 14, 3: 8, 4: 4 },
-      lands: 22,
-      creatures: 28,
-      spells: 10,
-    },
-    burn: {
-      curve: { 1: 16, 2: 12, 3: 6, 4: 2 },
-      lands: 20,
-      creatures: 8,
-      spells: 32,
-    },
-    control: {
-      curve: { 2: 6, 3: 10, 4: 10, 5: 6 },
-      lands: 26,
-      creatures: 6,
-      spells: 28,
-    },
-    combo: {
-      curve: { 1: 6, 2: 10, 3: 12, 4: 8 },
-      lands: 24,
-      creatures: 12,
-      spells: 24,
-    },
-    midrange: {
-      curve: { 2: 8, 3: 12, 4: 10, 5: 6 },
-      lands: 24,
-      creatures: 22,
-      spells: 14,
-    },
-    ramp: {
-      curve: { 1: 4, 2: 8, 3: 8, 4: 4, 5: 8, 6: 4 },
-      lands: 22,
-      creatures: 16,
-      spells: 22,
-    },
-    tempo: {
-      curve: { 1: 8, 2: 14, 3: 10, 4: 4 },
-      lands: 20,
-      creatures: 16,
-      spells: 24,
-    },
+function TemplatePreview({ 
+  archetype, 
+  format, 
+  playstyle, 
+  powerLevel, 
+  consistency 
+}: { 
+  archetype: ArchetypeName;
+  format: FormatName;
+  playstyle?: string;
+  powerLevel?: PowerLevel;
+  consistency?: Consistency;
+}) {
+  const baseTemplates: Record<ArchetypeName, any> = {
+    aggro: { curve: { 1: 12, 2: 14, 3: 8, 4: 4 }, lands: 22, creatures: 28, spells: 10, priorities: ["haste"] },
+    burn: { curve: { 1: 16, 2: 12, 3: 6, 4: 2 }, lands: 20, creatures: 8, spells: 32, priorities: ["direct_damage"] },
+    control: { curve: { 2: 6, 3: 10, 4: 10, 5: 6 }, lands: 26, creatures: 6, spells: 28, priorities: ["removal"] },
+    combo: { curve: { 1: 6, 2: 10, 3: 12, 4: 8 }, lands: 24, creatures: 12, spells: 24, priorities: ["draw"] },
+    midrange: { curve: { 2: 8, 3: 12, 4: 10, 5: 6 }, lands: 24, creatures: 22, spells: 14, priorities: ["value"] },
+    ramp: { curve: { 1: 4, 2: 8, 3: 8, 4: 4, 5: 8, 6: 4 }, lands: 22, creatures: 16, spells: 22, priorities: ["ramp"] },
+    tempo: { curve: { 1: 8, 2: 14, 3: 10, 4: 4 }, lands: 20, creatures: 16, spells: 24, priorities: ["counter"] },
   };
-  const t = templates[archetype];
-  const maxCurve = Math.max(...Object.values(t.curve));
+
+  const playstyleMods: Record<string, any> = {
+    go_wide: { curve: { 1: 16, 2: 16, 3: 10, 4: 4 }, priorities: ["token"] },
+    go_tall: { curve: { 1: 6, 2: 10, 3: 12, 4: 12 }, priorities: ["counter_synergy"] },
+    burn_hybrid: { curve: { 1: 14, 2: 14, 3: 8, 4: 2 }, priorities: ["direct_damage"] },
+    draw_go: { curve: { 1: 2, 2: 8, 3: 12, 4: 10, 5: 6 }, priorities: ["draw", "counter"] },
+    tap_out: { curve: { 2: 4, 3: 10, 4: 14, 5: 10, 6: 4 }, priorities: ["removal"] },
+    hard_control: { curve: { 1: 2, 2: 6, 3: 8, 4: 12, 5: 10, 6: 6 }, priorities: ["counter", "board_wipe"] },
+  };
+
+  let t = { ...baseTemplates[archetype] };
+  
+  if (playstyle && playstyleMods[playstyle]) {
+    const mod = playstyleMods[playstyle];
+    t = {
+      ...t,
+      curve: { ...t.curve, ...mod.curve },
+      lands: Math.round(t.lands * (mod.curve[1] > t.curve[1] ? 0.9 : 1)),
+    };
+  }
+
+  if (format === "commander") {
+    t = {
+      ...t,
+      lands: 37,
+      creatures: Math.round(t.creatures * 1.5),
+      spells: Math.round(t.spells * 1.5),
+    };
+  }
+
+  const pLevel = powerLevel || "ranked";
+  const consis = consistency || "medium";
+  const landAdjust = pLevel === "meta" ? -2 : pLevel === "casual" ? 2 : 0;
+  const creaturesAdjust = pLevel === "meta" ? 2 : pLevel === "casual" ? -2 : 0;
+  const curveShift = consis === "high" ? 1 : consis === "greedy" ? -1 : 0;
+
+  t = {
+    ...t,
+    lands: Math.max(18, t.lands + landAdjust),
+    creatures: Math.max(8, t.creatures + creaturesAdjust),
+    curve: Object.fromEntries(
+      Object.entries(t.curve).map(([cmc, count]) => [
+        cmc,
+        Math.max(0, (count as number) + curveShift * (parseInt(cmc) <= 2 ? 2 : -1)),
+      ])
+    ),
+  };
+
   const cmcs = [1, 2, 3, 4, 5, 6];
+  const maxVal = Math.max(...Object.values(t.curve) as number[]);
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
-        Template do Arquétipo
-      </p>
-      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-        <div className="p-2 bg-red-900/20 rounded border border-red-500/20">
-          <p className="text-red-300 font-bold text-lg">{t.creatures}</p>
-          <p className="text-gray-500">Criaturas</p>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">
+          Estrutura Projetada (Preview)
+        </p>
+        <Badge variant="outline" className="text-[9px] h-4 border-purple-500/30 font-normal">
+          {format.toUpperCase()}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-slate-950/40 p-2 rounded border border-purple-500/10 text-center">
+          <p className="text-red-400 text-lg font-black leading-none">{t.creatures}</p>
+          <p className="text-[9px] text-gray-600 uppercase mt-1">Crits</p>
         </div>
-        <div className="p-2 bg-blue-900/20 rounded border border-blue-500/20">
-          <p className="text-blue-300 font-bold text-lg">{t.spells}</p>
-          <p className="text-gray-500">Spells</p>
+        <div className="bg-slate-950/40 p-2 rounded border border-purple-500/10 text-center">
+          <p className="text-blue-400 text-lg font-black leading-none">{t.spells}</p>
+          <p className="text-[9px] text-gray-600 uppercase mt-1">Sps</p>
         </div>
-        <div className="p-2 bg-green-900/20 rounded border border-green-500/20">
-          <p className="text-green-300 font-bold text-lg">{t.lands}</p>
-          <p className="text-gray-500">Terrenos</p>
+        <div className="bg-slate-950/40 p-2 rounded border border-purple-500/10 text-center">
+          <p className="text-green-400 text-lg font-black leading-none">{t.lands}</p>
+          <p className="text-[9px] text-gray-600 uppercase mt-1">Lands</p>
         </div>
       </div>
-      <div className="space-y-1">
-        <p className="text-xs text-gray-500">Curva de Mana Ideal</p>
+
+      <div className="space-y-2">
         <div className="flex items-end gap-1 h-12">
           {cmcs.map(cmc => {
-            const count = t.curve[cmc] || 0;
-            const h = count > 0 ? Math.max(6, (count / maxCurve) * 44) : 4;
+            const val = t.curve[cmc] || 0;
+            const h = maxVal > 0 ? (val / maxVal) * 100 : 0;
             return (
-              <div
-                key={cmc}
-                className="flex-1 flex flex-col items-center gap-0.5"
-              >
-                <div
-                  className="w-full rounded-t bg-gradient-to-t from-purple-600 to-purple-400"
-                  style={{ height: `${h}px`, opacity: count > 0 ? 1 : 0.15 }}
-                />
-                <span className="text-xs text-gray-600">{cmc}</span>
+              <div key={cmc} className="flex-1 flex flex-col items-center gap-1 group">
+                <div className="w-full bg-slate-800/50 rounded-t-sm relative h-full overflow-hidden">
+                  <div 
+                    className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-purple-600 to-pink-500 rounded-t-sm transition-all duration-300" 
+                    style={{ height: `${h}%` }}
+                  />
+                </div>
+                <span className="text-[9px] text-gray-700 font-bold">{cmc}</span>
               </div>
             );
           })}
@@ -1023,7 +1028,13 @@ export default function ArchetypeGenerator() {
             {/* Template Preview */}
             <Card className="bg-slate-900/50 border-purple-500/30">
               <CardContent className="pt-4">
-                <TemplatePreview archetype={archetype} />
+                <TemplatePreview 
+                  archetype={archetype} 
+                  format={format}
+                  playstyle={playstyle}
+                  powerLevel={powerLevel}
+                  consistency={consistency}
+                />
               </CardContent>
             </Card>
 
@@ -1205,41 +1216,63 @@ export default function ArchetypeGenerator() {
                                 )
                               </p>
                               <div className="space-y-1">
-                                {cards.map((card: any, idx: number) => (
-                                  <div
-                                    key={idx}
-                                    className={`flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border transition-colors ${
-                                      role === "commander" 
-                                        ? "border-amber-500/50 bg-amber-950/20" 
-                                        : "border-purple-500/10 hover:border-purple-500/30"
-                                    }`}
-                                  >
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-white text-sm font-medium truncate">
-                                        {card.name}
-                                      </p>
-                                      <p className="text-gray-500 text-xs truncate">
-                                        {card.type}
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-3 ml-3 shrink-0">
-                                      {card.cmc != null && (
-                                        <span className="text-gray-500 text-xs">
-                                          CMC {card.cmc}
-                                        </span>
-                                      )}
-                                      {card.colors &&
-                                        card.colors.length > 0 && (
+                                  {cards.map((card: any, idx: number) => (
+                                    <div
+                                      key={idx}
+                                      className={`group flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border transition-colors ${
+                                        role === "commander" 
+                                          ? "border-amber-500/50 bg-amber-950/20" 
+                                          : "border-purple-500/10 hover:border-purple-500/30"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        {/* Miniatura da Imagem Real */}
+                                        <div className="w-10 h-10 rounded overflow-hidden bg-slate-700 border border-slate-600 shrink-0">
+                                          {card.imageUrl ? (
+                                            <img 
+                                              src={card.imageUrl} 
+                                              alt={card.name} 
+                                              className="w-full h-full object-cover transition-transform group-hover:scale-125"
+                                              loading="lazy"
+                                            />
+                                          ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-500">
+                                              No Art
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-white text-sm font-medium truncate">
+                                            {card.name}
+                                          </p>
+                                          <p className="text-gray-500 text-xs truncate">
+                                            {card.type}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-3 ml-3 shrink-0">
+                                        {card.cmc != null && (
                                           <span className="text-gray-500 text-xs">
-                                            {card.colors}
+                                            CMC {card.cmc}
                                           </span>
                                         )}
-                                      <span className="text-purple-300 font-bold text-sm w-6 text-right">
-                                        {card.quantity}×
-                                      </span>
+                                        {card.colors && card.colors.length > 0 && (
+                                          <div className="flex gap-0.5">
+                                            {card.colors.split("").map((c: string, ci: number) => (
+                                              <span key={ci} className="text-[10px] bg-slate-700 px-1 border border-slate-600 rounded text-gray-300">
+                                                {c}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                        <span className="text-purple-300 font-extrabold text-sm w-8 text-right bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                          {card.quantity}×
+                                        </span>
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  ))}
                               </div>
                             </div>
                           );
