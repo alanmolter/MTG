@@ -22,6 +22,15 @@ interface ScryfallCard {
   power?: string;
   toughness?: string;
   oracle_text?: string;
+  oracle_id?: string;
+  arena_id?: number;
+  digital?: boolean;
+  set?: string;
+  set_type?: string;
+  prices?: {
+    usd?: string;
+    usd_foil?: string;
+  };
 }
 
 async function getImageUrl(card: ScryfallCard): Promise<string | null> {
@@ -52,11 +61,13 @@ async function seedScryfall() {
   let totalSkipped = 0;
   let errors: string[] = [];
 
-  // Buscar cartas simples (evitar dupla-face que têm mais problemas)
-  const query = "legal:modern is:permanent type:creature unique:prints";
-  let nextPageUrl = `${SCRYFALL_API}/cards/search?q=${encodeURIComponent(query)}&unique=prints`;
+  // BUSCA ABSOLUTA: Pega TODAS as cartas únicas da história do Magic (Papel e Arena)
+  // unique=cards garante 1 de cada nome (Bolt, Birds, etc.) sem duplicatas inúteis.
+  // game:paper OR game:arena cobre 100% da existência do jogo.
+  const query = "game:paper OR game:arena";
+  let nextPageUrl = `${SCRYFALL_API}/cards/search?q=${encodeURIComponent(query)}&unique=cards`;
   let pageCount = 0;
-  const maxPages = 5; // Limitar a 5 páginas para teste rápido
+  const maxPages = 200; // Suficiente para carregar ~35.000 cartas únicas (toda a história do Magic)
 
   while (nextPageUrl && pageCount < maxPages) {
     try {
@@ -90,21 +101,32 @@ async function seedScryfall() {
             .limit(1);
 
           if (existing.length > 0) {
+            // Opcional: Atualizar se isArena mudou ou preço mudou
             totalSkipped++;
             continue;
           }
 
+          // Determinar se é Arena
+          // 1. Tem arena_id no scryfall?
+          // 2. Faz parte de um set do Arena?
+          const isArena = scryfallCard.arena_id || 
+                          scryfallCard.set_type === "alchemy" || 
+                          scryfallCard.digital ? 1 : 0;
+
           const insertData: InsertCard = {
             scryfallId: scryfallCard.id,
+            oracleId: scryfallCard.oracle_id || null,
             name: scryfallCard.name,
             type: scryfallCard.type_line,
             colors: scryfallCard.colors?.join("") || null,
-            cmc: scryfallCard.cmc || 0,
+            cmc: scryfallCard.cmc ?? 0,
             rarity: scryfallCard.rarity || "unknown",
             imageUrl: imageUrl,
             power: scryfallCard.power || null,
             toughness: scryfallCard.toughness || null,
             text: scryfallCard.oracle_text || null,
+            isArena: isArena,
+            priceUsd: scryfallCard.prices?.usd ? parseFloat(scryfallCard.prices.usd) : null,
           };
 
           await db.insert(cards).values(insertData);

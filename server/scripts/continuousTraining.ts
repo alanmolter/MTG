@@ -14,25 +14,29 @@ import { cards } from "../../drizzle/schema";
 async function runContinuousTraining(iterations: number = 100) {
   console.log(`🚀 Iniciando Loop de Treinamento Contínuo (${iterations} iterações)...`);
   
-  const archetypes = ["aggro", "control", "midrange", "combo"];
+  const archetypes = ["aggro", "control", "midrange", "combo", "ramp"];
   const database = await getDb();
   if (!database) return;
   
-  const cardPool = await database.select().from(cards).limit(1000);
+  const cardPool = await database.select().from(cards).limit(2000);
 
   for (let it = 1; it <= iterations; it++) {
     console.log(`\n🔄 Iteração [${it}/${iterations}] ───────────────────────`);
     
-    for (const arch of archetypes) {
+    // Processar arquétipos em paralelo
+    const archPromises = archetypes.map(async (arch) => {
       console.log(`   [${arch.toUpperCase()}] Gerando população inicial...`);
       
       // 1. Gerar População
       const population: { deck: any[], score: number }[] = [];
-      for (let i = 0; i < 20; i++) {
-        const deck = await generateInitialDeck({ format: "standard", archetype: arch });
+      const deckPromises = Array.from({ length: 20 }, async () => {
+        const deck = await generateInitialDeck({ format: "standard", archetype: arch as any });
         const evalResult = await evaluateDeckWithBrain(deck, arch);
-        population.push({ deck, score: evalResult.normalizedScore });
-      }
+        return { deck, score: evalResult.normalizedScore };
+      });
+      
+      const results = await Promise.all(deckPromises);
+      population.push(...results);
 
       // 2. Seleção (Top 25%)
       population.sort((a, b) => b.score - a.score);
@@ -58,8 +62,10 @@ async function runContinuousTraining(iterations: number = 100) {
       await modelLearningService.runSelfPlaySession(nextGen);
 
       // 5. Aprender (Pesos já atualizados pelo runSelfPlaySession)
-      console.log(`   [${arch}] Aprendizado concluído e pesos atualizados.`);
-    }
+      console.log(`   [${arch}] Aprendizado concluído.`);
+    });
+
+    await Promise.all(archPromises);
 
     // Tracking do Progresso
     ExperimentTracker.logExperiment(`Training Loop It ${it}`, {
