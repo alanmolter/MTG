@@ -27,6 +27,18 @@ export type FormatName =
   | "commander"
   | "pioneer";
 
+export type Playstyle =
+  | "go_wide"
+  | "go_tall"
+  | "burn_hybrid"
+  | "draw_go"
+  | "tap_out"
+  | "hard_control";
+
+export type ColorMode = "strict" | "splash" | "flex";
+export type PowerLevel = "casual" | "ranked" | "meta";
+export type Consistency = "high" | "medium" | "greedy";
+
 export type ManaColor = "W" | "U" | "B" | "R" | "G";
 
 export interface CardData {
@@ -59,6 +71,10 @@ export interface GenerateByArchetypeOptions {
   cardTypes?: string[];
   useScoring?: boolean;
   onlyArena?: boolean;
+  playstyle?: Playstyle;
+  colorMode?: ColorMode;
+  powerLevel?: PowerLevel;
+  consistency?: Consistency;
 }
 
 export interface GeneratedDeckResult {
@@ -80,7 +96,8 @@ export const ARCHETYPES: Record<ArchetypeName, ArchetypeTemplate> = {
     creatures: 28,
     spells: 10,
     priorities: ["haste", "direct_damage", "low_cmc"],
-    description: "Fast aggressive strategy focused on early pressure and direct damage.",
+    description:
+      "Fast aggressive strategy focused on early pressure and direct damage.",
     keyMechanics: ["haste", "first strike", "trample", "direct damage"],
   },
   burn: {
@@ -89,7 +106,8 @@ export const ARCHETYPES: Record<ArchetypeName, ArchetypeTemplate> = {
     creatures: 8,
     spells: 32,
     priorities: ["direct_damage", "low_cmc", "haste"],
-    description: "Pure damage strategy using instants and sorceries to burn opponents.",
+    description:
+      "Pure damage strategy using instants and sorceries to burn opponents.",
     keyMechanics: ["direct damage", "instant speed", "haste"],
   },
   control: {
@@ -98,7 +116,8 @@ export const ARCHETYPES: Record<ArchetypeName, ArchetypeTemplate> = {
     creatures: 6,
     spells: 28,
     priorities: ["removal", "draw", "counter"],
-    description: "Reactive strategy that answers threats and wins in the late game.",
+    description:
+      "Reactive strategy that answers threats and wins in the late game.",
     keyMechanics: ["counterspell", "removal", "card draw", "board wipe"],
   },
   combo: {
@@ -107,7 +126,8 @@ export const ARCHETYPES: Record<ArchetypeName, ArchetypeTemplate> = {
     creatures: 12,
     spells: 24,
     priorities: ["draw", "tutor", "synergy"],
-    description: "Assembles a powerful combination of cards to win in a single turn.",
+    description:
+      "Assembles a powerful combination of cards to win in a single turn.",
     keyMechanics: ["tutor", "card draw", "sacrifice", "token", "counter"],
   },
   midrange: {
@@ -116,7 +136,8 @@ export const ARCHETYPES: Record<ArchetypeName, ArchetypeTemplate> = {
     creatures: 22,
     spells: 14,
     priorities: ["removal", "value", "resilience"],
-    description: "Flexible strategy with efficient threats and answers for any situation.",
+    description:
+      "Flexible strategy with efficient threats and answers for any situation.",
     keyMechanics: ["removal", "card advantage", "enters the battlefield"],
   },
   ramp: {
@@ -125,7 +146,8 @@ export const ARCHETYPES: Record<ArchetypeName, ArchetypeTemplate> = {
     creatures: 16,
     spells: 22,
     priorities: ["ramp", "draw", "big_threat"],
-    description: "Accelerates mana production to deploy oversized threats ahead of schedule.",
+    description:
+      "Accelerates mana production to deploy oversized threats ahead of schedule.",
     keyMechanics: ["ramp", "land search", "mana dork", "big creatures"],
   },
   tempo: {
@@ -134,14 +156,74 @@ export const ARCHETYPES: Record<ArchetypeName, ArchetypeTemplate> = {
     creatures: 16,
     spells: 24,
     priorities: ["counter", "draw", "low_cmc"],
-    description: "Efficient threats backed by cheap interaction to stay ahead on tempo.",
+    description:
+      "Efficient threats backed by cheap interaction to stay ahead on tempo.",
     keyMechanics: ["flash", "counterspell", "bounce", "draw"],
+  },
+};
+
+// ─── Playstyle Modifiers ─────────────────────────────────────────────────────
+
+interface PlaystyleModifier {
+  curve: Record<number, number>;
+  priorities: string[];
+  keyMechanics: string[];
+  description: string;
+}
+
+export const PLAYSTYLES: Record<Playstyle, PlaystyleModifier> = {
+  go_wide: {
+    curve: { 1: 16, 2: 16, 3: 10, 4: 4 },
+    priorities: ["token", "creature", "sacrifice", "draw"],
+    keyMechanics: ["token", "sacrifice", "go wide", "mass anthem"],
+    description: "Generate many small creatures to overwhelm opponents.",
+  },
+  go_tall: {
+    curve: { 1: 6, 2: 10, 3: 12, 4: 12 },
+    priorities: ["counter_synergy", "pump", "big_threat"],
+    keyMechanics: ["+1/+1 counters", "pump", "go tall", "double strike"],
+    description: "Build a few powerful creatures with counters and buffs.",
+  },
+  burn_hybrid: {
+    curve: { 1: 14, 2: 14, 3: 8, 4: 2 },
+    priorities: ["direct_damage", "low_cmc", "haste", "creature"],
+    keyMechanics: ["direct damage", "burn", "aggro-creature", "heroic"],
+    description:
+      "Mix direct damage with aggressive creatures for maximum pressure.",
+  },
+  draw_go: {
+    curve: { 1: 2, 2: 8, 3: 12, 4: 10, 5: 6 },
+    priorities: ["draw", "counter", "removal", "flash"],
+    keyMechanics: ["card draw", "counterspell", "flash", "instant speed"],
+    description:
+      "Pass the turn with counters and card advantage, react to everything.",
+  },
+  tap_out: {
+    curve: { 2: 4, 3: 10, 4: 14, 5: 10, 6: 4 },
+    priorities: ["removal", "draw", "big_threat", "board_wipe"],
+    keyMechanics: ["board wipe", "removal", "fat creatures", "tap-out control"],
+    description: "Play powerful cards at sorcery speed, tap out every turn.",
+  },
+  hard_control: {
+    curve: { 1: 2, 2: 6, 3: 8, 4: 12, 5: 10, 6: 6 },
+    priorities: ["counter", "removal", "draw", "board_wipe", "wincon"],
+    keyMechanics: [
+      "counterspell",
+      "removal",
+      "board wipe",
+      "planeswalker",
+      "lock",
+    ],
+    description: "Total control with counters, removal, and inevitability.",
   },
 };
 
 // ─── Regras de Formato ────────────────────────────────────────────────────────
 
-export const FORMAT_RULES: Record<FormatName, { deckSize: number; maxCopies: number; sideboardSize: number }> = {
+export const FORMAT_RULES: Record<
+  FormatName,
+  { deckSize: number; maxCopies: number; sideboardSize: number }
+> = {
   standard: { deckSize: 60, maxCopies: 4, sideboardSize: 15 },
   historic: { deckSize: 60, maxCopies: 4, sideboardSize: 15 },
   modern: { deckSize: 60, maxCopies: 4, sideboardSize: 15 },
@@ -169,22 +251,50 @@ export function classifyCard(card: CardData): string[] {
   if (type.includes("artifact")) tags.push("artifact");
   if (type.includes("planeswalker")) tags.push("planeswalker");
 
-  if (text.includes("destroy") || text.includes("exile") || (text.includes("deals") && text.includes("damage"))) tags.push("removal");
-  if (text.includes("draw a card") || text.includes("draw cards") || text.includes("draw two") || text.includes("draw three")) tags.push("draw");
+  if (
+    text.includes("destroy") ||
+    text.includes("exile") ||
+    (text.includes("deals") && text.includes("damage"))
+  )
+    tags.push("removal");
+  if (
+    text.includes("draw a card") ||
+    text.includes("draw cards") ||
+    text.includes("draw two") ||
+    text.includes("draw three")
+  )
+    tags.push("draw");
   if (text.includes("counter target")) tags.push("counter");
-  if (text.includes("add {") || text.includes("search your library for a basic land")) tags.push("ramp");
+  if (
+    text.includes("add {") ||
+    text.includes("search your library for a basic land")
+  )
+    tags.push("ramp");
   if (text.includes("haste")) tags.push("haste");
-  if (text.includes("deals") && text.includes("damage")) tags.push("direct_damage");
-  if (text.includes("search your library") && !text.includes("basic land")) tags.push("tutor");
+  if (text.includes("deals") && text.includes("damage"))
+    tags.push("direct_damage");
+  if (text.includes("search your library") && !text.includes("basic land"))
+    tags.push("tutor");
   if (text.includes("create") && text.includes("token")) tags.push("token");
-  if (text.includes("+1/+1 counter") || text.includes("proliferate")) tags.push("counter_synergy");
+  if (text.includes("+1/+1 counter") || text.includes("proliferate"))
+    tags.push("counter_synergy");
   if (text.includes("sacrifice")) tags.push("sacrifice");
-  if (text.includes("from your graveyard") || text.includes("flashback") || text.includes("escape")) tags.push("graveyard");
+  if (
+    text.includes("from your graveyard") ||
+    text.includes("flashback") ||
+    text.includes("escape")
+  )
+    tags.push("graveyard");
   if (text.includes("flying")) tags.push("flying");
-  if (text.includes("lifelink") || (text.includes("gain") && text.includes("life"))) tags.push("lifegain");
+  if (
+    text.includes("lifelink") ||
+    (text.includes("gain") && text.includes("life"))
+  )
+    tags.push("lifegain");
   if (text.includes("flash")) tags.push("flash");
   if (text.includes("trample")) tags.push("trample");
-  if (text.includes("first strike") || text.includes("double strike")) tags.push("first_strike");
+  if (text.includes("first strike") || text.includes("double strike"))
+    tags.push("first_strike");
 
   // CMC
   const cmc = card.cmc ?? 0;
@@ -193,6 +303,44 @@ export function classifyCard(card: CardData): string[] {
   if (cmc >= 7) tags.push("big_threat");
 
   return tags;
+}
+
+// ─── Filtro de Cor por Modo ───────────────────────────────────────────────────
+
+function matchesColorMode(
+  cardColors: string,
+  selectedColors: ManaColor[],
+  mode: ColorMode
+): boolean {
+  if (!selectedColors || selectedColors.length === 0) return true;
+
+  const colors = cardColors || "";
+  const isColorless = colors === "" || colors === "C";
+  const isLand = false; // will be passed as param
+
+  if (isColorless || isLand) return true;
+
+  const hasPrimary = selectedColors.some(c => colors.includes(c));
+  if (!hasPrimary) return false;
+
+  // strict: only selected colors (or colorless)
+  if (mode === "strict") {
+    const extraColors = colors
+      .split("")
+      .filter(c => !selectedColors.includes(c as ManaColor));
+    return extraColors.length === 0;
+  }
+
+  // splash: allows 1 extra color (light splash)
+  if (mode === "splash") {
+    const extraColors = colors
+      .split("")
+      .filter(c => !selectedColors.includes(c as ManaColor));
+    return extraColors.length <= 1;
+  }
+
+  // flex: any combination allowed (engine decides)
+  return true;
 }
 
 // ─── Filtro Avançado ──────────────────────────────────────────────────────────
@@ -208,33 +356,39 @@ export function filterCards(
     cardTypes?: string[];
     excludeLands?: boolean;
     onlyArena?: boolean;
+    colorMode?: ColorMode;
   } = {}
 ): CardData[] {
-  return cards.filter((card) => {
+  const mode = options.colorMode || "strict";
+
+  return cards.filter(card => {
     if (options.onlyArena && !card.isArena) return false;
 
     const type = (card.type || "").toLowerCase();
     const cardColors = card.colors || "";
+    const isLand = type.includes("land");
 
-    // Filtro de cor: a carta deve conter pelo menos uma das cores solicitadas
+    // Filtro de cor por modo
     if (options.colors && options.colors.length > 0) {
       const isColorless = cardColors === "" || cardColors === "C";
-      const isLand = type.includes("land");
       if (!isColorless && !isLand) {
-        const hasColor = options.colors.some((c) => cardColors.includes(c));
-        if (!hasColor) return false;
+        if (!matchesColorMode(cardColors, options.colors, mode)) {
+          return false;
+        }
       }
     }
 
     // Filtro de tribo: a carta deve mencionar a tribo no tipo
     if (options.tribes && options.tribes.length > 0) {
-      const hasTribe = options.tribes.some((t) => type.includes(t.toLowerCase()));
+      const hasTribe = options.tribes.some(t => type.includes(t.toLowerCase()));
       if (!hasTribe) return false;
     }
 
     // Filtro de tipo de carta
     if (options.cardTypes && options.cardTypes.length > 0) {
-      const hasType = options.cardTypes.some((t) => type.includes(t.toLowerCase()));
+      const hasType = options.cardTypes.some(t =>
+        type.includes(t.toLowerCase())
+      );
       if (!hasType) return false;
     }
 
@@ -251,7 +405,10 @@ export function filterCards(
  * Pontua uma carta de acordo com o arquétipo alvo.
  * Quanto maior o score, mais adequada a carta é para o arquétipo.
  */
-export function scoreCardForArchetype(card: CardData, archetype: ArchetypeTemplate): number {
+export function scoreCardForArchetype(
+  card: CardData,
+  archetype: ArchetypeTemplate
+): number {
   const tags = classifyCard(card);
   const cmc = card.cmc ?? 0;
   let score = 1; // base
@@ -287,9 +444,64 @@ export function generateDeckByArchetype(
   cardPool: CardData[],
   options: GenerateByArchetypeOptions
 ): GeneratedDeckResult {
-  const template = ARCHETYPES[options.archetype];
+  const baseTemplate = ARCHETYPES[options.archetype];
   const formatRules = FORMAT_RULES[options.format];
   const warnings: string[] = [];
+
+  // Mesclar com playstyle se especificado
+  let template = baseTemplate;
+  if (options.playstyle) {
+    const playstyleModifier = PLAYSTYLES[options.playstyle];
+    template = {
+      curve: { ...baseTemplate.curve, ...playstyleModifier.curve },
+      lands: Math.round(
+        baseTemplate.lands *
+          (playstyleModifier.curve[1] > baseTemplate.curve[1] ? 0.9 : 1)
+      ),
+      creatures: playstyleModifier.priorities.includes("token")
+        ? Math.round(baseTemplate.creatures * 1.3)
+        : baseTemplate.creatures,
+      spells: baseTemplate.spells,
+      priorities: Array.from(
+        new Set([...baseTemplate.priorities, ...playstyleModifier.priorities])
+      ),
+      description: `${baseTemplate.description} ${playstyleModifier.description}`,
+      keyMechanics: Array.from(
+        new Set([
+          ...baseTemplate.keyMechanics,
+          ...playstyleModifier.keyMechanics,
+        ])
+      ),
+    };
+  }
+
+  // Ajustar template baseado em powerLevel e consistency
+  if (options.powerLevel || options.consistency) {
+    const powerLevel = options.powerLevel || "ranked";
+    const consistency = options.consistency || "medium";
+
+    // Power level modifica o número de lands e a curva
+    const landAdjust =
+      powerLevel === "meta" ? -2 : powerLevel === "casual" ? 2 : 0;
+    const creaturesAdjust =
+      powerLevel === "meta" ? 2 : powerLevel === "casual" ? -2 : 0;
+
+    // Consistency modifica a curva (high = mais consistente = mais low cmc)
+    const curveShift =
+      consistency === "high" ? -1 : consistency === "greedy" ? 1 : 0;
+
+    template = {
+      ...template,
+      lands: Math.max(18, template.lands + landAdjust),
+      creatures: Math.max(8, template.creatures + creaturesAdjust),
+      curve: Object.fromEntries(
+        Object.entries(template.curve).map(([cmc, count]) => [
+          cmc,
+          Math.max(0, count + curveShift * (parseInt(cmc) <= 2 ? 2 : -1)),
+        ])
+      ),
+    };
+  }
 
   // Pool filtrado por cor/tribo/tipo (excluindo terrenos para a seleção de spells)
   const baseFilteredPool = filterCards(cardPool, {
@@ -298,29 +510,40 @@ export function generateDeckByArchetype(
     cardTypes: options.cardTypes,
     excludeLands: false,
     onlyArena: options.onlyArena,
+    colorMode: options.colorMode,
   });
-  const filteredPool = options.format === "commander"
-    ? baseFilteredPool.filter((c) => (c.cmc ?? 0) <= 6)
-    : baseFilteredPool;
+  const filteredPool =
+    options.format === "commander"
+      ? baseFilteredPool.filter(c => (c.cmc ?? 0) <= 6)
+      : baseFilteredPool;
 
   if (filteredPool.length < 20) {
-    warnings.push(`Pool muito pequeno (${filteredPool.length} cartas). Sincronize mais cartas do Scryfall.`);
+    warnings.push(
+      `Pool muito pequeno (${filteredPool.length} cartas). Sincronize mais cartas do Scryfall.`
+    );
   }
 
   // Separar terrenos, criaturas e spells
-  const allLands = filteredPool.filter((c) => (c.type || "").toLowerCase().includes("land"));
+  const allLands = filteredPool.filter(c =>
+    (c.type || "").toLowerCase().includes("land")
+  );
   const allCreatures = filteredPool.filter(
-    (c) => (c.type || "").toLowerCase().includes("creature") && !(c.type || "").toLowerCase().includes("land")
+    c =>
+      (c.type || "").toLowerCase().includes("creature") &&
+      !(c.type || "").toLowerCase().includes("land")
   );
   const allSpells = filteredPool.filter(
-    (c) =>
+    c =>
       !(c.type || "").toLowerCase().includes("creature") &&
       !(c.type || "").toLowerCase().includes("land")
   );
 
   // Ordenar por score
   const sortByScore = (cards: CardData[]) =>
-    [...cards].sort((a, b) => scoreCardForArchetype(b, template) - scoreCardForArchetype(a, template));
+    [...cards].sort(
+      (a, b) =>
+        scoreCardForArchetype(b, template) - scoreCardForArchetype(a, template)
+    );
 
   const scoredCreatures = sortByScore(allCreatures);
   const scoredSpells = sortByScore(allSpells);
@@ -333,11 +556,14 @@ export function generateDeckByArchetype(
 
   // ── 1. Terrenos ──────────────────────────────────────────────────────────────
   const targetLands = Math.min(template.lands, deckSize);
-  const landsToAdd = allLands.length > 0 ? shuffleAndPick(allLands, targetLands) : generateBasicLands(options.colors, targetLands);
+  const landsToAdd =
+    allLands.length > 0
+      ? shuffleAndPick(allLands, targetLands)
+      : generateBasicLands(options.colors, targetLands);
 
   for (const land of landsToAdd) {
     const isBasic = (land.type || "").toLowerCase().includes("basic");
-    const existing = deck.find((d) => d.name === land.name);
+    const existing = deck.find(d => d.name === land.name);
     if (existing) {
       if (isBasic || existing.quantity < maxCopies) {
         existing.quantity++;
@@ -350,7 +576,9 @@ export function generateDeckByArchetype(
   }
 
   if (landsToAdd.length < targetLands) {
-    warnings.push(`Apenas ${landsToAdd.length} terrenos encontrados (ideal: ${targetLands}). Adicione mais terrenos ao banco.`);
+    warnings.push(
+      `Apenas ${landsToAdd.length} terrenos encontrados (ideal: ${targetLands}). Adicione mais terrenos ao banco.`
+    );
   }
 
   // ── 2. Criaturas ─────────────────────────────────────────────────────────────
@@ -359,7 +587,7 @@ export function generateDeckByArchetype(
 
   for (const creature of scoredCreatures) {
     if (creaturesAdded >= targetCreatures) break;
-    const existing = deck.find((d) => d.name === creature.name);
+    const existing = deck.find(d => d.name === creature.name);
     if (existing) {
       if (existing.quantity < maxCopies) {
         existing.quantity++;
@@ -375,7 +603,9 @@ export function generateDeckByArchetype(
   }
 
   if (creaturesAdded < template.creatures * 0.5) {
-    warnings.push(`Poucas criaturas encontradas (${creaturesAdded}/${template.creatures}). Ajuste os filtros.`);
+    warnings.push(
+      `Poucas criaturas encontradas (${creaturesAdded}/${template.creatures}). Ajuste os filtros.`
+    );
   }
 
   // ── 3. Spells ────────────────────────────────────────────────────────────────
@@ -383,7 +613,7 @@ export function generateDeckByArchetype(
 
   for (const spell of scoredSpells) {
     if (totalCards >= deckSize) break;
-    const existing = deck.find((d) => d.name === spell.name);
+    const existing = deck.find(d => d.name === spell.name);
     if (existing) {
       if (existing.quantity < maxCopies) {
         existing.quantity++;
@@ -399,10 +629,12 @@ export function generateDeckByArchetype(
   // Se ainda faltam cartas, preencher com terrenos básicos
   if (totalCards < deckSize) {
     const missing = deckSize - totalCards;
-    warnings.push(`Deck incompleto: ${missing} cartas faltando. Sincronize mais cartas do Scryfall.`);
+    warnings.push(
+      `Deck incompleto: ${missing} cartas faltando. Sincronize mais cartas do Scryfall.`
+    );
     const basics = generateBasicLands(options.colors, missing);
     for (const land of basics) {
-      const existing = deck.find((d) => d.name === land.name);
+      const existing = deck.find(d => d.name === land.name);
       if (existing) {
         existing.quantity += 1;
         totalCards++;
@@ -434,7 +666,10 @@ function shuffleAndPick<T>(arr: T[], n: number): T[] {
 /**
  * Gera terrenos básicos quando o pool não tem terrenos suficientes.
  */
-function generateBasicLands(colors: ManaColor[] | undefined, count: number): CardData[] {
+function generateBasicLands(
+  colors: ManaColor[] | undefined,
+  count: number
+): CardData[] {
   const colorToLand: Record<ManaColor, string> = {
     W: "Plains",
     U: "Island",
@@ -443,7 +678,8 @@ function generateBasicLands(colors: ManaColor[] | undefined, count: number): Car
     G: "Forest",
   };
 
-  const targetColors = colors && colors.length > 0 ? colors : (["R"] as ManaColor[]);
+  const targetColors =
+    colors && colors.length > 0 ? colors : (["R"] as ManaColor[]);
   const lands: CardData[] = [];
 
   const perColor = Math.ceil(count / targetColors.length);
@@ -476,7 +712,7 @@ function generateBasicLands(colors: ManaColor[] | undefined, count: number): Car
  * Exporta deck no formato Arena (1 CardName por linha).
  */
 export function exportToArena(cards: (CardData & { quantity: number })[]) {
-  return cards.map((c) => `${c.quantity} ${c.name}`).join("\n");
+  return cards.map(c => `${c.quantity} ${c.name}`).join("\n");
 }
 
 /**
@@ -486,13 +722,25 @@ export function exportToText(
   cards: (CardData & { quantity: number; role?: string })[],
   meta: { archetype: string; format: string }
 ) {
-  const lands = cards.filter((c) => c.role === "land" || (c.type || "").toLowerCase().includes("land"));
-  const creatures = cards.filter((c) => c.role === "creature" || ((c.type || "").toLowerCase().includes("creature") && !(c.type || "").toLowerCase().includes("land")));
-  const spells = cards.filter((c) => c.role === "spell" || (!(c.type || "").toLowerCase().includes("creature") && !(c.type || "").toLowerCase().includes("land")));
+  const lands = cards.filter(
+    c => c.role === "land" || (c.type || "").toLowerCase().includes("land")
+  );
+  const creatures = cards.filter(
+    c =>
+      c.role === "creature" ||
+      ((c.type || "").toLowerCase().includes("creature") &&
+        !(c.type || "").toLowerCase().includes("land"))
+  );
+  const spells = cards.filter(
+    c =>
+      c.role === "spell" ||
+      (!(c.type || "").toLowerCase().includes("creature") &&
+        !(c.type || "").toLowerCase().includes("land"))
+  );
 
   const section = (title: string, list: typeof cards) =>
     list.length > 0
-      ? `// ${title} (${list.reduce((s, c) => s + c.quantity, 0)})\n${list.map((c) => `${c.quantity} ${c.name}`).join("\n")}`
+      ? `// ${title} (${list.reduce((s, c) => s + c.quantity, 0)})\n${list.map(c => `${c.quantity} ${c.name}`).join("\n")}`
       : "";
 
   return [

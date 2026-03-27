@@ -63,7 +63,13 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const { createDeck } = await import("./db-decks");
-        return await createDeck(ctx.user.id, input.name, input.format, input.archetype, input.description);
+        return await createDeck(
+          ctx.user.id,
+          input.name,
+          input.format,
+          input.archetype,
+          input.description
+        );
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {
@@ -116,20 +122,50 @@ export const appRouter = router({
     generateByArchetype: publicProcedure
       .input(
         z.object({
-          archetype: z.enum(["aggro", "burn", "control", "combo", "midrange", "ramp", "tempo"]),
-          format: z.enum(["standard", "historic", "modern", "legacy", "commander", "pioneer"]),
+          archetype: z.enum([
+            "aggro",
+            "burn",
+            "control",
+            "combo",
+            "midrange",
+            "ramp",
+            "tempo",
+          ]),
+          format: z.enum([
+            "standard",
+            "historic",
+            "modern",
+            "legacy",
+            "commander",
+            "pioneer",
+          ]),
           colors: z.array(z.enum(["W", "U", "B", "R", "G"])).optional(),
           tribes: z.array(z.string()).optional(),
           cardTypes: z.array(z.string()).optional(),
           useScoring: z.boolean().optional(),
           onlyArena: z.boolean().optional(),
           maxPrice: z.number().optional(),
+          playstyle: z
+            .enum([
+              "go_wide",
+              "go_tall",
+              "burn_hybrid",
+              "draw_go",
+              "tap_out",
+              "hard_control",
+            ])
+            .optional(),
+          colorMode: z.enum(["strict", "splash", "flex"]).optional(),
+          powerLevel: z.enum(["casual", "ranked", "meta"]).optional(),
+          consistency: z.enum(["high", "medium", "greedy"]).optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const { generateDeckByArchetype, exportToText, exportToArena } = await import("./services/archetypeGenerator");
+        const { generateDeckByArchetype, exportToText, exportToArena } =
+          await import("./services/archetypeGenerator");
         const { searchCards } = await import("./services/scryfall");
-        const { evaluateDeckWithEngine } = await import("./services/deckGenerator");
+        const { evaluateDeckWithEngine } =
+          await import("./services/deckGenerator");
         const { validateDeck } = await import("./services/deckGenerator");
 
         // Carregar pool de cartas do banco
@@ -141,7 +177,8 @@ export const appRouter = router({
 
         if (cardPool.length === 0) {
           return {
-            error: "Nenhuma carta encontrada no banco. Sincronize cartas do Scryfall primeiro.",
+            error:
+              "Nenhuma carta encontrada no banco. Sincronize cartas do Scryfall primeiro.",
             deck: [],
             metrics: null,
             validation: null,
@@ -161,15 +198,27 @@ export const appRouter = router({
           cardTypes: input.cardTypes,
           useScoring: input.useScoring ?? true,
           onlyArena: input.onlyArena,
+          playstyle: input.playstyle,
+          colorMode: input.colorMode,
+          powerLevel: input.powerLevel,
+          consistency: input.consistency,
         });
 
         // Avaliar com Game Feature Engine
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const metrics = evaluateDeckWithEngine(result.cards as any, input.archetype);
+        const metrics = evaluateDeckWithEngine(
+          result.cards as any,
+          input.archetype
+        );
 
         // Validar deck
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const validation = validateDeck(result.cards as any, input.format === "historic" || input.format === "pioneer" ? "standard" : input.format);
+        const validation = validateDeck(
+          result.cards as any,
+          input.format === "historic" || input.format === "pioneer"
+            ? "standard"
+            : input.format
+        );
 
         return {
           deck: result.cards,
@@ -178,7 +227,10 @@ export const appRouter = router({
           warnings: result.warnings,
           metrics,
           validation,
-          exportText: exportToText(result.cards, { archetype: input.archetype, format: input.format }),
+          exportText: exportToText(result.cards, {
+            archetype: input.archetype,
+            format: input.format,
+          }),
           exportArena: exportToArena(result.cards),
         };
       }),
@@ -193,25 +245,40 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        const { generateInitialDeck, validateDeck, evaluateDeckWithEngine, trainDeckWithRL } = await import(
-          "./services/deckGenerator"
-        );
+        const {
+          generateInitialDeck,
+          validateDeck,
+          evaluateDeckWithEngine,
+          trainDeckWithRL,
+        } = await import("./services/deckGenerator");
         const deck = await generateInitialDeck(input, input.seedCards);
         const validation = validateDeck(deck, input.format);
 
         // Avaliar deck com Game Feature Engine
-        const metrics = evaluateDeckWithEngine(deck, input.archetype || "default");
+        const metrics = evaluateDeckWithEngine(
+          deck,
+          input.archetype || "default"
+        );
 
         // Otimizar com RL melhorado se solicitado
         if (input.useRL) {
-          const { deck: rlDeck, metrics: rlMetrics, improvements } = await trainDeckWithRL(
+          const {
+            deck: rlDeck,
+            metrics: rlMetrics,
+            improvements,
+          } = await trainDeckWithRL(
             deck,
             { format: input.format, archetype: input.archetype },
             undefined,
             200
           );
           const rlValidation = validateDeck(rlDeck, input.format);
-          return { deck: rlDeck, validation: rlValidation, metrics: rlMetrics, improvements };
+          return {
+            deck: rlDeck,
+            validation: rlValidation,
+            metrics: rlMetrics,
+            improvements,
+          };
         }
 
         return { deck, validation, metrics, improvements: 0 };
@@ -220,23 +287,35 @@ export const appRouter = router({
     evaluate: publicProcedure
       .input(
         z.object({
-          cards: z.array(z.object({
-            name: z.string(),
-            type: z.string().optional(),
-            text: z.string().optional(),
-            cmc: z.number().optional(),
-            quantity: z.number(),
-          })),
+          cards: z.array(
+            z.object({
+              name: z.string(),
+              type: z.string().optional(),
+              text: z.string().optional(),
+              cmc: z.number().optional(),
+              quantity: z.number(),
+            })
+          ),
           archetype: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
         const { evaluateDeck } = await import("./services/gameFeatureEngine");
         // Expandir cartas com quantidades
-        const expanded: { name: string; type?: string; text?: string; cmc?: number }[] = [];
+        const expanded: {
+          name: string;
+          type?: string;
+          text?: string;
+          cmc?: number;
+        }[] = [];
         for (const card of input.cards) {
           for (let i = 0; i < card.quantity; i++) {
-            expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc });
+            expanded.push({
+              name: card.name,
+              type: card.type,
+              text: card.text,
+              cmc: card.cmc,
+            });
           }
         }
         return evaluateDeck(expanded, input.archetype || "default");
@@ -247,13 +326,16 @@ export const appRouter = router({
     syncScryfall: publicProcedure
       .input(
         z.object({
-          format: z.enum(["standard", "modern", "commander", "legacy", "all"]).optional(),
+          format: z
+            .enum(["standard", "modern", "commander", "legacy", "all"])
+            .optional(),
           colors: z.array(z.string()).optional(),
           limit: z.number().optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const { syncCardsFromScryfall } = await import("./services/scryfallSync");
+        const { syncCardsFromScryfall } =
+          await import("./services/scryfallSync");
         return await syncCardsFromScryfall(input);
       }),
 
@@ -267,17 +349,24 @@ export const appRouter = router({
     importDecks: publicProcedure
       .input(
         z.object({
-          format: z.enum(["standard", "modern", "commander", "legacy"]).optional(),
+          format: z
+            .enum(["standard", "modern", "commander", "legacy"])
+            .optional(),
           limit: z.number().min(1).max(100).optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const { importMoxfieldDecks } = await import("./services/moxfieldScraper");
-        return await importMoxfieldDecks(input.format || "standard", input.limit || 50);
+        const { importMoxfieldDecks } =
+          await import("./services/moxfieldScraper");
+        return await importMoxfieldDecks(
+          input.format || "standard",
+          input.limit || 50
+        );
       }),
 
     getStats: publicProcedure.query(async () => {
-      const { getCompetitiveDeckStats } = await import("./services/moxfieldScraper");
+      const { getCompetitiveDeckStats } =
+        await import("./services/moxfieldScraper");
       return await getCompetitiveDeckStats();
     }),
   }),
@@ -286,13 +375,26 @@ export const appRouter = router({
     importDecks: publicProcedure
       .input(
         z.object({
-          format: z.enum(["standard", "pioneer", "modern", "legacy", "vintage", "commander"]).optional(),
+          format: z
+            .enum([
+              "standard",
+              "pioneer",
+              "modern",
+              "legacy",
+              "vintage",
+              "commander",
+            ])
+            .optional(),
           limit: z.number().min(1).max(100).optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const { importMTGTop8Decks } = await import("./services/mtgtop8Scraper");
-        return await importMTGTop8Decks(input.format || "standard", input.limit || 50);
+        const { importMTGTop8Decks } =
+          await import("./services/mtgtop8Scraper");
+        return await importMTGTop8Decks(
+          input.format || "standard",
+          input.limit || 50
+        );
       }),
   }),
 
@@ -300,26 +402,41 @@ export const appRouter = router({
     importDecks: publicProcedure
       .input(
         z.object({
-          format: z.enum(["standard", "pioneer", "modern", "legacy", "vintage", "commander"]).optional(),
+          format: z
+            .enum([
+              "standard",
+              "pioneer",
+              "modern",
+              "legacy",
+              "vintage",
+              "commander",
+            ])
+            .optional(),
           limit: z.number().min(1).max(100).optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const { importMTGGoldfishDecks } = await import("./services/mtggoldfishScraper");
-        return await importMTGGoldfishDecks(input.format || "standard", input.limit || 50);
+        const { importMTGGoldfishDecks } =
+          await import("./services/mtggoldfishScraper");
+        return await importMTGGoldfishDecks(
+          input.format || "standard",
+          input.limit || 50
+        );
       }),
   }),
 
   training: router({
     trainEmbeddings: publicProcedure.mutation(async () => {
-      const { trainEmbeddingsFromDecks } = await import("./services/embeddingTrainer");
+      const { trainEmbeddingsFromDecks } =
+        await import("./services/embeddingTrainer");
       return await trainEmbeddingsFromDecks();
     }),
 
     clusterDecks: publicProcedure
       .input(z.object({ k: z.number().min(2).max(20).optional() }))
       .mutation(async ({ input }) => {
-        const { clusterCompetitiveDecks, getClusterStatsByArchetype } = await import("./services/clustering");
+        const { clusterCompetitiveDecks, getClusterStatsByArchetype } =
+          await import("./services/clustering");
 
         // Executar clustering com a nova implementação
         const { clusters, stats } = await clusterCompetitiveDecks(input.k || 8);
@@ -332,12 +449,16 @@ export const appRouter = router({
           stats,
           archetypeStats,
           totalClusters: clusters.length,
-          totalDecksClustered: clusters.reduce((sum, c) => sum + c.deckIds.length, 0),
+          totalDecksClustered: clusters.reduce(
+            (sum, c) => sum + c.deckIds.length,
+            0
+          ),
         };
       }),
 
     getHistory: publicProcedure.query(async () => {
-      const { getTrainingJobHistory } = await import("./services/embeddingTrainer");
+      const { getTrainingJobHistory } =
+        await import("./services/embeddingTrainer");
       return await getTrainingJobHistory(10);
     }),
   }),
@@ -347,20 +468,24 @@ export const appRouter = router({
       .input(
         z.object({
           deckId: z.number(),
-          style: z.enum(["fantasy", "minimalist", "abstract", "realistic"]).optional(),
+          style: z
+            .enum(["fantasy", "minimalist", "abstract", "realistic"])
+            .optional(),
           includeCardNames: z.boolean().optional(),
           customPrompt: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const { generateDeckVisualization } = await import("./services/deckVisualization");
+        const { generateDeckVisualization } =
+          await import("./services/deckVisualization");
         return await generateDeckVisualization(input);
       }),
 
     generateDeckArtSet: publicProcedure
       .input(z.object({ deckId: z.number() }))
       .mutation(async ({ input }) => {
-        const { generateDeckVisualizationSet } = await import("./services/deckVisualization");
+        const { generateDeckVisualizationSet } =
+          await import("./services/deckVisualization");
         return await generateDeckVisualizationSet(input.deckId);
       }),
   }),
@@ -391,7 +516,8 @@ export const appRouter = router({
     getShareUrls: publicProcedure
       .input(z.object({ shareId: z.string() }))
       .query(async ({ input }) => {
-        const { getSharedDeck, generateShareUrls } = await import("./services/deckSharing");
+        const { getSharedDeck, generateShareUrls } =
+          await import("./services/deckSharing");
         const shareData = await getSharedDeck(input.shareId);
         if (!shareData) {
           throw new Error("Share not found");
