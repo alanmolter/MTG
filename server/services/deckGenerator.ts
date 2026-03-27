@@ -2,7 +2,8 @@ import { Card } from "../../drizzle/schema";
 import { getCardById, getCardsByIds } from "./scryfall";
 import { findSimilarCardsForDeck } from "./embeddings";
 import { getCardSynergy } from "./synergy";
-import { evaluateDeck, optimizeDeckRL, extractCardFeatures, type DeckMetrics } from "./gameFeatureEngine";
+import { evaluateDeck as evaluateDeckBase, optimizeDeckRL, extractCardFeatures, type DeckMetrics } from "./gameFeatureEngine";
+import { evaluateDeckWithBrain as evaluateDeckBrain, evaluateDeckQuick, type EvaluationResult } from "./deckEvaluationBrain";
 
 interface DeckGeneratorOptions {
   format: "standard" | "modern" | "commander" | "legacy";
@@ -213,12 +214,48 @@ export function evaluateDeckWithEngine(
       expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc });
     }
   }
-  return evaluateDeck(expanded, archetype);
+  return evaluateDeckBase(expanded, archetype);
+}
+
+/**
+ * Avalia um deck usando o novo Deck Evaluation Brain (cérebro do sistema).
+ * Fornece análise completa com score normalizado, tier e recomendações.
+ */
+export async function evaluateDeckWithBrain(
+  deck: (Card & { quantity: number })[],
+  archetype: string = "default"
+): Promise<EvaluationResult> {
+  // Expandir deck com quantidades para avaliação
+  const expanded: any[] = [];
+  for (const card of deck) {
+    for (let i = 0; i < card.quantity; i++) {
+      expanded.push({ ...card });
+    }
+  }
+  return await evaluateDeckBrain(expanded, archetype);
+}
+
+/**
+ * Avaliação rápida para loops de otimização.
+ * Retorna apenas o score normalizado (0-100).
+ */
+export function evaluateDeckQuickScore(
+  deck: (Card & { quantity: number })[],
+  archetype: string = "default"
+): number {
+  // Expandir deck com quantidades para avaliação
+  const expanded: { name: string; type?: string | null; text?: string | null; cmc?: number | null }[] = [];
+  for (const card of deck) {
+    for (let i = 0; i < card.quantity; i++) {
+      expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc });
+    }
+  }
+  return evaluateDeckQuick(expanded, archetype);
 }
 
 /**
  * Treina um deck usando RL melhorado com Game Feature Engine.
- * Substitui o RL antigo baseado apenas em simulação de partidas.
+ * Usa a nova função evaluate_deck do Deck Evaluation Brain para melhor qualidade.
  */
 export async function trainDeckWithRL(
   initialDeck: (Card & { quantity: number })[],
@@ -238,7 +275,8 @@ export async function trainDeckWithRL(
     expanded,
     pool,
     options.archetype || "default",
-    iterations
+    iterations,
+    (cards, arch) => ({ totalScore: evaluateDeckQuick(cards, arch) })
   );
 
   // Reconstruir deck com objetos Card completos

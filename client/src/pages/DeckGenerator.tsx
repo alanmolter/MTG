@@ -12,16 +12,21 @@ import { toast } from "sonner";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function ScoreBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = Math.max(0, Math.min(100, ((value - max * -0.5) / (max * 1.5)) * 100));
+function ScoreBar({ label, value, color, isNormalized = true }: { label: string; value: number; color: string; isNormalized?: boolean }) {
+  const pct = isNormalized 
+    ? Math.max(0, Math.min(100, value))
+    : Math.max(0, Math.min(100, ((value + 30) / 80) * 100));
+    
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-gray-400">
         <span>{label}</span>
-        <span className={value >= 0 ? "text-green-400" : "text-red-400"}>{value.toFixed(1)}</span>
+        <span className={value >= (isNormalized ? 50 : 0) ? "text-green-400" : "text-red-400"}>
+          {value.toFixed(1)}{isNormalized ? "%" : ""}
+        </span>
       </div>
-      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -230,7 +235,7 @@ export default function DeckGenerator() {
                 <CardHeader>
                   <CardTitle className="text-white flex items-center gap-2 text-base">
                     <BarChart3 className="w-4 h-4 text-blue-400" />
-                    Deck Metrics
+                    Deck Evaluation Brain
                   </CardTitle>
                   {generatedDeck.improvements > 0 && (
                     <Badge className="bg-green-900/50 text-green-300 border-green-500/30 w-fit">
@@ -238,44 +243,85 @@ export default function DeckGenerator() {
                     </Badge>
                   )}
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Total Score */}
-                  <div className="p-3 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center">
-                    <p className="text-xs text-gray-400 mb-1">Total Score</p>
-                    <p className={`text-3xl font-bold ${metrics.totalScore >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {metrics.totalScore.toFixed(1)}
-                    </p>
+                <CardContent className="space-y-6">
+                  {/* Total Score & Tier */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-3 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center flex flex-col justify-center">
+                      <p className="text-[10px] text-gray-400 mb-0.5 uppercase">Score</p>
+                      <p className={`text-3xl font-black ${metrics.normalizedScore >= 50 ? "text-green-400" : "text-red-400"}`}>
+                        {metrics.normalizedScore?.toFixed(0)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center">
+                      <p className="text-[10px] text-gray-400 mb-0.5 uppercase">Tier</p>
+                      <p className={`text-4xl font-black italic tracking-tighter ${
+                        metrics.tier === "S" ? "text-yellow-400" : 
+                        metrics.tier === "A" ? "text-purple-400" : 
+                        metrics.tier === "B" ? "text-blue-400" : 
+                        "text-gray-500"
+                      }`}>
+                        {metrics.tier}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Brain Analysis */}
+                  {metrics.analysis && (
+                    <div className="space-y-2">
+                       {metrics.analysis.strengths?.slice(0, 2).map((s: string, i: number) => (
+                         <div key={i} className="px-2 py-1 bg-green-900/10 border border-green-500/20 rounded text-[10px] text-green-300">
+                           ✓ {s}
+                         </div>
+                       ))}
+                       {metrics.analysis.weaknesses?.slice(0, 2).map((w: string, i: number) => (
+                         <div key={i} className="px-2 py-1 bg-red-900/10 border border-red-500/20 rounded text-[10px] text-red-300">
+                           ⚠ {w}
+                         </div>
+                       ))}
+                    </div>
+                  )}
+
+                  {/* Recommendations */}
+                  {metrics.recommendations?.length > 0 && (
+                    <div className="p-2 bg-purple-900/10 border border-purple-500/20 rounded-lg text-[10px] text-purple-200 space-y-1">
+                      <p className="font-bold text-purple-400 flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" /> Recommendations:
+                      </p>
+                      {metrics.recommendations.slice(0, 3).map((rec: string, i: number) => (
+                        <p key={i} className="truncate">• {rec}</p>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Score Breakdown */}
                   <div className="space-y-3">
-                    <ScoreBar label="Mana Curve" value={metrics.breakdown.curve} max={30} color="bg-purple-500" />
-                    <ScoreBar label="Land Ratio" value={metrics.breakdown.lands} max={20} color="bg-blue-500" />
-                    <ScoreBar label="Synergy" value={metrics.breakdown.synergy} max={50} color="bg-green-500" />
-                    <ScoreBar label="Simulation" value={metrics.breakdown.simulation} max={20} color="bg-yellow-500" />
+                    <ScoreBar label="Mana Curve" value={metrics.breakdown?.curve ?? 0} color="bg-purple-500" />
+                    <ScoreBar label="Land Ratio" value={metrics.breakdown?.lands ?? 0} color="bg-blue-500" />
+                    <ScoreBar label="Synergy" value={metrics.breakdown?.synergy ?? 0} color="bg-green-500" />
+                    <ScoreBar label="Simulation" value={metrics.breakdown?.simulation ?? 0} color="bg-yellow-500" />
                   </div>
 
                   {/* Composition */}
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="p-2 bg-slate-800/50 rounded">
-                      <Swords className="w-4 h-4 text-red-400 mx-auto mb-1" />
-                      <p className="text-white font-bold text-sm">{metrics.creatureCount}</p>
-                      <p className="text-gray-500 text-xs">Creatures</p>
+                      <Swords className="w-3 h-3 text-red-400 mx-auto mb-1" />
+                      <p className="text-white font-bold text-xs">{metrics.creatureCount}</p>
+                      <p className="text-gray-500 text-[10px]">Creatures</p>
                     </div>
                     <div className="p-2 bg-slate-800/50 rounded">
-                      <Zap className="w-4 h-4 text-yellow-400 mx-auto mb-1" />
-                      <p className="text-white font-bold text-sm">{metrics.spellCount}</p>
-                      <p className="text-gray-500 text-xs">Spells</p>
+                      <Zap className="w-3 h-3 text-yellow-400 mx-auto mb-1" />
+                      <p className="text-white font-bold text-xs">{metrics.spellCount}</p>
+                      <p className="text-gray-500 text-[10px]">Spells</p>
                     </div>
                     <div className="p-2 bg-slate-800/50 rounded">
-                      <Shield className="w-4 h-4 text-green-400 mx-auto mb-1" />
-                      <p className="text-white font-bold text-sm">{metrics.landCount}</p>
-                      <p className="text-gray-500 text-xs">Lands</p>
+                      <Shield className="w-3 h-3 text-green-400 mx-auto mb-1" />
+                      <p className="text-white font-bold text-xs">{metrics.landCount}</p>
+                      <p className="text-gray-500 text-[10px]">Lands</p>
                     </div>
                   </div>
 
                   {/* Functional Roles */}
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
                     <div className="p-2 bg-red-900/20 rounded border border-red-500/20">
                       <p className="text-red-300 font-bold">{metrics.removalCount}</p>
                       <p className="text-gray-500">Removal</p>
@@ -300,6 +346,7 @@ export default function DeckGenerator() {
                       <div className="flex flex-wrap gap-1">
                         {Object.entries(metrics.mechanicTagCounts)
                           .sort(([, a], [, b]) => (b as number) - (a as number))
+                          .slice(0, 10)
                           .map(([tag, count]) => (
                             <TagBadge key={tag} tag={tag} count={count as number} />
                           ))}

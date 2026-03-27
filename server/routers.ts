@@ -164,7 +164,7 @@ export const appRouter = router({
         const { generateDeckByArchetype, exportToText, exportToArena } =
           await import("./services/archetypeGenerator");
         const { searchCards } = await import("./services/scryfall");
-        const { evaluateDeckWithEngine } =
+        const { evaluateDeckWithEngine, evaluateDeckWithBrain } =
           await import("./services/deckGenerator");
         const { validateDeck } = await import("./services/deckGenerator");
 
@@ -206,7 +206,7 @@ export const appRouter = router({
 
         // Avaliar com Game Feature Engine
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const metrics = evaluateDeckWithEngine(
+        const metrics = await evaluateDeckWithBrain(
           result.cards as any,
           input.archetype
         );
@@ -248,14 +248,14 @@ export const appRouter = router({
         const {
           generateInitialDeck,
           validateDeck,
-          evaluateDeckWithEngine,
+          evaluateDeckWithBrain,
           trainDeckWithRL,
         } = await import("./services/deckGenerator");
         const deck = await generateInitialDeck(input, input.seedCards);
         const validation = validateDeck(deck, input.format);
 
         // Avaliar deck com Game Feature Engine
-        const metrics = evaluateDeckWithEngine(
+        const metrics = await evaluateDeckWithBrain(
           deck,
           input.archetype || "default"
         );
@@ -319,6 +319,33 @@ export const appRouter = router({
           }
         }
         return evaluateDeck(expanded, input.archetype || "default");
+      }),
+
+    evaluateBrain: publicProcedure
+      .input(
+        z.object({
+          cards: z.array(
+            z.object({
+              name: z.string(),
+              type: z.string().optional(),
+              text: z.string().optional(),
+              cmc: z.number().optional(),
+              quantity: z.number(),
+            })
+          ),
+          archetype: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { evaluateDeckWithBrain } = await import("./services/deckEvaluationBrain");
+        // Expandir cartas com quantidades
+        const expanded: any[] = [];
+        for (const card of input.cards) {
+          for (let i = 0; i < card.quantity; i++) {
+            expanded.push({ ...card });
+          }
+        }
+        return await evaluateDeckWithBrain(expanded, input.archetype || "default");
       }),
   }),
 

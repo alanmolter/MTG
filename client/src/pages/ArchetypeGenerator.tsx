@@ -429,23 +429,28 @@ function ScoreBar({
   label,
   value,
   color,
+  isNormalized = true,
 }: {
   label: string;
   value: number;
   color: string;
+  isNormalized?: boolean;
 }) {
-  const pct = Math.max(0, Math.min(100, ((value + 30) / 80) * 100));
+  const pct = isNormalized 
+    ? Math.max(0, Math.min(100, value))
+    : Math.max(0, Math.min(100, ((value + 30) / 80) * 100));
+  
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-gray-400">
         <span>{label}</span>
-        <span className={value >= 0 ? "text-green-400" : "text-red-400"}>
-          {value.toFixed(1)}
+        <span className={value >= (isNormalized ? 50 : 0) ? "text-green-400" : "text-red-400"}>
+          {value.toFixed(1)}{isNormalized ? "%" : ""}
         </span>
       </div>
       <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full ${color}`}
+          className={`h-full rounded-full ${color} transition-all duration-500`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -1238,18 +1243,120 @@ export default function ArchetypeGenerator() {
 
                     {/* Tab: Métricas */}
                     {activeTab === "metrics" && result.metrics && (
-                      <div className="space-y-4">
-                        <div className="p-4 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center">
-                          <p className="text-xs text-gray-400 mb-1">
-                            Score Total
-                          </p>
-                          <p
-                            className={`text-4xl font-bold ${result.metrics.totalScore >= 0 ? "text-green-400" : "text-red-400"}`}
-                          >
-                            {result.metrics.totalScore?.toFixed(1)}
-                          </p>
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-4 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center flex flex-col justify-center">
+                            <p className="text-xs text-gray-400 mb-1">
+                              Deck Score (Normalizado)
+                            </p>
+                            <p
+                              className={`text-6xl font-black ${result.metrics.normalizedScore >= 70 ? "text-green-400" : result.metrics.normalizedScore >= 50 ? "text-yellow-400" : "text-red-400"}`}
+                            >
+                              {result.metrics.normalizedScore?.toFixed(0)}
+                              <span className="text-2xl font-normal text-gray-600">
+                                /100
+                              </span>
+                            </p>
+                          </div>
+                          <div className="p-4 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center">
+                            <p className="text-xs text-gray-400 mb-1">
+                              Qualidade (Tier)
+                            </p>
+                            <div className="relative inline-block mt-2">
+                              <div
+                                className={`text-7xl font-black italic tracking-tighter ${
+                                  result.metrics.tier === "S"
+                                    ? "text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]"
+                                    : result.metrics.tier === "A"
+                                      ? "text-purple-400"
+                                      : result.metrics.tier === "B"
+                                        ? "text-blue-400"
+                                        : result.metrics.tier === "C"
+                                          ? "text-green-400"
+                                          : "text-gray-500"
+                                }`}
+                              >
+                                {result.metrics.tier}
+                              </div>
+                              <Badge className="absolute -top-1 -right-4 bg-purple-600 border-none scale-75 animate-pulse">
+                                NEW BRAIN
+                              </Badge>
+                            </div>
+                          </div>
                         </div>
+
+                        {/* Análise Estrutural do Brain */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide flex items-center gap-2">
+                              <CheckCircle2 className="w-3 h-3 text-green-400" />{" "}
+                              Pontos Fortes
+                            </p>
+                            <div className="space-y-1">
+                              {result.metrics.analysis?.strengths?.map(
+                                (s: string, i: number) => (
+                                  <div
+                                    key={i}
+                                    className="px-3 py-1.5 bg-green-900/10 border border-green-500/20 rounded text-xs text-green-300"
+                                  >
+                                    ✓ {s}
+                                  </div>
+                                )
+                              ) || (
+                                <p className="text-xs text-gray-600 italic">
+                                  Nenhum ponto forte identificado.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide flex items-center gap-2">
+                              <AlertTriangle className="w-3 h-3 text-red-400" />{" "}
+                              Pontos Fracos
+                            </p>
+                            <div className="space-y-1">
+                              {result.metrics.analysis?.weaknesses?.map(
+                                (w: string, i: number) => (
+                                  <div
+                                    key={i}
+                                    className="px-3 py-1.5 bg-red-900/10 border border-red-500/20 rounded text-xs text-red-300"
+                                  >
+                                    ⚠ {w}
+                                  </div>
+                                )
+                              ) || (
+                                <p className="text-xs text-green-600/50 italic">
+                                  Nenhuma fraqueza estrutural óbvia.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Recomendações */}
+                        {result.metrics.recommendations?.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide flex items-center gap-2">
+                              <Wand2 className="w-3 h-3 text-purple-400" />{" "}
+                              Recomendações Cérebro
+                            </p>
+                            <div className="p-3 bg-purple-900/10 border border-purple-500/20 rounded-lg space-y-2 text-xs text-purple-200">
+                              {result.metrics.recommendations.map(
+                                (rec: string, i: number) => (
+                                  <p key={i} className="flex gap-2">
+                                    <span className="text-purple-500">•</span>
+                                    {rec}
+                                  </p>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="space-y-3">
+                          <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+                            Breakdown do Score (0-100%)
+                          </p>
                           <ScoreBar
                             label="Curva de Mana"
                             value={result.metrics.breakdown?.curve ?? 0}
