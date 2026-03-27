@@ -3,7 +3,11 @@ import { getCardById, getCardsByIds } from "./scryfall";
 import { findSimilarCardsForDeck } from "./embeddings";
 import { getCardSynergy } from "./synergy";
 import { evaluateDeck as evaluateDeckBase, optimizeDeckRL, extractCardFeatures, type DeckMetrics } from "./gameFeatureEngine";
+<<<<<<< HEAD
 import { evaluateDeckWithBrain as evaluateDeckBrain, evaluateDeckQuick, type EvaluationResult } from "./deckEvaluationBrain";
+=======
+import { evaluateDeck as evaluateDeckBrain, evaluateDeckQuick, type EvaluationResult } from "./deckEvaluationBrain";
+>>>>>>> e49072ee3e80d4b26e0991b2fdb7895cc73b850d
 
 interface DeckGeneratorOptions {
   format: "standard" | "modern" | "commander" | "legacy";
@@ -221,6 +225,7 @@ export function evaluateDeckWithEngine(
  * Avalia um deck usando o novo Deck Evaluation Brain (cérebro do sistema).
  * Fornece análise completa com score normalizado, tier e recomendações.
  */
+<<<<<<< HEAD
 export async function evaluateDeckWithBrain(
   deck: (Card & { quantity: number })[],
   archetype: string = "default"
@@ -233,6 +238,20 @@ export async function evaluateDeckWithBrain(
     }
   }
   return await evaluateDeckBrain(expanded, archetype);
+=======
+export function evaluateDeckWithBrain(
+  deck: (Card & { quantity: number })[],
+  archetype: string = "default"
+): EvaluationResult {
+  // Expandir deck com quantidades para avaliação
+  const expanded: { name: string; type?: string | null; text?: string | null; cmc?: number | null }[] = [];
+  for (const card of deck) {
+    for (let i = 0; i < card.quantity; i++) {
+      expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc });
+    }
+  }
+  return evaluateDeckBrain(expanded, archetype);
+>>>>>>> e49072ee3e80d4b26e0991b2fdb7895cc73b850d
 }
 
 /**

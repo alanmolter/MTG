@@ -337,6 +337,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
+<<<<<<< HEAD
         const { evaluateDeckWithBrain } = await import("./services/deckEvaluationBrain");
         // Expandir cartas com quantidades
         const expanded: any[] = [];
@@ -346,6 +347,27 @@ export const appRouter = router({
           }
         }
         return await evaluateDeckWithBrain(expanded, input.archetype || "default");
+=======
+        const { evaluateDeck } = await import("./services/deckEvaluationBrain");
+        // Expandir cartas com quantidades
+        const expanded: {
+          name: string;
+          type?: string;
+          text?: string;
+          cmc?: number;
+        }[] = [];
+        for (const card of input.cards) {
+          for (let i = 0; i < card.quantity; i++) {
+            expanded.push({
+              name: card.name,
+              type: card.type,
+              text: card.text,
+              cmc: card.cmc,
+            });
+          }
+        }
+        return evaluateDeck(expanded, input.archetype || "default");
+>>>>>>> e49072ee3e80d4b26e0991b2fdb7895cc73b850d
       }),
   }),
 
