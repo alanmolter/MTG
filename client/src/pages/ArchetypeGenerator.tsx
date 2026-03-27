@@ -1449,6 +1449,28 @@ export default function ArchetypeGenerator() {
                             </p>
                           </div>
                         </div>
+
+                        {/* Winrate e Meta Performance */}
+                        <div className="p-4 bg-gradient-to-r from-emerald-900/40 to-blue-900/40 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-500/5">
+                          <div className="flex justify-between items-center mb-2">
+                             <div className="flex items-center gap-2">
+                               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                               <p className="text-xs font-bold text-emerald-300 uppercase tracking-tighter">Winrate Estimado vs Meta Pro</p>
+                             </div>
+                             <span className="text-2xl font-black text-white italic">
+                               {((result.metrics.winrate || 0) * 100).toFixed(0)}%
+                             </span>
+                          </div>
+                          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 transition-all duration-1000"
+                              style={{ width: `${(result.metrics.winrate || 0) * 100}%` }}
+                            />
+                          </div>
+                          <p className="mt-2 text-[10px] text-emerald-400/60 leading-tight">
+                            *Baseado em 10 simulações de partida contra arquétipos Tier 1 do meta atual.
+                          </p>
+                        </div>
                         {result.metrics.mechanicTagCounts &&
                           Object.keys(result.metrics.mechanicTagCounts).length >
                             0 && (

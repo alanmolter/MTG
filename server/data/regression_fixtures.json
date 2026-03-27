@@ -1,0 +1,16 @@
+{
+  "fixtures": [
+    {
+      "archetype": "aggro",
+      "decklist": "4x Kumano Faces Kakkazan\n4x Monastery Swiftspear\n4x Phoenix Chick\n4x Feldon, Ronom Excavator\n4x Bloodthirsty Adversary\n4x Play with Fire\n4x Lightning Strike\n4x Mishras Foundry\n20x Mountain"
+    },
+    {
+      "archetype": "control",
+      "decklist": "4x No More Lies\n4x Get Lost\n3x Sunfall\n4x Memory Deluge\n4x Quick Study\n2x The Wandering Emperor\n2x Tishana's Tidebinder\n4x Hallowed Fountain\n10x Island\n10x Plains\n13x Other Spell"
+    },
+    {
+      "archetype": "midrange",
+      "decklist": "4x Preacher of the Schism\n4x Deep-Cavern Bat\n4x Sheoldred, the Apocalypse\n4x Go for the Throat\n4x Cut Down\n4x Graveyard Trespasser\n2x Liliana of the Veil\n24x Swamp\n10x Other Spell"
+    }
+  ]
+}

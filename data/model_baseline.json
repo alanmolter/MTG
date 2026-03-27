@@ -1,0 +1,30 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2026-03-27T02:32:50.144Z",
+  "results": [
+    {
+      "archetype": "aggro",
+      "totalScore": -132,
+      "normalizedScore": 0,
+      "winrate": 0,
+      "tier": "F",
+      "consistency": 70
+    },
+    {
+      "archetype": "control",
+      "totalScore": -146,
+      "normalizedScore": 0,
+      "winrate": 0,
+      "tier": "F",
+      "consistency": 70
+    },
+    {
+      "archetype": "midrange",
+      "totalScore": -148,
+      "normalizedScore": 0,
+      "winrate": 0,
+      "tier": "F",
+      "consistency": 70
+    }
+  ]
+}

@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
-    "seed:scryfall": "cross-env NODE_ENV=development tsx server/seed-scryfall.ts"
+    "seed:scryfall": "cross-env NODE_ENV=development tsx server/seed-scryfall.ts",
+    "test:model": "cross-env NODE_ENV=development tsx server/scripts/regressionTest.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
