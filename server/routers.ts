@@ -320,6 +320,43 @@ export const appRouter = router({
         }
         return evaluateDeck(expanded, input.archetype || "default");
       }),
+
+    evaluateBrain: publicProcedure
+      .input(
+        z.object({
+          cards: z.array(
+            z.object({
+              name: z.string(),
+              type: z.string().optional(),
+              text: z.string().optional(),
+              cmc: z.number().optional(),
+              quantity: z.number(),
+            })
+          ),
+          archetype: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { evaluateDeck } = await import("./services/deckEvaluationBrain");
+        // Expandir cartas com quantidades
+        const expanded: {
+          name: string;
+          type?: string;
+          text?: string;
+          cmc?: number;
+        }[] = [];
+        for (const card of input.cards) {
+          for (let i = 0; i < card.quantity; i++) {
+            expanded.push({
+              name: card.name,
+              type: card.type,
+              text: card.text,
+              cmc: card.cmc,
+            });
+          }
+        }
+        return evaluateDeck(expanded, input.archetype || "default");
+      }),
   }),
 
   sync: router({
