@@ -213,3 +213,22 @@ export const deckShares = pgTable("deck_shares", {
 
 export type DeckShare = typeof deckShares.$inferSelect;
 export type InsertDeckShare = typeof deckShares.$inferInsert;
+
+export const cardLearning = pgTable(
+  "card_learning",
+  {
+    id: serial("id").primaryKey(),
+    cardName: varchar("card_name", { length: 255 }).notNull().unique(),
+    weight: real("weight").notNull().default(1.0),
+    winCount: integer("win_count").notNull().default(0),
+    lossCount: integer("loss_count").notNull().default(0),
+    avgScore: real("avg_score").notNull().default(0.0),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    weightIdx: index("learning_weight_idx").on(table.weight),
+  })
+);
+
+export type CardLearning = typeof cardLearning.$inferSelect;
+export type InsertCardLearning = typeof cardLearning.$inferInsert;

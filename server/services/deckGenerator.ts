@@ -4,6 +4,7 @@ import { findSimilarCardsForDeck } from "./embeddings";
 import { getCardSynergy } from "./synergy";
 import { evaluateDeck as evaluateDeckBase, optimizeDeckRL, extractCardFeatures, type DeckMetrics } from "./gameFeatureEngine";
 import { evaluateDeckWithBrain as evaluateDeckBrain, evaluateDeckQuick, type EvaluationResult } from "./deckEvaluationBrain";
+import { modelLearningService } from "./modelLearning";
 
 interface DeckGeneratorOptions {
   format: "standard" | "modern" | "commander" | "legacy";
@@ -113,25 +114,29 @@ export async function generateInitialDeck(
     }
   }
 
-  // Buscar cartas similares para preencher o deck
+  // Buscar pesos de aprendizado (Se existirem)
+  const learningWeights = await modelLearningService.getCardWeights();
+
+  // Buscar cartas similares para preencher o deck (Com Pesos de Aprendizado)
   const deckCardIds = Array.from(deck.keys());
   let currentSize = Array.from(deck.values()).reduce((a, b) => a + b, 0);
 
   while (currentSize < targetSize && deckCardIds.length < 100) {
-    const similar = await findSimilarCardsForDeck(deckCardIds, 20);
+    const similar = await findSimilarCardsForDeck(deckCardIds, 40);
 
     for (const card of similar) {
       if (currentSize >= targetSize) break;
+      
+      const weight = learningWeights[card.name] || 1.0;
+      const chance = Math.random() * (weight * 2.0); // Aumenta a chance de cartas com peso maior
 
-      if (!deck.has(card.id)) {
+      if (!deck.has(card.id) && chance > 0.5) {
         const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies);
         deck.set(card.id, quantity);
         deckCardIds.push(card.id);
         currentSize += quantity;
       }
     }
-
-    // Evitar loop infinito
     if (similar.length === 0) break;
   }
 
