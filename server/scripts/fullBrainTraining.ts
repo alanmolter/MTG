@@ -2,15 +2,20 @@ import { getDb, closeDb } from "../db";
 import { cardLearning } from "../../drizzle/schema";
 import { count, gt, gte, lt, and, sql } from "drizzle-orm";
 import { spawn } from "child_process";
+import {
+  printForgeStartupBanner,
+  printForgeConnectionStatus,
+  printForgeRulesLearning,
+} from "../services/forgeStatus";
 
 /**
  * MASTER BRAIN TRAINING SCRIPT
  * Executa Commander Intelligence + Archetype Continuous Training em sequencia.
- * Inclui feedback visual completo sobre dados do banco antes do treinamento.
+ * Inclui feedback visual completo sobre o Forge e dados do banco antes do treinamento.
  */
 
 function divider(label: string) {
-  const line = "-".repeat(52);
+  const line = "─".repeat(52);
   console.log(`\n${line}`);
   console.log(`  ${label}`);
   console.log(line);
@@ -22,17 +27,17 @@ function timestamp(): string {
 
 function bar(value: number, max: number, width = 20): string {
   const filled = max > 0 ? Math.round((value / max) * width) : 0;
-  return "[" + "#".repeat(filled) + "-".repeat(width - filled) + "]";
+  return "[" + "█".repeat(filled) + "░".repeat(width - filled) + "]";
 }
 
 function pct(value: number, total: number): string {
-  return total > 0 ? ((value / total) * 100).toFixed(1) + "%" : "0%";
+  return total > 0 ? ((value / total) * 100).toFixed(1) + "%" : "0.0%";
 }
 
-async function reportForgeDataStatus(db: any): Promise<void> {
-  console.log("\n" + "=".repeat(52));
-  console.log("  DADOS DE INTELIGENCIA CARREGADOS DO BANCO");
-  console.log("=".repeat(52));
+async function reportBrainDataStatus(db: any): Promise<void> {
+  console.log("\n" + "═".repeat(52));
+  console.log("  CEREBRO — DADOS DE INTELIGENCIA NO BANCO");
+  console.log("═".repeat(52));
 
   // Total de cartas no banco de aprendizado
   const [{ value: totalCards }] = await db
@@ -44,7 +49,8 @@ async function reportForgeDataStatus(db: any): Promise<void> {
   if (total === 0) {
     console.log("  [AVISO] Banco de inteligencia vazio.");
     console.log("  O modelo iniciara do zero sem dados previos.");
-    console.log("=".repeat(52) + "\n");
+    console.log("  O Forge ira gerar os primeiros dados de treinamento.");
+    console.log("═".repeat(52) + "\n");
     return;
   }
 
@@ -104,22 +110,22 @@ async function reportForgeDataStatus(db: any): Promise<void> {
 
   const avgWeight = Number(avgW || 0).toFixed(3);
 
-  console.log(`\n  CONEXAO COM BANCO DE INTELIGENCIA: OK`);
-  console.log(`  Total de cartas com dados de aprendizado : ${total}`);
-  console.log(`  Peso medio geral                         : ${avgWeight}`);
-  console.log(`  Cartas com historico de vitorias         : ${withWins} (${pct(Number(withWins), total)})`);
-  console.log(`  Cartas com historico de derrotas         : ${withLosses} (${pct(Number(withLosses), total)})`);
-  console.log(`  Cartas com score calculado               : ${withScore} (${pct(Number(withScore), total)})`);
+  console.log(`\n  Conexao com banco de inteligencia : OK`);
+  console.log(`  Total de cartas aprendidas        : ${total}`);
+  console.log(`  Peso medio geral                  : ${avgWeight}`);
+  console.log(`  Cartas com historico de vitorias  : ${withWins} (${pct(Number(withWins), total)})`);
+  console.log(`  Cartas com historico de derrotas  : ${withLosses} (${pct(Number(withLosses), total)})`);
+  console.log(`  Cartas com score calculado        : ${withScore} (${pct(Number(withScore), total)})`);
 
   console.log("\n  DISTRIBUICAO DE PESOS:");
-  console.log(`  Alta relevancia  (>= 10.0) : ${bar(Number(highWeight), total)} ${highWeight} cartas (${pct(Number(highWeight), total)})`);
-  console.log(`  Media relevancia (2.0-9.9) : ${bar(Number(midWeight), total)} ${midWeight} cartas (${pct(Number(midWeight), total)})`);
-  console.log(`  Base             (0.5-1.9) : ${bar(Number(baseWeight), total)} ${baseWeight} cartas (${pct(Number(baseWeight), total)})`);
-  console.log(`  Baixa relevancia (< 0.5)   : ${bar(Number(lowWeight), total)} ${lowWeight} cartas (${pct(Number(lowWeight), total)})`);
+  console.log(`  Alta relevancia  (>= 10.0) : ${bar(Number(highWeight), total)} ${highWeight} (${pct(Number(highWeight), total)})`);
+  console.log(`  Media relevancia (2.0-9.9) : ${bar(Number(midWeight), total)} ${midWeight} (${pct(Number(midWeight), total)})`);
+  console.log(`  Base             (0.5-1.9) : ${bar(Number(baseWeight), total)} ${baseWeight} (${pct(Number(baseWeight), total)})`);
+  console.log(`  Baixa relevancia (< 0.5)   : ${bar(Number(lowWeight), total)} ${lowWeight} (${pct(Number(lowWeight), total)})`);
 
   if (topCards.length > 0) {
     console.log("\n  TOP 5 CARTAS POR PESO APRENDIDO:");
-    console.log("  " + "-".repeat(50));
+    console.log("  " + "─".repeat(50));
     topCards.forEach((c: any, i: number) => {
       const matches = c.winCount + c.lossCount;
       const winRate = matches > 0
@@ -129,25 +135,30 @@ async function reportForgeDataStatus(db: any): Promise<void> {
         `  ${i + 1}. ${c.cardName.padEnd(30)} peso: ${c.weight.toFixed(3).padStart(7)} | ${winRate}`
       );
     });
-    console.log("  " + "-".repeat(50));
+    console.log("  " + "─".repeat(50));
   }
 
   console.log("\n  FONTES DE APRENDIZADO ACUMULADAS NO BANCO:");
-  console.log("    forge_reality   - partidas reais registradas via Forge");
-  console.log("    self_play       - simulacoes internas de partidas");
-  console.log("    commander_train - treinamento especializado Commander");
-  console.log("    user_generation - interacoes do usuario no front-end");
-  console.log("    rl_policy       - retroalimentacao do RL REINFORCE");
+  console.log("    [F] forge_reality   — partidas reais simuladas via Forge engine");
+  console.log("    [S] self_play       — simulacoes internas do loop genetico");
+  console.log("    [C] commander_train — treinamento especializado Commander EDH");
+  console.log("    [U] user_generation — interacoes do usuario no front-end");
+  console.log("    [R] rl_policy       — retroalimentacao do algoritmo RL REINFORCE");
   console.log("\n  TODOS OS DADOS ACIMA SERAO UTILIZADOS NO TREINAMENTO.");
-  console.log("=".repeat(52) + "\n");
+  console.log("═".repeat(52) + "\n");
 }
 
 async function launchMasterTraining() {
   const startTotal = Date.now();
-  console.log("=".repeat(52));
+
+  // ── Banner principal ──────────────────────────────────────────────────────
+  console.log("═".repeat(52));
   console.log("  TREINAMENTO GLOBAL DA IA (MTG Brain)");
   console.log(`  Inicio: ${timestamp()}`);
-  console.log("=".repeat(52));
+  console.log("═".repeat(52));
+
+  // ── 1. Banner de inicialização do Forge ───────────────────────────────────
+  printForgeStartupBanner();
 
   const db = await getDb();
   if (!db) {
@@ -156,8 +167,14 @@ async function launchMasterTraining() {
     return;
   }
 
-  // Mostrar status completo dos dados de inteligência antes de treinar
-  await reportForgeDataStatus(db);
+  // ── 2. Status de conexão do Forge e dados forge_reality no banco ──────────
+  await printForgeConnectionStatus();
+
+  // ── 3. Regras MTG que o Forge está ensinando ao modelo ────────────────────
+  printForgeRulesLearning();
+
+  // ── 4. Status completo do banco de inteligência ───────────────────────────
+  await reportBrainDataStatus(db);
 
   const [{ value: initialCount }] = await db
     .select({ value: count() })
@@ -167,6 +184,7 @@ async function launchMasterTraining() {
     return new Promise((resolve) => {
       divider(`Modulo: ${name}`);
       console.log(`  Script : npx tsx ${path}`);
+      console.log(`  Forge  : ativo — regras MTG aplicadas em cada partida`);
       console.log(`  Status : executando...\n`);
 
       const child = spawn("npx", ["tsx", path], {
@@ -179,6 +197,7 @@ async function launchMasterTraining() {
         const dur = ((Date.now() - tStart) / 1000).toFixed(1);
         if (code === 0) {
           console.log(`\n  [OK] Modulo "${name}" concluido em ${dur}s`);
+          console.log(`  [Forge] Dados de partidas gravados em forge_reality.`);
         } else {
           console.warn(`\n  [AVISO] Modulo "${name}" terminou com codigo ${code} (${dur}s)`);
         }
@@ -187,27 +206,29 @@ async function launchMasterTraining() {
     });
   };
 
-  // 1. Commander Intelligence
-  await runScript("Commander Intelligence", "server/scripts/trainCommander.ts");
+  // ── 5. Commander Intelligence ─────────────────────────────────────────────
+  await runScript("Commander Intelligence (Forge)", "server/scripts/trainCommander.ts");
 
-  // 2. Archetype Continuous Training
-  await runScript("Archetype Continuous Training", "server/scripts/continuousTraining.ts");
+  // ── 6. Archetype Continuous Training ─────────────────────────────────────
+  await runScript("Archetype Self-Play (Forge)", "server/scripts/continuousTraining.ts");
 
-  // Resultado Final
+  // ── 7. Resultado Final ────────────────────────────────────────────────────
   const [{ value: finalCount }] = await db
     .select({ value: count() })
     .from(cardLearning);
 
   const totalDur = ((Date.now() - startTotal) / 1000).toFixed(1);
 
-  console.log("\n" + "=".repeat(52));
+  console.log("\n" + "═".repeat(52));
   console.log("  TREINAMENTO CONCLUIDO");
+  console.log("═".repeat(52));
   console.log(`  Duracao total           : ${totalDur}s`);
   console.log(`  Cartas antes do treino  : ${initialCount}`);
   console.log(`  Cartas apos o treino    : ${finalCount}`);
   console.log(`  Novas entradas criadas  : ${Number(finalCount) - Number(initialCount)}`);
+  console.log(`  Motor de regras         : Forge (forge_reality)`);
   console.log(`  Fim: ${timestamp()}`);
-  console.log("=".repeat(52) + "\n");
+  console.log("═".repeat(52) + "\n");
 
   closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }

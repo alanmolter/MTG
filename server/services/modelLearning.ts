@@ -218,12 +218,19 @@ export class modelLearningService {
    *   Vencedor: +0.05 por carta
    *   Perdedor: -0.02 por carta
    */
-  public static async runSelfPlaySession(population: any[][]): Promise<void> {
+  public static async runSelfPlaySession(
+    population: any[][]
+  ): Promise<{ wins: number; matches: number }> {
     const weightUpdates: Record<string, { weightDelta: number; win?: boolean }> = {};
+    let wins = 0;
+    let matches = 0;
 
     for (let i = 0; i < population.length; i++) {
       for (let j = i + 1; j < Math.min(i + 5, population.length); j++) {
         const result = ModelEvaluator.simulateMatch(population[i], population[j]);
+        matches++;
+        if (result.winner === "A") wins++;
+
         const winner = result.winner === "A" ? population[i] : population[j];
         const loser  = result.winner === "A" ? population[j] : population[i];
 
@@ -243,5 +250,6 @@ export class modelLearningService {
 
     // Passa pela fila — sem race condition, com weight capping
     await this.updateWeights(weightUpdates, "self_play");
+    return { wins, matches };
   }
 }
