@@ -43,16 +43,22 @@ async function applyMigration() {
       await db.execute(sql.raw(statement));
       applied++;
     } catch (err: any) {
-      // Ignorar erros de "já existe" (42P07, 42701, 42P06)
-      if (
+      // Ignorar silenciosamente erros de "já existe" (42P07=index, 42701=column, 42P06=schema, 42P04=db)
+      const isAlreadyExists =
         err?.code === "42P07" ||
         err?.code === "42701" ||
         err?.code === "42P06" ||
-        err?.message?.includes("already exists")
-      ) {
-        skipped++;
+        err?.code === "42P04" ||
+        err?.severity === "NOTICE" ||
+        err?.message?.includes("already exists") ||
+        err?.message?.includes("já existe");
+
+      if (isAlreadyExists) {
+        skipped++; // silencioso — objeto já existe, tudo certo
       } else {
-        console.warn(`[Migration] Aviso no statement: ${err?.message}`);
+        // Exibir apenas a mensagem curta, sem o SQL completo
+        const shortMsg = err?.message?.split("\n")[0] ?? "erro desconhecido";
+        console.warn(`[Migration] Aviso: ${shortMsg}`);
         skipped++;
       }
     }
