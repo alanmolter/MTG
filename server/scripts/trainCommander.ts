@@ -6,39 +6,68 @@ import { evaluateDeckWithBrain } from "../services/deckGenerator";
 
 /**
  * Script de Treinamento Especializado em Comandantes
- * 
- * Este script foca exclusivamente em evoluir a escolha do Comandante
- * através de ciclos de geração, simulação e reforço.
+ * Foca em evoluir a escolha do Comandante via ciclos de geracao, simulacao e reforco.
  */
-async function trainCommander(iterations = 300) {
-  console.log(`\n🎓 Iniciando Treinamento de Comandantes (${iterations} iterações)...\n`);
 
-  // Pegamos tudo (Arena e Físico) para garantir que cobrimos todos os modos
+function barCmd(current: number, total: number, width = 18): string {
+  const filled = total > 0 ? Math.round((current / total) * width) : 0;
+  return "[" + "#".repeat(filled) + "-".repeat(width - filled) + "]";
+}
+
+function timestampCmd(): string {
+  return new Date().toLocaleTimeString("pt-BR");
+}
+
+async function trainCommander(iterations = 300) {
+  const startTotal = Date.now();
+  console.log("=".repeat(52));
+  console.log(`  COMMANDER INTELLIGENCE (${iterations} iteracoes)`);
+  console.log(`  Inicio: ${timestampCmd()}`);
+  console.log("=".repeat(52));
+
+  console.log("\n  Carregando pool de cartas (Arena + Fisico)...");
   const cardPool = await searchCards({ isArena: false });
   if (cardPool.length === 0) {
-    console.error("❌ Erro: Banco de dados vazio. Sincronize o Scryfall primeiro.");
-    return;
+    console.error("  [ERRO] Banco de dados vazio. Sincronize o Scryfall primeiro.");
+    process.exit(1);
   }
+  console.log(`  Pool carregado: ${cardPool.length} cartas`);
 
   const archetypes: any[] = ["aggro", "control", "midrange", "combo", "ramp"];
-  const batchSize = 5; // Rodar 5 simulações em paralelo
+  const batchSize = 5;
+  let totalWins = 0;
+  let totalMatches = 0;
 
   for (let i = 0; i < iterations; i += batchSize) {
+    const progBar = barCmd(Math.min(i + batchSize, iterations), iterations);
+    process.stdout.write(`\r  ${progBar} ${Math.min(i + batchSize, iterations)}/${iterations} | wins: ${totalWins}/${totalMatches} | ${timestampCmd()}`);
+
     const batch = Array.from({ length: Math.min(batchSize, iterations - i) }, (_, index) => {
       const itIndex = i + index;
       const archetype = archetypes[itIndex % archetypes.length];
-      return runIteration(itIndex, archetype, cardPool);
+      return runIteration(itIndex, archetype, cardPool).then((r: any) => {
+        if (r) { totalWins += r.wins; totalMatches += r.matches; }
+      });
     });
-
     await Promise.all(batch);
   }
 
-  console.log("\n✅ Treinamento de Comandantes concluído com sucesso!");
+  process.stdout.write("\n");
+
+  const totalDur = ((Date.now() - startTotal) / 1000).toFixed(1);
+  const winratePct = totalMatches > 0 ? ((totalWins / totalMatches) * 100).toFixed(1) : "N/A";
+  console.log("\n" + "=".repeat(52));
+  console.log("  COMMANDER INTELLIGENCE CONCLUIDO");
+  console.log(`  Iteracoes     : ${iterations}`);
+  console.log(`  Partidas      : ${totalMatches}`);
+  console.log(`  Vitorias      : ${totalWins} (${winratePct}%)`);
+  console.log(`  Duracao total : ${totalDur}s`);
+  console.log(`  Fim: ${timestampCmd()}`);
+  console.log("=".repeat(52) + "\n");
   process.exit(0);
 }
 
-async function runIteration(i: number, archetype: string, cardPool: CardData[]) {
-  console.log(`\n🔄 Iteração [${i + 1}] - Foco: ${archetype.toUpperCase()}`);
+async function runIteration(i: number, archetype: string, cardPool: CardData[]): Promise<{ wins: number; matches: number } | null> {
 
   // 1. Carregar pesos atuais
   const learnedWeights = await modelLearningService.getCardWeights();
@@ -52,8 +81,7 @@ async function runIteration(i: number, archetype: string, cardPool: CardData[]) 
 
   const commander = result.cards.find(c => c.role === "commander");
   if (!commander) {
-    console.log(`⚠️  [${archetype}] Nenhum comandante elegível encontrado.`);
-    return;
+    return null;
   }
 
   // 3. Avaliação Inicial pelo Cérebro
@@ -70,7 +98,6 @@ async function runIteration(i: number, archetype: string, cardPool: CardData[]) 
   }
 
   const winrate = wins / matches;
-  console.log(`👑 [${archetype}] ${commander.name} | Winrate: ${(winrate * 100).toFixed(0)}% | Score: ${metrics.normalizedScore?.toFixed(0)}`);
 
   // 5. APRENDIZADO DE REFORÇO
   const weightDelta = winrate > 0.5 ? 0.2 : -0.1;
@@ -87,8 +114,12 @@ async function runIteration(i: number, archetype: string, cardPool: CardData[]) 
     }
   });
 
-  // CORREÇÃO: source="commander_train" para rastreabilidade e roteamento pela fila
+  // source="commander_train" para rastreabilidade e roteamento pela fila
   await modelLearningService.updateWeights(updates, "commander_train");
+  return { wins, matches };
 }
 
-trainCommander().catch(console.error);
+trainCommander().catch((e) => {
+  console.error("[trainCommander] Erro fatal:", e?.message);
+  process.exit(0);
+});

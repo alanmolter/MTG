@@ -1,56 +1,91 @@
 import "dotenv/config";
 import { importMTGGoldfishDecks } from "./server/services/mtggoldfishScraper.ts";
 import { importMTGTop8Decks } from "./server/services/mtgtop8Scraper.ts";
-import { trainEmbeddingsFromDecks, getTrainingJobHistory } from "./server/services/embeddingTrainer.ts";
+import { trainEmbeddingsFromDecks } from "./server/services/embeddingTrainer.ts";
 
-// Timeout global de 5 minutos para o script inteiro
+// Timeout global de 8 minutos
 const GLOBAL_TIMEOUT = setTimeout(() => {
-  console.warn("[import-and-train] Timeout global atingido (5min). Encerrando...");
+  console.log("\n[import-and-train] Timeout global atingido (8min). Encerrando...");
   process.exit(0);
-}, 5 * 60 * 1000);
+}, 8 * 60 * 1000);
 GLOBAL_TIMEOUT.unref();
 
-async function main() {
-  console.log("[import-and-train] Iniciando importacao de dados reais...");
+function divider(label: string) {
+  const line = "-".repeat(52);
+  console.log(`\n${line}`);
+  console.log(`  ${label}`);
+  console.log(line);
+}
 
-  // 1. MTGGoldfish
-  console.log("\n[1/3] Importando do MTGGoldfish...");
+function timestamp(): string {
+  return new Date().toLocaleTimeString("pt-BR");
+}
+
+async function main() {
+  const startTotal = Date.now();
+  console.log("=".repeat(52));
+  console.log("  IMPORTACAO E TREINAMENTO DE DADOS");
+  console.log(`  Inicio: ${timestamp()}`);
+  console.log("=".repeat(52));
+
+  // ─── 1. MTGGoldfish ───────────────────────────────
+  divider("1/3  MTGGoldfish -- Metagame Moderno");
+  const t1 = Date.now();
   try {
     const goldfish = await importMTGGoldfishDecks("modern", 10);
-    console.log(`   OK: ${goldfish.decksImported} importados, ${goldfish.decksSkipped} pulados.`);
+    const dur1 = ((Date.now() - t1) / 1000).toFixed(1);
+    console.log(`  Decks importados : ${goldfish.decksImported}`);
+    console.log(`  Decks pulados    : ${goldfish.decksSkipped}`);
+    console.log(`  Cartas salvas    : ${goldfish.cardsImported}`);
+    console.log(`  Duracao          : ${dur1}s`);
     if (goldfish.errors.length > 0) {
-      console.warn(`   Avisos: ${goldfish.errors.slice(0, 3).join("; ")}`);
+      console.warn(`  Avisos (${goldfish.errors.length}): ${goldfish.errors.slice(0, 3).join(" | ")}`);
     }
   } catch (e: any) {
-    console.warn(`   [AVISO] MTGGoldfish falhou: ${e?.message}. Continuando...`);
+    console.warn(`  [AVISO] MTGGoldfish falhou: ${e?.message}. Continuando...`);
   }
 
-  // 2. MTGTop8
-  console.log("\n[2/3] Importando do MTGTop8...");
+  // ─── 2. MTGTop8 ───────────────────────────────────
+  divider("2/3  MTGTop8 -- Torneios Recentes");
+  const t2 = Date.now();
   try {
     const top8 = await importMTGTop8Decks("modern", 10);
-    console.log(`   OK: ${top8.decksImported} importados, ${top8.decksSkipped} pulados.`);
+    const dur2 = ((Date.now() - t2) / 1000).toFixed(1);
+    console.log(`  Decks importados : ${top8.decksImported}`);
+    console.log(`  Decks pulados    : ${top8.decksSkipped}`);
+    console.log(`  Cartas salvas    : ${top8.cardsImported}`);
+    console.log(`  Duracao          : ${dur2}s`);
     if (top8.errors.length > 0) {
-      console.warn(`   Avisos: ${top8.errors.slice(0, 3).join("; ")}`);
+      console.warn(`  Avisos (${top8.errors.length}): ${top8.errors.slice(0, 3).join(" | ")}`);
     }
   } catch (e: any) {
-    console.warn(`   [AVISO] MTGTop8 falhou: ${e?.message}. Continuando...`);
+    console.warn(`  [AVISO] MTGTop8 falhou: ${e?.message}. Continuando...`);
   }
 
-  // 3. Treinar Embeddings
-  console.log("\n[3/3] Treinando Embeddings Word2Vec...");
+  // ─── 3. Embeddings Word2Vec ───────────────────────
+  divider("3/3  Treinamento de Embeddings Word2Vec");
+  const t3 = Date.now();
+  console.log("  Carregando decks competitivos do banco...");
   try {
     const result = await trainEmbeddingsFromDecks();
+    const dur3 = ((Date.now() - t3) / 1000).toFixed(1);
     if (result.status === "completed") {
-      console.log(`   OK: ${result.embeddingsTrained} embeddings, ${result.synergiesUpdated} sinergias (${(result.durationMs / 1000).toFixed(1)}s)`);
+      console.log(`  Embeddings treinados : ${result.embeddingsTrained}`);
+      console.log(`  Sinergias atualizadas: ${result.synergiesUpdated}`);
+      console.log(`  Duracao              : ${dur3}s`);
     } else {
-      console.warn(`   [AVISO] Embeddings: ${result.error}`);
+      console.warn(`  [AVISO] Embeddings: ${result.error}`);
     }
   } catch (e: any) {
-    console.warn(`   [AVISO] Embeddings falhou: ${e?.message}. Continuando...`);
+    console.warn(`  [AVISO] Embeddings falhou: ${e?.message}. Continuando...`);
   }
 
-  console.log("\n[import-and-train] Concluido.");
+  // ─── Resumo Final ─────────────────────────────────
+  const totalDur = ((Date.now() - startTotal) / 1000).toFixed(1);
+  console.log("\n" + "=".repeat(52));
+  console.log(`  CONCLUIDO em ${totalDur}s -- ${timestamp()}`);
+  console.log("=".repeat(52) + "\n");
+
   clearTimeout(GLOBAL_TIMEOUT);
   process.exit(0);
 }
