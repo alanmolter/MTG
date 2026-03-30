@@ -53,6 +53,40 @@ function bar(current: number, total: number, width = 20): string {
   return "[" + "#".repeat(filled) + "-".repeat(width - filled) + "]";
 }
 
+/**
+ * Extrai IDs de deck numéricos da página de um archetype específico.
+ * Padrão atual do MTGGoldfish: href="/deck/7693069" ou href="/deck/7693069#paper"
+ */
+async function getDeckIdsFromArchetype(archetypeSlug: string, maxDecks = 5): Promise<{ id: string; name: string }[]> {
+  const url = `${MTGGOLDFISH_BASE_URL}/archetype/${archetypeSlug}#paper`;
+  try {
+    const response = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT } });
+    if (!response.ok) return [];
+    const html = await response.text();
+    // Padrão atual: href="/deck/7693069" ou href="/deck/7693069#paper"
+    const deckRegex = /href="\/deck\/(\d+)(?:#[^"]*)?"/g;
+    const seen = new Set<string>();
+    const results: { id: string; name: string }[] = [];
+    let match;
+    // Extrair nome do archetype do slug para usar como nome do deck
+    const archetypeName = archetypeSlug
+      .replace(/^(modern|standard|legacy|pioneer|vintage|pauper)-/, "")
+      .replace(/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, "") // remover UUID
+      .replace(/-\d+$/, "") // remover sufixo numérico
+      .replace(/-/g, " ");
+    while ((match = deckRegex.exec(html)) !== null && results.length < maxDecks) {
+      const id = match[1];
+      if (!seen.has(id)) {
+        seen.add(id);
+        results.push({ id, name: archetypeName });
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 export async function importMTGGoldfishDecks(
   format: string = "modern",
   limit: number = 20
@@ -63,7 +97,7 @@ export async function importMTGGoldfishDecks(
   console.log(`  [MTGGoldfish] Conectando a: ${url}`);
   console.log(`  [MTGGoldfish] Aguardando resposta (timeout: ${FETCH_TIMEOUT_MS / 1000}s)...`);
 
-  let deckSummaries: MTGGoldfishDeckSummary[] = [];
+  let archetypeSlugs: string[] = [];
 
   try {
     const t0 = Date.now();
@@ -78,20 +112,23 @@ export async function importMTGGoldfishDecks(
     const html = await response.text();
     console.log(`  [MTGGoldfish] Resposta recebida em ${elapsed}s (${(html.length / 1024).toFixed(0)} KB)`);
 
-    const deckRegex = /\/deck\/(\d+)#paper/g;
-    const seen = new Set<string>();
+    // ESTRATÉGIA ATUALIZADA: extrair slugs de archetype da página de metagame
+    // Padrão atual: href="/archetype/modern-boros-energy#paper" ou com UUID
+    const archetypeRegex = /href="\/archetype\/([^"#]+)(?:#[^"]*)?"/g;
+    const seenSlugs = new Set<string>();
     let match;
-    while ((match = deckRegex.exec(html)) !== null && deckSummaries.length < limit) {
-      const id = match[1];
-      if (seen.has(id)) continue;
-      seen.add(id);
-      deckSummaries.push({ id, name: "Goldfish Deck", format, author: "Unknown", views: 0, likes: 0 });
+    while ((match = archetypeRegex.exec(html)) !== null) {
+      const slug = match[1];
+      if (!seenSlugs.has(slug) && !slug.includes("custom")) {
+        seenSlugs.add(slug);
+        archetypeSlugs.push(slug);
+      }
     }
 
-    console.log(`  [MTGGoldfish] ${deckSummaries.length} decks encontrados no metagame ${format.toUpperCase()}`);
+    console.log(`  [MTGGoldfish] ${archetypeSlugs.length} arquetipos encontrados no metagame ${format.toUpperCase()}`);
 
-    if (deckSummaries.length === 0) {
-      console.warn(`  [MTGGoldfish] Nenhum deck encontrado. HTML pode ter mudado de estrutura.`);
+    if (archetypeSlugs.length === 0) {
+      console.warn(`  [MTGGoldfish] Nenhum arquetipo encontrado. HTML pode ter mudado de estrutura.`);
       return result;
     }
   } catch (error: any) {
@@ -100,6 +137,39 @@ export async function importMTGGoldfishDecks(
       : `Erro de conexao: ${error?.message}`;
     console.warn(`  [MTGGoldfish] ${msg}`);
     result.errors.push(msg);
+    return result;
+  }
+
+  // Calcular quantos decks por archetype para atingir o limite
+  const decksPerArchetype = Math.max(1, Math.ceil(limit / Math.min(archetypeSlugs.length, limit)));
+  const archetypesToProcess = archetypeSlugs.slice(0, Math.min(archetypeSlugs.length, limit));
+
+  console.log(`  [MTGGoldfish] Coletando ate ${decksPerArchetype} deck(s) de cada arquetipo (${archetypesToProcess.length} arquetipos)...`);
+
+  // Coletar IDs de deck de cada archetype
+  const deckSummaries: MTGGoldfishDeckSummary[] = [];
+  for (let i = 0; i < archetypesToProcess.length && deckSummaries.length < limit; i++) {
+    const slug = archetypesToProcess[i];
+    const deckEntries = await getDeckIdsFromArchetype(slug, decksPerArchetype);
+    for (const entry of deckEntries) {
+      if (deckSummaries.length >= limit) break;
+      deckSummaries.push({
+        id: entry.id,
+        name: entry.name,
+        format,
+        archetype: entry.name,
+        author: "MTGGoldfish",
+        views: 0,
+        likes: 0,
+      });
+    }
+    await new Promise((r) => setTimeout(r, 150)); // Rate limiting
+  }
+
+  console.log(`  [MTGGoldfish] ${deckSummaries.length} decks encontrados no metagame ${format.toUpperCase()}`);
+
+  if (deckSummaries.length === 0) {
+    console.warn(`  [MTGGoldfish] Nenhum deck encontrado nos arquetipos.`);
     return result;
   }
 
@@ -135,10 +205,17 @@ export async function importMTGGoldfishDecks(
         }
       }
 
+      // Ignorar decks vazios
+      if (mainboard.length === 0) {
+        result.decksSkipped++;
+        continue;
+      }
+
       const deckDetail: MTGGoldfishDeckDetail = {
         id: summary.id,
-        name: `Deck ${summary.id}`,
+        name: summary.name || `Deck ${summary.id}`,
         format,
+        archetype: summary.archetype,
         author: "MTGGoldfish",
         views: 0,
         likes: 0,

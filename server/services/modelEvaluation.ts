@@ -28,30 +28,45 @@ export class ModelEvaluator {
     let lifeA = 20;
     let lifeB = 20;
     let turn = 1;
-    
-    // Simplificação: Cada deck joga sua curva e causa dano baseado no Impact Score + Ameaças
-    // Decks com remoção podem "atrasar" o impacto do outro
+
+    // Simulação com variância estocástica para evitar winrate trivial de 100%.
+    // Cada turno tem um fator de "mão" (0.5–1.5) que simula draws aleatórios.
+    // Sem isso, o deck A (gerado pelo modelo) sempre vence por ter mais cartas
+    // com impactScore alto, tornando o treinamento ineficaz.
     while (lifeA > 0 && lifeB > 0 && turn <= 20) {
+      // Fator de variabilidade por turno (simula draws)
+      const handFactorA = 0.5 + Math.random();
+      const handFactorB = 0.5 + Math.random();
+
       // Turno A
-      const powerA = this.calculateTurnPower(featuresA, turn);
-      const interactB = this.calculateInteraction(featuresB, turn);
+      const powerA = this.calculateTurnPower(featuresA, turn) * handFactorA;
+      const interactB = this.calculateInteraction(featuresB, turn) * (0.7 + Math.random() * 0.6);
       lifeB -= Math.max(0, powerA - interactB);
 
       if (lifeB <= 0) break;
 
       // Turno B
-      const powerB = this.calculateTurnPower(featuresB, turn);
-      const interactA = this.calculateInteraction(featuresA, turn);
+      const powerB = this.calculateTurnPower(featuresB, turn) * handFactorB;
+      const interactA = this.calculateInteraction(featuresA, turn) * (0.7 + Math.random() * 0.6);
       lifeA -= Math.max(0, powerB - interactA);
 
       turn++;
     }
 
+    // Empate (ambos com vida > 0 após 20 turnos): vence quem tem mais vida
+    // Se igual, desempate aleatório 50/50
+    if (lifeA > 0 && lifeB > 0) {
+      if (lifeA === lifeB) {
+        return { winner: Math.random() < 0.5 ? "A" : "B", turns: turn, finalLifeA: lifeA, finalLifeB: lifeB };
+      }
+      return { winner: lifeA > lifeB ? "A" : "B", turns: turn, finalLifeA: lifeA, finalLifeB: lifeB };
+    }
+
     return {
       winner: lifeB <= 0 ? "A" : "B",
       turns: turn,
-      finalLifeA: lifeA,
-      finalLifeB: lifeB
+      finalLifeA: Math.max(0, lifeA),
+      finalLifeB: Math.max(0, lifeB)
     };
   }
 

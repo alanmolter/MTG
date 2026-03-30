@@ -21,23 +21,37 @@ import { META_DECKS } from "./metaDecks";
 // ─── Inicialização Meta-Learning ──────────────────────────────────────────────
 
 let isMetaInitialized = false;
+// Promise de inicialização para evitar corrida entre chamadas paralelas
+let _initPromise: Promise<void> | null = null;
 
 async function initMetaBenchmarks() {
+  // Se já inicializado, retorna imediatamente (sem log)
   if (isMetaInitialized) return;
+  // Se já está inicializando em paralelo, aguarda a mesma promise
+  if (_initPromise) return _initPromise;
   
-  for (const [archetype, decklists] of Object.entries(META_DECKS)) {
-    const decks: any[][] = [];
-    for (const dl of decklists) {
-      const parsed = await (import("./metaAnalytics")).then(m => m.MetaAnalytics.parseDecklist(dl));
-      if (parsed.length > 0) decks.push(parsed);
+  _initPromise = (async () => {
+    const initialized: string[] = [];
+    for (const [archetype, decklists] of Object.entries(META_DECKS)) {
+      const decks: any[][] = [];
+      for (const dl of decklists) {
+        const parsed = await (import("./metaAnalytics")).then(m => m.MetaAnalytics.parseDecklist(dl));
+        if (parsed.length > 0) decks.push(parsed);
+      }
+      if (decks.length > 0) {
+        metaAnalyzer.generateBenchmark(archetype, decks);
+        initialized.push(`${archetype}(n=${decks.length})`);
+      }
     }
-    
-    if (decks.length > 0) {
-      metaAnalyzer.generateBenchmark(archetype, decks);
-      console.log(`[BRAIN] Meta-Benchmark Gerada: ${archetype} (n=${decks.length})`);
+    // Log ÚNICO de resumo — evita spam de centenas de linhas durante self-play
+    // (antes: 1 linha por arquétipo × N chamadas paralelas = centenas de linhas)
+    if (initialized.length > 0) {
+      console.log(`[BRAIN] Meta-Benchmarks: ${initialized.join(", ")}`);
     }
-  }
-  isMetaInitialized = true;
+    isMetaInitialized = true;
+  })();
+  
+  return _initPromise;
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────

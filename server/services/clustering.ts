@@ -304,12 +304,33 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
   const adjustedK = Math.min(k, vectors.length);
   
   // Extrair apenas os dados numéricos para a biblioteca
-  const data = vectors.map(v => v.vector);
+  const rawData = vectors.map(v => v.vector);
 
-  console.log(`[KMeans] Running ml-kmeans with k=${adjustedK}, max_iterations=${maxIterations}`);
+  // CORREÇÃO: Normalizar dimensões para evitar RangeError: Inconsistent array dimensions
+  // Ocorre quando embeddings de generateSimpleEmbedding (dim=50) e Word2Vec (dim=64)
+  // coexistem no banco. Padding com zeros para alinhar todas as dimensões.
+  const maxDim = rawData.reduce((max, vec) => Math.max(max, vec.length), 0);
+  const data = rawData.map(vec => {
+    if (vec.length === maxDim) return vec;
+    const padded = new Array(maxDim).fill(0);
+    for (let i = 0; i < vec.length; i++) padded[i] = vec[i];
+    return padded;
+  });
+
+  // Filtrar vetores completamente zerados (embeddings inválidos)
+  const validMask = data.map(vec => vec.some(v => v !== 0));
+  const filteredData = data.filter((_, i) => validMask[i]);
+  const filteredVectors = vectors.filter((_, i) => validMask[i]);
+
+  if (filteredData.length < adjustedK) {
+    console.warn(`[KMeans] Vetores válidos insuficientes (${filteredData.length}) para k=${adjustedK}. Abortando.`);
+    return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
+  }
+
+  console.log(`[KMeans] Running ml-kmeans: k=${adjustedK}, dim=${maxDim}, n=${filteredData.length}, max_iterations=${maxIterations}`);
 
   // Executar a biblioteca real
-  const result = kmeans(data, adjustedK, {
+  const result = kmeans(filteredData, adjustedK, {
     maxIterations,
     initialization: 'kmeans++',
   });
@@ -332,12 +353,12 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
   // Criar resultados finais com informações enriquecidas
   const clusters: ClusterResult[] = [];
   clusterMap.forEach((vectorIndices, clusterId) => {
-    const clusterVectors = vectorIndices.map(i => vectors[i]);
+    const clusterVectors = vectorIndices.map(i => filteredVectors[i]);
     const centroid = centroids[clusterId];
 
     // Calcular distâncias intra-cluster
     const intraClusterDistances = vectorIndices.map(i =>
-      euclideanDistance(vectors[i].vector, centroid)
+      euclideanDistance(filteredVectors[i].vector, centroid)
     );
     const avgIntraClusterDistance = intraClusterDistances.length > 0
       ? intraClusterDistances.reduce((a, b) => a + b, 0) / intraClusterDistances.length
