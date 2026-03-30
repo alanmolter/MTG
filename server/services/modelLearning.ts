@@ -22,20 +22,49 @@ import { getCardLearningQueue } from "./cardLearningQueue";
  * CORREÇÃO CRÍTICA (Weight Capping):
  *   Todos os pesos são limitados ao intervalo [0.1, 50.0] via SQL LEAST/GREATEST,
  *   evitando que cartas acumulem pesos infinitos após muitas iterações.
+ *
+ * CORREÇÃO CRÍTICA (Log Spam):
+ *   getCardWeights() usa cache em memória com TTL de 60 segundos.
+ *   O log de status é emitido apenas UMA vez por sessão (flag _logged).
+ *   Isso evita que o self-play (100+ decks/iteração) polua o terminal
+ *   com milhares de linhas idênticas de "[Brain] Dados de inteligencia...".
  */
 
 /** Limites de peso para evitar divergência */
 export const WEIGHT_MIN = 0.1;
 export const WEIGHT_MAX = 50.0;
 
+/** TTL do cache de pesos em memória (ms) */
+const WEIGHT_CACHE_TTL_MS = 60_000; // 60 segundos
+
+/** Cache em memória dos pesos de aprendizado */
+let _weightCache: Record<string, number> | null = null;
+let _weightCacheTimestamp = 0;
+let _weightCacheLogged = false; // garante log único por sessão de processo
+
 /** Fonte de aprendizado — usada para rastrear qual processo atualizou o peso */
 export type LearningSource = "user_generation" | "self_play" | "commander_train" | "rl_policy" | "forge_reality";
 
 export class modelLearningService {
   /**
-   * Recupera os pesos atuais de aprendizado do banco
+   * Recupera os pesos atuais de aprendizado do banco.
+   *
+   * OTIMIZAÇÃO: Cache em memória com TTL de 60s.
+   * O SELECT no banco ocorre no máximo 1x por minuto, independentemente de
+   * quantos decks sejam gerados em paralelo durante o self-play.
+   *
+   * LOG: Emitido apenas UMA vez por sessão de processo para não poluir o terminal.
+   *
+   * Para forçar recarga imediata (ex: após updateWeights), use invalidateCache().
    */
   public static async getCardWeights(): Promise<Record<string, number>> {
+    const now = Date.now();
+
+    // Retorna cache se ainda válido
+    if (_weightCache !== null && (now - _weightCacheTimestamp) < WEIGHT_CACHE_TTL_MS) {
+      return _weightCache;
+    }
+
     const database = await getDb();
     if (!database) return {};
 
@@ -52,14 +81,31 @@ export class modelLearningService {
       else                       baseCount++;
     });
 
-    if (weights.length > 0) {
+    // Atualiza cache
+    _weightCache = weightMap;
+    _weightCacheTimestamp = now;
+
+    // Log apenas uma vez por sessão de processo
+    if (!_weightCacheLogged && weights.length > 0) {
+      _weightCacheLogged = true;
       console.log(`[Brain] Dados de inteligencia carregados: ${weights.length} cartas`);
       console.log(`[Brain] Alta relevancia (>=10): ${highCount} | Media (2-9): ${midCount} | Base (<2): ${baseCount}`);
       console.log(`[Brain] Fontes: forge_reality + self_play + commander_train + user_generation + rl_policy`);
       console.log(`[Brain] Pesos serao aplicados na selecao de cartas do deck.`);
+      console.log(`[Brain] Cache ativo: recarrega a cada ${WEIGHT_CACHE_TTL_MS / 1000}s.`);
     }
 
     return weightMap;
+  }
+
+  /**
+   * Invalida o cache de pesos, forçando recarga no próximo getCardWeights().
+   * Chamado automaticamente após updateWeights() para garantir consistência.
+   */
+  public static invalidateCache(): void {
+    _weightCache = null;
+    _weightCacheTimestamp = 0;
+    // Não reseta _weightCacheLogged — o log de status já foi emitido
   }
 
   /**
@@ -67,6 +113,7 @@ export class modelLearningService {
    *
    * CORREÇÃO: Usa CardLearningQueue para evitar race condition.
    * CORREÇÃO: Aplica weight capping [0.1, 50.0] via SQL LEAST/GREATEST.
+   * CORREÇÃO: Invalida cache após escrita para garantir consistência.
    *
    * @param updates  Mapa de carta → delta de peso
    * @param source   Identificador da fonte de aprendizado (para rastreabilidade)
@@ -90,6 +137,9 @@ export class modelLearningService {
 
     // Aguarda o processamento da fila para garantir persistência antes de retornar
     await queue.flush();
+
+    // Invalida cache após escrita — próxima leitura buscará dados atualizados
+    modelLearningService.invalidateCache();
   }
 
   /**
