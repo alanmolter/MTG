@@ -20,8 +20,13 @@ import { eq } from "drizzle-orm";
 
 export interface CardLearningUpdate {
   cardName: string;
-  delta: number;
-  source: "forge_reality" | "unified_learning" | "rl_feedback" | "user_generation";
+  /** delta de peso (positivo = reforço, negativo = penalidade) */
+  delta?: number;
+  /** alias de delta — aceito para compatibilidade com modelLearning */
+  weightDelta?: number;
+  source: "forge_reality" | "unified_learning" | "rl_feedback" | "user_generation" | "self_play" | "commander_train" | "rl_policy";
+  scoreDelta?: number;
+  win?: boolean;
   timestamp?: number;
   metadata?: Record<string, unknown>;
 }
@@ -40,12 +45,27 @@ export class CardLearningQueue {
   }
 
   /**
+   * Força o processamento imediato de toda a fila (útil após updateWeights)
+   */
+  async flush(): Promise<void> {
+    // Dispara processamento imediato se houver itens
+    if (this.queue.length > 0) {
+      await this.processBatch();
+    }
+    // Aguarda esvaziamento completo
+    await this.waitUntilEmpty();
+  }
+
+  /**
    * Enfileira uma atualização de peso de carta
    */
   async enqueue(update: CardLearningUpdate): Promise<void> {
-    if (!update.cardName || typeof update.delta !== "number") {
+    // Aceita tanto delta quanto weightDelta
+    const effectiveDelta = update.delta ?? update.weightDelta ?? 0;
+    if (!update.cardName || typeof effectiveDelta !== "number") {
       throw new Error("Invalid card learning update: missing cardName or delta");
     }
+    update.delta = effectiveDelta;
 
     update.timestamp = update.timestamp || Date.now();
     this.queue.push(update);
@@ -164,7 +184,7 @@ export class CardLearningQueue {
       const sources: string[] = [];
 
       for (const update of updates) {
-        totalDelta += update.delta;
+        totalDelta += update.delta ?? update.weightDelta ?? 0;
         sources.push(update.source);
       }
 

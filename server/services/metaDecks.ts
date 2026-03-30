@@ -1,7 +1,7 @@
 /**
  * Meta Decks Database
  * 
- * Exemplo de decks "Gold Standard" (Moxfield/Meta) para o sistema aprender padrões.
+ * Exemplo de decks "Gold Standard" (MTGGoldfish/MTGTop8) para o sistema aprender padrões.
  */
 
 export const META_DECKS = {

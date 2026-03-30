@@ -167,6 +167,7 @@ export const appRouter = router({
         const { evaluateDeckWithEngine, evaluateDeckWithBrain, validateDeck } =
           await import("./services/deckGenerator");
         const { modelLearningService } = await import("./services/modelLearning");
+        const { getCardLearningQueue } = await import("./services/cardLearningQueue");
 
         // Carregar pool de cartas do banco
         const cardPool = await searchCards({
@@ -224,16 +225,19 @@ export const appRouter = router({
         );
 
         // ── ENSINAR O MODELO (User-Driven Learning) ──────────────────────────
-        // Cada vez que um usuário gera um deck, as cartas recebem um pequeno boost 
-        // de "validação" (voto popular), alimentando o cérebro da IA. 
-        const userWeightUpdates: Record<string, { weightDelta: number, win: boolean }> = {};
-        result.cards.forEach(c => {
-          userWeightUpdates[c.name] = { 
-            weightDelta: 0.01, 
-            win: true 
-          };
-        });
-        await modelLearningService.updateWeights(userWeightUpdates);
+        // Cada vez que um usuário gera um deck, as cartas recebem um pequeno boost
+        // de "validação" (voto popular), alimentando o cérebro da IA.
+        // CORREÇÃO: Usa CardLearningQueue (fila serializada) para evitar race condition.
+        // CORREÇÃO: source="user_generation" para rastreabilidade.
+        const queue = getCardLearningQueue();
+        for (const c of result.cards) {
+          queue.enqueue({
+            cardName: c.name,
+            delta: 0.01,
+            source: "user_generation",
+          });
+        }
+        // Não aguarda flush — aprendizado é assíncrono e não bloqueia a resposta ao usuário
 
         return {
           deck: result.cards,

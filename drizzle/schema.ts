@@ -1,4 +1,4 @@
-import { index, integer, pgEnum, pgTable, serial, text, timestamp, varchar, real } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgEnum, pgTable, serial, text, timestamp, varchar, real } from "drizzle-orm/pg-core";
 
 /**
  * Core user table backing auth flow.
@@ -141,7 +141,7 @@ export const embeddingsCache = pgTable("embeddings_cache", {
 export type EmbeddingsCache = typeof embeddingsCache.$inferSelect;
 export type InsertEmbeddingsCache = typeof embeddingsCache.$inferInsert;
 
-// Decks competitivos importados de fontes externas (Moxfield, MTGGoldfish, etc.)
+// Decks competitivos importados de fontes externas (MTGGoldfish, MTGTop8)
 export const competitiveDecks = pgTable("competitive_decks", {
   id: serial("id").primaryKey(),
   sourceId: varchar("source_id", { length: 128 }).notNull().unique(),
@@ -154,6 +154,10 @@ export const competitiveDecks = pgTable("competitive_decks", {
   views: integer("views").default(0),
   colors: varchar("colors", { length: 10 }),
   rawJson: text("raw_json"),
+  /** Marca decks gerados sinteticamente (fallback quando API está indisponível).
+   *  Decks sintéticos são excluídos do treinamento de embeddings para evitar
+   *  contaminação com co-ocorrências que não existem em decks reais. */
+  isSynthetic: boolean("is_synthetic").notNull().default(false),
   importedAt: timestamp("imported_at").defaultNow().notNull(),
 });
 
@@ -232,3 +236,25 @@ export const cardLearning = pgTable(
 
 export type CardLearning = typeof cardLearning.$inferSelect;
 export type InsertCardLearning = typeof cardLearning.$inferInsert;
+
+// Decisões do RL REINFORCE para retroalimentação em card_learning
+export const rlDecisions = pgTable(
+  "rl_decisions",
+  {
+    id: serial("id").primaryKey(),
+    deckId: integer("deck_id"),
+    cardName: varchar("card_name", { length: 255 }).notNull(),
+    policyProbability: real("policy_probability").notNull().default(0),
+    reward: real("reward"),
+    /** false = aguardando resultado da partida; true = já processado em card_learning */
+    processed: boolean("processed").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    processedIdx: index("rl_decisions_processed_idx").on(table.processed),
+    cardNameIdx: index("rl_decisions_card_idx").on(table.cardName),
+  })
+);
+
+export type RlDecision = typeof rlDecisions.$inferSelect;
+export type InsertRlDecision = typeof rlDecisions.$inferInsert;

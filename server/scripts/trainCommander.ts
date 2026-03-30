@@ -87,7 +87,8 @@ async function runIteration(i: number, archetype: string, cardPool: CardData[]) 
     }
   });
 
-  await modelLearningService.updateWeights(updates);
+  // CORREÇÃO: source="commander_train" para rastreabilidade e roteamento pela fila
+  await modelLearningService.updateWeights(updates, "commander_train");
 }
 
 trainCommander().catch(console.error);

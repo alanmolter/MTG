@@ -1,294 +1,192 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal EnableDelayedExpansion
 
-:: =============================================================================
-::  MTG AI - PIPELINE MASTER COMPLETO (Windows CMD)
-::  Uso: run-all.bat
-::  Opcional: run-all.bat commander 200 100
-::    Arg 1: formato (modern/commander/standard/legacy) - default: modern
-::    Arg 2: iteracoes de treinamento                   - default: 100
-::    Arg 3: limite de decks a importar                 - default: 50
-:: =============================================================================
+:: MTG AI - Pipeline Completo (Windows CMD)
+:: Uso: run-all.bat [formato] [iteracoes] [decks]
+:: Exemplo: run-all.bat commander 200 100
 
-set "FORMAT=%~1"
-set "ITERATIONS=%~2"
-set "DECKS=%~3"
+set ARG1=%~1
+set ARG2=%~2
+set ARG3=%~3
 
-if "%FORMAT%"=="" set "FORMAT=modern"
-if "%ITERATIONS%"=="" set "ITERATIONS=100"
-if "%DECKS%"=="" set "DECKS=50"
+if "%ARG1%"=="" (set FORMAT=modern) else (set FORMAT=%ARG1%)
+if "%ARG2%"=="" (set ITERATIONS=100) else (set ITERATIONS=%ARG2%)
+if "%ARG3%"=="" (set DECKS=50) else (set DECKS=%ARG3%)
 
-set STEP=0
 set ERRORS=0
 
 echo.
 echo ==============================================================
 echo    MTG AI - PIPELINE MASTER COMPLETO
 echo ==============================================================
-echo.
-echo   Formato:    %FORMAT%
-echo   Iteracoes:  %ITERATIONS%
-echo   Decks:      %DECKS%
-echo   Inicio:     %DATE% %TIME%
+echo    Formato:   %FORMAT%
+echo    Iteracoes: %ITERATIONS%
+echo    Decks:     %DECKS%
+echo    Inicio:    %DATE% %TIME%
+echo ==============================================================
 echo.
 
-:: ============================================================
-:: PASSO 1: Pre-requisitos
-:: ============================================================
-set /a STEP+=1
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Verificando pre-requisitos
-echo --------------------------------------------------------------
-
+:: --- PASSO 1: Pre-requisitos ---
+echo [1/13] Verificando pre-requisitos...
 node --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo   [ERRO] Node.js nao encontrado. Instale em https://nodejs.org
+if errorlevel 1 (
+    echo [ERRO] Node.js nao encontrado. Instale em https://nodejs.org
     pause
     exit /b 1
 )
-for /f "tokens=*" %%v in ('node --version') do echo   [OK] Node.js %%v
-
-npm --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo   [ERRO] npm nao encontrado.
-    pause
-    exit /b 1
-)
-for /f "tokens=*" %%v in ('npm --version') do echo   [OK] npm %%v
-
+for /f "tokens=*" %%v in ('node --version') do echo    Node.js %%v OK
 if not exist "package.json" (
-    echo   [ERRO] Execute este script na raiz do projeto MTG
+    echo [ERRO] Execute na raiz do projeto MTG
     pause
     exit /b 1
 )
-echo   [OK] package.json encontrado
+echo    package.json OK
 
-if exist ".env" (
-    echo   [OK] .env encontrado
-) else (
-    echo   [AVISO] .env nao encontrado - usando variaveis de ambiente do sistema
-)
-
-:: ============================================================
-:: PASSO 2: Dependencias
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 2: Dependencias ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Instalando dependencias
-echo --------------------------------------------------------------
+echo [2/13] Instalando dependencias...
 call npm install --silent
-if %errorlevel% neq 0 (
-    echo   [AVISO] npm install falhou
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] npm install retornou erro
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Dependencias instaladas
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 3: Schema do banco
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 3: Schema do banco ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Sincronizando schema do banco de dados
-echo --------------------------------------------------------------
+echo [3/13] Sincronizando schema do banco de dados...
 call npm run db:push
-if %errorlevel% neq 0 (
-    echo   [AVISO] db:push falhou - banco pode estar desatualizado
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] db:push falhou - verifique DATABASE_URL no .env
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Schema sincronizado
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 4: Sincronizacao Scryfall
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 4: Sync Scryfall ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Sincronizando cartas do Scryfall (bulk oracle)
-echo --------------------------------------------------------------
+echo [4/13] Sincronizando cartas do Scryfall...
 call npx tsx server/sync-bulk.ts
-if %errorlevel% neq 0 (
-    echo   [AVISO] sync-bulk falhou - usando dados existentes
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] sync-bulk falhou - usando dados existentes
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Cartas Scryfall sincronizadas
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 5: Seed inicial
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 5: Seed inicial ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Seed inicial de cartas (se necessario)
-echo --------------------------------------------------------------
+echo [5/13] Seed inicial de cartas...
 call npm run seed:scryfall
-if %errorlevel% neq 0 (
-    echo   [AVISO] Seed falhou ou ja foi executado anteriormente
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] Seed falhou ou banco ja populado
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Seed concluido
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 6: Importacao de decks competitivos
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 6: Importar decks MTGGoldfish + MTGTop8 ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Importando decks (MTGGoldfish + MTGTop8)
-echo --------------------------------------------------------------
-echo   Importando MTGGoldfish - formato: %FORMAT%, limite: %DECKS%...
+echo [6/13] Importando decks do MTGGoldfish e MTGTop8...
 call npx tsx import-and-train.ts
-if %errorlevel% neq 0 (
-    echo   [AVISO] import-and-train falhou
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] import-and-train falhou
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Importacao e embeddings concluidos
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 7: Clustering de arquetipos
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 7: Clustering ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Clustering de arquetipos (KMeans)
-echo --------------------------------------------------------------
+echo [7/13] Clustering de arquetipos (KMeans)...
 call npx tsx run-clustering.ts
-if %errorlevel% neq 0 (
-    echo   [AVISO] Clustering falhou
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] Clustering falhou
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Clustering concluido
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 8: Brain v2
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 8: Brain v2 ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Treinamento do Brain v2
-echo --------------------------------------------------------------
+echo [8/13] Treinando Brain v2...
 call npm run teach
-if %errorlevel% neq 0 (
-    echo   [AVISO] Brain training falhou
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] Brain v2 training falhou
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Brain v2 treinado
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 9: Commander Specialist
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 9: Commander Specialist ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Treinamento especializado em Comandantes
-echo --------------------------------------------------------------
+echo [9/13] Treinando especialista Commander...
 call npx tsx server/scripts/trainCommander.ts
-if %errorlevel% neq 0 (
-    echo   [AVISO] Commander training falhou
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] Commander training falhou
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Treinamento Commander concluido
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 10: Self-Play continuo
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 10: Self-Play continuo ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Loop de treinamento continuo (%ITERATIONS% iteracoes)
-echo --------------------------------------------------------------
+echo [10/13] Self-Play Loop (%ITERATIONS% iteracoes)...
 call npx tsx server/scripts/continuousTraining.ts
-if %errorlevel% neq 0 (
-    echo   [AVISO] Treinamento continuo falhou
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] continuousTraining falhou
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Treinamento continuo concluido
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 11: Verificar pesos
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 11: Verificar pesos ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Verificando pesos e aprendizado acumulado
-echo --------------------------------------------------------------
+echo [11/13] Verificando pesos aprendidos...
 call npm run check:learn
-if %errorlevel% neq 0 (
-    echo   [AVISO] check:learn falhou
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] check:learn falhou
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Pesos verificados
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 12: Testes de regressao
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 12: Testes de regressao ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Testes de regressao do modelo
-echo --------------------------------------------------------------
+echo [12/13] Testes de regressao do modelo...
 call npm run test:model
-if %errorlevel% neq 0 (
-    echo   [AVISO] Testes de modelo falharam
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] Testes de modelo falharam
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Testes de modelo passaram
+    echo    OK
 )
 
-:: ============================================================
-:: PASSO 13: Suite de testes vitest
-:: ============================================================
-set /a STEP+=1
+:: --- PASSO 13: Suite vitest ---
 echo.
-echo --------------------------------------------------------------
-echo   PASSO %STEP%: Suite de testes automatizados (vitest)
-echo --------------------------------------------------------------
+echo [13/13] Suite de testes vitest...
 call npm test
-if %errorlevel% neq 0 (
-    echo   [AVISO] Alguns testes falharam
-    set /a ERRORS+=1
+if errorlevel 1 (
+    echo [AVISO] Alguns testes vitest falharam
+    set /a ERRORS=ERRORS+1
 ) else (
-    echo   [OK] Todos os testes passaram
+    echo    OK
 )
 
-:: ============================================================
-:: RELATORIO FINAL
-:: ============================================================
+:: --- Relatorio Final ---
 echo.
 echo ==============================================================
-echo   RELATORIO FINAL
+echo    RELATORIO FINAL
+echo    Passos: 13   Avisos: %ERRORS%
+echo    Termino: %DATE% %TIME%
+echo.
+echo    Proximos passos:
+echo      1. Inicie o servidor: npm run dev
+echo      2. Acesse: http://localhost:3000
+echo      3. Repita run-all.bat para treinar mais
 echo ==============================================================
-echo   Passos executados: %STEP%
-echo   Avisos:            %ERRORS%
-echo   Termino:           %DATE% %TIME%
-echo.
-echo   Proximos passos:
-echo     1. Inicie o servidor:  npm run dev
-echo     2. Acesse o dashboard: http://localhost:3000
-echo     3. Repita run-all.bat para tornar a IA mais inteligente
 echo.
 
-if %ERRORS%==0 (
-    echo ==============================================================
-    echo    PIPELINE CONCLUIDO COM SUCESSO TOTAL
-    echo ==============================================================
-) else (
-    echo ==============================================================
-    echo    PIPELINE CONCLUIDO COM %ERRORS% AVISO(S) NAO-CRITICO(S)
-    echo ==============================================================
-)
-
-echo.
 pause
 endlocal

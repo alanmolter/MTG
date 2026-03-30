@@ -9,7 +9,7 @@ import {
   InsertEmbeddingsCache,
   InsertCardSynergy,
 } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, ne } from "drizzle-orm";
 
 const EMBEDDING_DIM = 64;
 const MODEL_VERSION = "v2.0-real";
@@ -51,13 +51,19 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
   try {
     console.log(`[Trainer] Job ${jobId} iniciado`);
 
-    // ── 1. Carregar todos os decks competitivos ──────────────────────────────
-    const allDecks = await db.select().from(competitiveDecks);
+    // ── 1. Carregar decks competitivos REAIS (excluir sintéticos) ─────────────────────────
+    // CORREÇÃO: Decks sintéticos (fallback de API bloqueada) são excluídos para
+    // evitar que o modelo aprenda co-ocorrências que não existem em decks reais.
+    const allDecks = await db
+      .select()
+      .from(competitiveDecks)
+      .where(ne(competitiveDecks.isSynthetic, true));
     const allDeckCards = await db.select().from(competitiveDeckCards);
 
     if (allDecks.length === 0) {
-      throw new Error("Nenhum deck competitivo encontrado. Importe decks primeiro.");
+      throw new Error("Nenhum deck competitivo real encontrado. Importe decks do MTGGoldfish ou MTGTop8 primeiro.");
     }
+    console.log(`[Trainer] Usando ${allDecks.length} decks reais para treinamento (sintéticos excluídos).`);
 
     // Agrupar cartas por deck
     const deckMap = new Map<number, string[]>();

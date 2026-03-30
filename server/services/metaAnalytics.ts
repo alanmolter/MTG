@@ -4,7 +4,7 @@ import { searchCards } from "./scryfall";
 /**
  * Meta Analytics Service
  * 
- * Este serviço analisa decks reais (ex: Moxfield) para extrair padrões de "Gold Standard".
+ * Este serviço analisa decks reais (MTGGoldfish, MTGTop8) para extrair padrões de "Gold Standard".
  * Permite que o Cérebro de Avaliação use benchmarks reais em vez de teóricos.
  */
 
@@ -22,7 +22,7 @@ export class MetaAnalytics {
   private benchmarks: Record<string, MetaBenchmark> = {};
 
   /**
-   * Converte uma string de decklist (Moxfield/Arena) em um objeto de deck processável
+   * Converte uma string de decklist (Arena/MTGGoldfish) em um objeto de deck processável
    */
   public static async parseDecklist(decklist: string): Promise<any[]> {
     const lines = decklist.split("\n");

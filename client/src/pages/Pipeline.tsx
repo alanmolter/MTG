@@ -205,8 +205,6 @@ export default function Pipeline() {
               </CardContent>
             </Card>
 
-            {/* Moxfield Stats */}
-
           </div>
 
           {/* Results Panel */}

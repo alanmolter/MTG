@@ -326,7 +326,7 @@ export default function SynergyGraph() {
             <div>
               <h4 className="text-white font-medium mb-2">Data Source</h4>
               <p className="text-gray-400 text-sm">
-                Synergy data is derived from competitive deck lists imported from Moxfield and other sources.
+                Synergy data is derived from competitive deck lists imported from MTGGoldfish and MTGTop8.
                 The more decks analyzed, the more accurate the synergy scores become.
               </p>
             </div>

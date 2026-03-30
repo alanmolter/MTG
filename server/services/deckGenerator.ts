@@ -300,5 +300,17 @@ export async function trainDeckWithRL(
 
   console.log(`[RL] Score: ${initialScore.toFixed(1)} → ${finalScore.toFixed(1)} (${improvements} melhorias)`);
 
+  // CORREÇÃO (Problema 3): Retroalimenta card_learning com o resultado da otimização RL.
+  // O bridge converte o score em reward e enfileira os deltas via CardLearningQueue,
+  // eliminando o isolamento do RL em relação ao ciclo de aprendizado tabular.
+  try {
+    const { getRLToCardLearningBridge } = await import("./rlToCardLearningBridge");
+    const bridge = getRLToCardLearningBridge();
+    await bridge.feedbackFromDeckOptimization(resultDeck, finalScore);
+  } catch (bridgeErr) {
+    // Não-crítico: falha no bridge não deve interromper a geração do deck
+    console.warn("[RL] Bridge feedback failed (non-critical):", bridgeErr);
+  }
+
   return { deck: resultDeck, metrics, improvements };
 }

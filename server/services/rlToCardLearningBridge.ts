@@ -1,41 +1,53 @@
 /**
  * RL to Card Learning Bridge
- * 
- * Problema: RL REINFORCE treina policy_net isoladamente sem retroalimentar card_learning
- * 
- * Solução: Bridge que:
- * 1. Rastreia decisões do RL em rl_decisions table
- * 2. Calcula rewards após partidas
- * 3. Retroalimenta em card_learning com delta = reward × 0.1
+ *
+ * CORREÇÃO CRÍTICA (Problema 3): RL REINFORCE estava desconectado do ciclo de aprendizado.
+ *
+ * Este bridge:
+ * 1. Persiste decisões do RL na tabela rl_decisions (schema.ts)
+ * 2. Calcula rewards após partidas simuladas
+ * 3. Retroalimenta card_learning via CardLearningQueue (sem race condition)
+ * 4. Conecta trainDeckWithRL ao aprendizado tabular via feedbackFromDeckOptimization()
+ *
+ * Fórmula: delta = reward × 0.1  (escala reduzida para evitar overfitting)
+ * Fonte:   "rl_feedback" (rastreável na fila)
  */
 
 import { getDb } from "../db";
+import { rlDecisions } from "../../drizzle/schema";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { getCardLearningQueue } from "./cardLearningQueue";
 
 export interface RLDecision {
-  deckId: number;
+  deckId?: number;
   cardName: string;
   policyProbability: number;
   reward?: number;
-  timestamp: number;
 }
 
 export class RLToCardLearningBridge {
   /**
-   * Registra uma decisão do RL (quando carta é selecionada pela policy)
+   * Registra uma decisão do RL quando uma carta é selecionada pela policy.
+   * Persiste em rl_decisions para processamento posterior.
    */
   async recordRLDecision(decision: RLDecision): Promise<void> {
     const db = await getDb();
     if (!db) {
-      console.warn("[RLBridge] Database not available");
+      console.warn("[RLBridge] Database not available — decision not recorded");
       return;
     }
 
     try {
-      // Inserir em rl_decisions table
-      // (Assumindo que a tabela já existe no schema)
+      await db.insert(rlDecisions).values({
+        deckId: decision.deckId ?? null,
+        cardName: decision.cardName,
+        policyProbability: decision.policyProbability,
+        reward: decision.reward ?? null,
+        processed: false,
+      });
+
       console.log(
-        `[RLBridge] Recorded decision: ${decision.cardName} ` +
+        `[RLBridge] Recorded: ${decision.cardName} ` +
         `(prob: ${decision.policyProbability.toFixed(3)})`
       );
     } catch (error) {
@@ -44,13 +56,12 @@ export class RLToCardLearningBridge {
   }
 
   /**
-   * Sincroniza rewards do RL para card_learning
-   * Chamado após partidas serem jogadas e rewards calculados
+   * Sincroniza rewards do RL para card_learning via fila serializada.
+   * Chamado pelo pipeline de treinamento após partidas serem jogadas.
+   *
+   * @returns { synced, totalReward }
    */
-  async syncRLRewardsToCardLearning(): Promise<{
-    synced: number;
-    totalReward: number;
-  }> {
+  async syncRLRewardsToCardLearning(): Promise<{ synced: number; totalReward: number }> {
     const db = await getDb();
     if (!db) {
       console.warn("[RLBridge] Database not available");
@@ -58,16 +69,19 @@ export class RLToCardLearningBridge {
     }
 
     try {
-      // 1. Ler decisões com rewards não processadas
-      // (Assumindo rl_decisions table com campo 'processed')
-      const decisions = await db.query.rlDecisions.findMany({
-        where: (rd) => {
-          // Pseudocódigo: where reward is not null and processed = false
-          return null;
-        },
-      });
+      // 1. Buscar decisões com reward definido e ainda não processadas
+      const pending = await db
+        .select()
+        .from(rlDecisions)
+        .where(
+          and(
+            eq(rlDecisions.processed, false),
+            isNotNull(rlDecisions.reward)
+          )
+        )
+        .limit(500);
 
-      if (decisions.length === 0) {
+      if (pending.length === 0) {
         console.log("[RLBridge] No unprocessed RL decisions");
         return { synced: 0, totalReward: 0 };
       }
@@ -75,17 +89,14 @@ export class RLToCardLearningBridge {
       const queue = getCardLearningQueue();
       let totalReward = 0;
 
-      // 2. Converter rewards em deltas de card_learning
-      for (const decision of decisions) {
-        if (decision.reward === undefined || decision.reward === null) {
-          continue;
-        }
+      // 2. Converter rewards em deltas e enfileirar em card_learning
+      for (const decision of pending) {
+        if (decision.reward === null || decision.reward === undefined) continue;
 
         // Delta = reward × 0.1 (escala reduzida para evitar overfitting)
         const delta = decision.reward * 0.1;
 
-        // 3. Enfileirar em card_learning
-        await queue.enqueue({
+        queue.enqueue({
           cardName: decision.cardName,
           delta,
           source: "rl_feedback",
@@ -99,15 +110,23 @@ export class RLToCardLearningBridge {
         totalReward += decision.reward;
       }
 
-      // 4. Marcar como processadas
-      // await db.update(rlDecisions).set({ processed: true })...
+      // 3. Marcar como processadas
+      for (const d of pending) {
+        await db
+          .update(rlDecisions)
+          .set({ processed: true })
+          .where(eq(rlDecisions.id, d.id));
+      }
+
+      // 4. Aguardar flush da fila para garantir persistência
+      await queue.flush();
 
       console.log(
-        `[RLBridge] ✓ Synced ${decisions.length} RL decisions ` +
+        `[RLBridge] ✓ Synced ${pending.length} RL decisions ` +
         `(total reward: ${totalReward.toFixed(2)})`
       );
 
-      return { synced: decisions.length, totalReward };
+      return { synced: pending.length, totalReward };
     } catch (error) {
       console.error("[RLBridge] Error syncing RL rewards:", error);
       return { synced: 0, totalReward: 0 };
@@ -115,24 +134,55 @@ export class RLToCardLearningBridge {
   }
 
   /**
-   * Calcula reward para uma decisão RL baseado em resultado da partida
+   * Calcula reward para uma decisão RL baseado no resultado da partida.
+   * Normalizado em [-1, 1] ponderado pela probabilidade da policy.
    */
   calculateReward(
-    deckPerformance: {
-      wins: number;
-      losses: number;
-      draws: number;
-    },
+    deckPerformance: { wins: number; losses: number; draws: number },
     policyProbability: number
   ): number {
-    // Fórmula simples: (wins - losses) / total_games * policy_probability
     const totalGames = deckPerformance.wins + deckPerformance.losses + deckPerformance.draws;
     if (totalGames === 0) return 0;
 
     const winRate = deckPerformance.wins / totalGames;
-    const reward = (winRate - 0.5) * policyProbability; // Normalizado em torno de 50%
+    const reward = (winRate - 0.5) * policyProbability;
+    return Math.max(-1, Math.min(1, reward));
+  }
 
-    return Math.max(-1, Math.min(1, reward)); // Clamp em [-1, 1]
+  /**
+   * Retroalimenta card_learning após otimização de deck pelo trainDeckWithRL.
+   * Conecta o RL ao ciclo tabular de aprendizado.
+   *
+   * @param deck    Cartas do deck otimizado
+   * @param score   Score final do deck (0–100)
+   * @param deckId  ID do deck no banco (opcional)
+   */
+  async feedbackFromDeckOptimization(
+    deck: { name: string }[],
+    score: number,
+    deckId?: number
+  ): Promise<void> {
+    // Normaliza score para reward em [-1, 1]
+    // Score 50 = reward 0 (neutro), 100 = reward +1, 0 = reward -1
+    const reward = (score - 50) / 50;
+
+    const queue = getCardLearningQueue();
+
+    for (const card of deck) {
+      // Delta = reward × 0.05 (mais conservador que self-play)
+      const delta = reward * 0.05;
+      queue.enqueue({
+        cardName: card.name,
+        delta,
+        source: "rl_feedback",
+        metadata: { deckScore: score, deckId },
+      });
+    }
+
+    console.log(
+      `[RLBridge] Queued RL feedback for ${deck.length} cards ` +
+      `(score: ${score.toFixed(1)}, reward: ${reward.toFixed(3)})`
+    );
   }
 }
 
