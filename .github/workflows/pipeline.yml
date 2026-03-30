@@ -1,0 +1,177 @@
+name: 📊 Data Pipeline - Scheduled Training
+
+on:
+  schedule:
+    # Executar pipeline de dados diariamente às 2 AM UTC
+    - cron: '0 2 * * *'
+    # Executar a cada segunda-feira às 3 AM UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      format:
+        description: 'Deck format'
+        required: false
+        default: 'modern'
+        type: choice
+        options:
+          - standard
+          - modern
+          - commander
+          - legacy
+      decks:
+        description: 'Number of decks to import'
+        required: false
+        default: '50'
+        type: string
+
+env:
+  NODE_VERSION: '22.13.0'
+
+jobs:
+  data-pipeline:
+    name: 📊 Full Data Pipeline
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD || 'test_password' }}
+          POSTGRES_DB: MTG
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📚 Install dependencies
+        run: npm ci
+
+      - name: 🗄️ Run migrations
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+        run: npm run migrate --if-present
+
+      - name: ✅ Validate data quality
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+        run: npm run audit:data-quality --if-present
+
+      - name: 📥 Import MTGGoldfish
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+        run: |
+          npm run import:mtggoldfish -- \
+            --format ${{ github.event.inputs.format || 'modern' }} \
+            --limit ${{ github.event.inputs.decks || '50' }} \
+            --if-present
+        continue-on-error: true
+
+      - name: 📥 Import MTGTop8
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+        run: |
+          npm run import:mtgtop8 -- \
+            --format ${{ github.event.inputs.format || 'modern' }} \
+            --limit ${{ github.event.inputs.decks || '50' }} \
+            --if-present
+        continue-on-error: true
+
+      - name: 🧠 Train embeddings
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+        run: npm run train:embeddings --if-present
+        timeout-minutes: 30
+        continue-on-error: true
+
+      - name: 🧠 Train Brain v2
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+        run: npm run train:brain --if-present
+        timeout-minutes: 30
+        continue-on-error: true
+
+      - name: 🎲 Train RL Policy
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+        run: npm run train:rl --if-present
+        timeout-minutes: 30
+        continue-on-error: true
+
+      - name: 📊 Generate statistics
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+        run: npm run stats:pipeline --if-present
+
+      - name: 📋 Create summary
+        if: always()
+        run: |
+          echo "# 📊 Data Pipeline Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Pipeline Execution" >> $GITHUB_STEP_SUMMARY
+          echo "- Format: ${{ github.event.inputs.format || 'modern' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Decks: ${{ github.event.inputs.decks || '50' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📤 Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 7
+
+      - name: 💬 Slack notification
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "❌ Magic AI Data Pipeline Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Magic AI Data Pipeline*\n❌ Pipeline execution failed\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }
+        continue-on-error: true
+
+      - name: ✅ Success notification
+        if: success()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "✅ Magic AI Data Pipeline Completed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Magic AI Data Pipeline*\n✅ Pipeline execution completed successfully\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }
+        continue-on-error: true
+
+
