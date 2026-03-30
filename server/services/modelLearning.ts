@@ -41,9 +41,24 @@ export class modelLearningService {
 
     const weights = await database.select().from(cardLearning);
     const weightMap: Record<string, number> = {};
+    let highCount = 0;
+    let midCount  = 0;
+    let baseCount = 0;
+
     weights.forEach(w => {
       weightMap[w.cardName] = w.weight;
+      if (w.weight >= 10.0)      highCount++;
+      else if (w.weight >= 2.0)  midCount++;
+      else                       baseCount++;
     });
+
+    if (weights.length > 0) {
+      console.log(`[Brain] Dados de inteligencia carregados: ${weights.length} cartas`);
+      console.log(`[Brain] Alta relevancia (>=10): ${highCount} | Media (2-9): ${midCount} | Base (<2): ${baseCount}`);
+      console.log(`[Brain] Fontes: forge_reality + self_play + commander_train + user_generation + rl_policy`);
+      console.log(`[Brain] Pesos serao aplicados na selecao de cartas do deck.`);
+    }
+
     return weightMap;
   }
 

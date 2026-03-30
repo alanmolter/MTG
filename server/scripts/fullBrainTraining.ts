@@ -1,11 +1,12 @@
 import { getDb, closeDb } from "../db";
 import { cardLearning } from "../../drizzle/schema";
-import { count } from "drizzle-orm";
+import { count, gt, gte, lt, and, sql } from "drizzle-orm";
 import { spawn } from "child_process";
 
 /**
  * MASTER BRAIN TRAINING SCRIPT
  * Executa Commander Intelligence + Archetype Continuous Training em sequencia.
+ * Inclui feedback visual completo sobre dados do banco antes do treinamento.
  */
 
 function divider(label: string) {
@@ -19,6 +20,128 @@ function timestamp(): string {
   return new Date().toLocaleTimeString("pt-BR");
 }
 
+function bar(value: number, max: number, width = 20): string {
+  const filled = max > 0 ? Math.round((value / max) * width) : 0;
+  return "[" + "#".repeat(filled) + "-".repeat(width - filled) + "]";
+}
+
+function pct(value: number, total: number): string {
+  return total > 0 ? ((value / total) * 100).toFixed(1) + "%" : "0%";
+}
+
+async function reportForgeDataStatus(db: any): Promise<void> {
+  console.log("\n" + "=".repeat(52));
+  console.log("  DADOS DE INTELIGENCIA CARREGADOS DO BANCO");
+  console.log("=".repeat(52));
+
+  // Total de cartas no banco de aprendizado
+  const [{ value: totalCards }] = await db
+    .select({ value: count() })
+    .from(cardLearning);
+
+  const total = Number(totalCards);
+
+  if (total === 0) {
+    console.log("  [AVISO] Banco de inteligencia vazio.");
+    console.log("  O modelo iniciara do zero sem dados previos.");
+    console.log("=".repeat(52) + "\n");
+    return;
+  }
+
+  // Breakdown por faixa de peso
+  const [{ value: highWeight }] = await db
+    .select({ value: count() })
+    .from(cardLearning)
+    .where(gte(cardLearning.weight, 10.0));
+
+  const [{ value: midWeight }] = await db
+    .select({ value: count() })
+    .from(cardLearning)
+    .where(and(gte(cardLearning.weight, 2.0), lt(cardLearning.weight, 10.0)));
+
+  const [{ value: baseWeight }] = await db
+    .select({ value: count() })
+    .from(cardLearning)
+    .where(and(gte(cardLearning.weight, 0.5), lt(cardLearning.weight, 2.0)));
+
+  const [{ value: lowWeight }] = await db
+    .select({ value: count() })
+    .from(cardLearning)
+    .where(lt(cardLearning.weight, 0.5));
+
+  // Cartas com histórico de vitórias/derrotas
+  const [{ value: withWins }] = await db
+    .select({ value: count() })
+    .from(cardLearning)
+    .where(gt(cardLearning.winCount, 0));
+
+  const [{ value: withLosses }] = await db
+    .select({ value: count() })
+    .from(cardLearning)
+    .where(gt(cardLearning.lossCount, 0));
+
+  const [{ value: withScore }] = await db
+    .select({ value: count() })
+    .from(cardLearning)
+    .where(gt(cardLearning.avgScore, 0));
+
+  // Peso médio geral
+  const [{ avgW }] = await db
+    .select({ avgW: sql<number>`AVG(${cardLearning.weight})` })
+    .from(cardLearning);
+
+  // Top 5 cartas por peso
+  const topCards = await db
+    .select({
+      cardName: cardLearning.cardName,
+      weight: cardLearning.weight,
+      winCount: cardLearning.winCount,
+      lossCount: cardLearning.lossCount,
+    })
+    .from(cardLearning)
+    .orderBy(sql`${cardLearning.weight} DESC`)
+    .limit(5);
+
+  const avgWeight = Number(avgW || 0).toFixed(3);
+
+  console.log(`\n  CONEXAO COM BANCO DE INTELIGENCIA: OK`);
+  console.log(`  Total de cartas com dados de aprendizado : ${total}`);
+  console.log(`  Peso medio geral                         : ${avgWeight}`);
+  console.log(`  Cartas com historico de vitorias         : ${withWins} (${pct(Number(withWins), total)})`);
+  console.log(`  Cartas com historico de derrotas         : ${withLosses} (${pct(Number(withLosses), total)})`);
+  console.log(`  Cartas com score calculado               : ${withScore} (${pct(Number(withScore), total)})`);
+
+  console.log("\n  DISTRIBUICAO DE PESOS:");
+  console.log(`  Alta relevancia  (>= 10.0) : ${bar(Number(highWeight), total)} ${highWeight} cartas (${pct(Number(highWeight), total)})`);
+  console.log(`  Media relevancia (2.0-9.9) : ${bar(Number(midWeight), total)} ${midWeight} cartas (${pct(Number(midWeight), total)})`);
+  console.log(`  Base             (0.5-1.9) : ${bar(Number(baseWeight), total)} ${baseWeight} cartas (${pct(Number(baseWeight), total)})`);
+  console.log(`  Baixa relevancia (< 0.5)   : ${bar(Number(lowWeight), total)} ${lowWeight} cartas (${pct(Number(lowWeight), total)})`);
+
+  if (topCards.length > 0) {
+    console.log("\n  TOP 5 CARTAS POR PESO APRENDIDO:");
+    console.log("  " + "-".repeat(50));
+    topCards.forEach((c: any, i: number) => {
+      const matches = c.winCount + c.lossCount;
+      const winRate = matches > 0
+        ? ((c.winCount / matches) * 100).toFixed(1) + "% wr"
+        : "sem historico";
+      console.log(
+        `  ${i + 1}. ${c.cardName.padEnd(30)} peso: ${c.weight.toFixed(3).padStart(7)} | ${winRate}`
+      );
+    });
+    console.log("  " + "-".repeat(50));
+  }
+
+  console.log("\n  FONTES DE APRENDIZADO ACUMULADAS NO BANCO:");
+  console.log("    forge_reality   - partidas reais registradas via Forge");
+  console.log("    self_play       - simulacoes internas de partidas");
+  console.log("    commander_train - treinamento especializado Commander");
+  console.log("    user_generation - interacoes do usuario no front-end");
+  console.log("    rl_policy       - retroalimentacao do RL REINFORCE");
+  console.log("\n  TODOS OS DADOS ACIMA SERAO UTILIZADOS NO TREINAMENTO.");
+  console.log("=".repeat(52) + "\n");
+}
+
 async function launchMasterTraining() {
   const startTotal = Date.now();
   console.log("=".repeat(52));
@@ -30,10 +153,15 @@ async function launchMasterTraining() {
   if (!db) {
     console.error("  [ERRO] Nao foi possivel conectar ao banco. Abortando.");
     closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
+    return;
   }
 
-  const [{ value: initialCount }] = await db.select({ value: count() }).from(cardLearning);
-  console.log(`\n  Cartas no banco de inteligencia: ${initialCount}`);
+  // Mostrar status completo dos dados de inteligência antes de treinar
+  await reportForgeDataStatus(db);
+
+  const [{ value: initialCount }] = await db
+    .select({ value: count() })
+    .from(cardLearning);
 
   const runScript = (name: string, path: string): Promise<number> => {
     return new Promise((resolve) => {
@@ -66,7 +194,10 @@ async function launchMasterTraining() {
   await runScript("Archetype Continuous Training", "server/scripts/continuousTraining.ts");
 
   // Resultado Final
-  const [{ value: finalCount }] = await db.select({ value: count() }).from(cardLearning);
+  const [{ value: finalCount }] = await db
+    .select({ value: count() })
+    .from(cardLearning);
+
   const totalDur = ((Date.now() - startTotal) / 1000).toFixed(1);
 
   console.log("\n" + "=".repeat(52));
