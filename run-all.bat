@@ -27,7 +27,7 @@ echo ==============================================================
 echo.
 
 :: --- PASSO 1: Pre-requisitos ---
-echo [1/13] Verificando pre-requisitos...
+echo [1/12] Verificando pre-requisitos...
 node --version >nul 2>&1
 if errorlevel 1 (
     echo [ERRO] Node.js nao encontrado. Instale em https://nodejs.org
@@ -44,29 +44,35 @@ echo    package.json OK
 
 :: --- PASSO 2: Dependencias ---
 echo.
-echo [2/13] Instalando dependencias...
-call npm install --silent
+echo [2/12] Instalando dependencias...
+call npm install --prefer-offline --silent 2>nul
 if errorlevel 1 (
-    echo [AVISO] npm install retornou erro
+    call npm install --silent 2>nul
+    if errorlevel 1 (
+        echo [AVISO] npm install retornou erro - continuando com modulos existentes
+        set /a ERRORS=ERRORS+1
+    ) else (
+        echo    OK
+    )
+) else (
+    echo    OK
+)
+
+:: --- PASSO 3: Migracoes do banco ---
+echo.
+echo [3/12] Aplicando migracoes do banco de dados...
+call npx tsx server/scripts/applyMigration.ts
+if errorlevel 1 (
+    echo [AVISO] applyMigration retornou erro
     set /a ERRORS=ERRORS+1
 ) else (
     echo    OK
 )
 
-:: --- PASSO 3: Schema do banco ---
+:: --- PASSO 4: Sync Scryfall (bulk oracle) ---
 echo.
-echo [3/13] Sincronizando schema do banco de dados...
-call npm run db:push
-if errorlevel 1 (
-    echo [AVISO] db:push falhou - verifique DATABASE_URL no .env
-    set /a ERRORS=ERRORS+1
-) else (
-    echo    OK
-)
-
-:: --- PASSO 4: Sync Scryfall ---
-echo.
-echo [4/13] Sincronizando cartas do Scryfall...
+echo [4/12] Sincronizando cartas do Scryfall (bulk oracle)...
+echo    Este passo pode demorar alguns minutos na primeira vez.
 call npx tsx server/sync-bulk.ts
 if errorlevel 1 (
     echo [AVISO] sync-bulk falhou - usando dados existentes
@@ -75,20 +81,9 @@ if errorlevel 1 (
     echo    OK
 )
 
-:: --- PASSO 5: Seed inicial ---
+:: --- PASSO 5: Importar decks MTGGoldfish + MTGTop8 ---
 echo.
-echo [5/13] Seed inicial de cartas...
-call npm run seed:scryfall
-if errorlevel 1 (
-    echo [AVISO] Seed falhou ou banco ja populado
-    set /a ERRORS=ERRORS+1
-) else (
-    echo    OK
-)
-
-:: --- PASSO 6: Importar decks MTGGoldfish + MTGTop8 ---
-echo.
-echo [6/13] Importando decks do MTGGoldfish e MTGTop8...
+echo [5/12] Importando decks do MTGGoldfish e MTGTop8...
 call npx tsx import-and-train.ts
 if errorlevel 1 (
     echo [AVISO] import-and-train falhou
@@ -97,9 +92,9 @@ if errorlevel 1 (
     echo    OK
 )
 
-:: --- PASSO 7: Clustering ---
+:: --- PASSO 6: Clustering ---
 echo.
-echo [7/13] Clustering de arquetipos (KMeans)...
+echo [6/12] Clustering de arquetipos (KMeans)...
 call npx tsx run-clustering.ts
 if errorlevel 1 (
     echo [AVISO] Clustering falhou
@@ -108,9 +103,9 @@ if errorlevel 1 (
     echo    OK
 )
 
-:: --- PASSO 8: Brain v2 ---
+:: --- PASSO 7: Brain v2 ---
 echo.
-echo [8/13] Treinando Brain v2...
+echo [7/12] Treinando Brain v2...
 call npm run teach
 if errorlevel 1 (
     echo [AVISO] Brain v2 training falhou
@@ -119,9 +114,9 @@ if errorlevel 1 (
     echo    OK
 )
 
-:: --- PASSO 9: Commander Specialist ---
+:: --- PASSO 8: Commander Specialist ---
 echo.
-echo [9/13] Treinando especialista Commander...
+echo [8/12] Treinando especialista Commander...
 call npx tsx server/scripts/trainCommander.ts
 if errorlevel 1 (
     echo [AVISO] Commander training falhou
@@ -130,9 +125,9 @@ if errorlevel 1 (
     echo    OK
 )
 
-:: --- PASSO 10: Self-Play continuo ---
+:: --- PASSO 9: Self-Play continuo ---
 echo.
-echo [10/13] Self-Play Loop (%ITERATIONS% iteracoes)...
+echo [9/12] Self-Play Loop (%ITERATIONS% iteracoes)...
 call npx tsx server/scripts/continuousTraining.ts
 if errorlevel 1 (
     echo [AVISO] continuousTraining falhou
@@ -141,9 +136,9 @@ if errorlevel 1 (
     echo    OK
 )
 
-:: --- PASSO 11: Verificar pesos ---
+:: --- PASSO 10: Verificar pesos ---
 echo.
-echo [11/13] Verificando pesos aprendidos...
+echo [10/12] Verificando pesos aprendidos...
 call npm run check:learn
 if errorlevel 1 (
     echo [AVISO] check:learn falhou
@@ -152,9 +147,9 @@ if errorlevel 1 (
     echo    OK
 )
 
-:: --- PASSO 12: Testes de regressao ---
+:: --- PASSO 11: Testes de regressao ---
 echo.
-echo [12/13] Testes de regressao do modelo...
+echo [11/12] Testes de regressao do modelo...
 call npm run test:model
 if errorlevel 1 (
     echo [AVISO] Testes de modelo falharam
@@ -163,9 +158,9 @@ if errorlevel 1 (
     echo    OK
 )
 
-:: --- PASSO 13: Suite vitest ---
+:: --- PASSO 12: Suite vitest ---
 echo.
-echo [13/13] Suite de testes vitest...
+echo [12/12] Suite de testes vitest...
 call npm test
 if errorlevel 1 (
     echo [AVISO] Alguns testes vitest falharam
@@ -178,7 +173,7 @@ if errorlevel 1 (
 echo.
 echo ==============================================================
 echo    RELATORIO FINAL
-echo    Passos: 13   Avisos: %ERRORS%
+echo    Passos: 12   Avisos: %ERRORS%
 echo    Termino: %DATE% %TIME%
 echo.
 echo    Proximos passos:
