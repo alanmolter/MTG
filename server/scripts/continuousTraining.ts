@@ -4,6 +4,7 @@ import { evaluateDeckWithBrain } from "../services/deckEvaluationBrain";
 import { ExperimentTracker } from "../services/modelEvaluation";
 import { getDb, closeDb } from "../db";
 import { cards } from "../../drizzle/schema";
+import { getCardLearningQueue } from "../services/cardLearningQueue";
 
 /**
  * Script de Loop de Treinamento Contínuo (Self-Improving IA)
@@ -104,6 +105,16 @@ async function runContinuousTraining(iterations: number = 100) {
   console.log(`  Duracao total        : ${totalDur}s`);
   console.log(`  Fim: ${timestamp()}`);
   console.log("=".repeat(52) + "\n");
+
+  // Aguardar fila esvaziar e mostrar resumo final
+  const queue = getCardLearningQueue();
+  await queue.flush();
+  const qStats = queue.getAndResetStats();
+  console.log(`  Pesos atualizados    : ${qStats.totalUpdated}`);
+  console.log(`  Pesos com decay      : ${qStats.totalDecayed}`);
+  console.log(`  Pesos saturados      : ${qStats.totalSaturated}`);
+  console.log(`  Lotes processados    : ${qStats.batchCount}`);
+  process.stdout.write("\n");
 
   closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }

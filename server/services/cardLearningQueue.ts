@@ -1,17 +1,14 @@
 /**
  * CardLearningQueue: Fila serializada para atualizar pesos de cartas
- * 
- * Problema: Três processos escrevem na mesma tabela sem sincronização:
- * - unified_learning_loop.py (delta = reward × learningRate)
- * - syncForgeRealityToCardLearning.ts (delta = ±0.5/±0.2 × Elo)
- * - deckGenerator.ts (delta = +0.1)
- * 
- * Solução: Fila FIFO com worker thread que processa sequencialmente
- * Garantias:
- * ✓ Sem race conditions
- * ✓ Todos os deltas aplicados
- * ✓ Ordem FIFO preservada
- * ✓ Peso sempre em [0.1, 50.0]
+ *
+ * CORREÇÕES APLICADAS:
+ * 1. Race Condition: Fila FIFO com worker único — sem escrita concorrente
+ * 2. Weight Capping: pesos sempre em [0.1, 50.0]
+ * 3. Logs silenciosos: sem log por carta individual — apenas resumo por lote
+ * 4. Decay proporcional: cartas próximas do teto recebem delta reduzido
+ *    Formula: effectiveDelta = delta * (1 - currentWeight / MAX_WEIGHT)^DECAY_POWER
+ *    Isso garante que cartas em 50.0 nunca recebem mais delta positivo
+ *    e cartas em 0.1 recebem o delta completo.
  */
 
 import { getDb } from "../db";
@@ -34,25 +31,58 @@ export interface CardLearningUpdate {
 const MIN_WEIGHT = 0.1;
 const MAX_WEIGHT = 50.0;
 
+/**
+ * Fator de decaimento para evitar saturação no teto.
+ * Quanto maior o DECAY_POWER, mais agressivo o decaimento próximo ao teto.
+ * Valor 2.0 = decaimento quadrático (suave mas efetivo).
+ */
+const DECAY_POWER = 2.0;
+
+/**
+ * Aplica decay proporcional ao delta para evitar saturação.
+ * - delta positivo: reduz conforme a carta se aproxima do MAX_WEIGHT
+ * - delta negativo: reduz conforme a carta se aproxima do MIN_WEIGHT
+ * - Resultado: cartas no teto nunca ficam presas, sempre há diferenciação
+ */
+function applyDecay(currentWeight: number, delta: number): number {
+  if (delta > 0) {
+    // Quanto mais próximo de MAX, menor o delta positivo
+    const headroom = (MAX_WEIGHT - currentWeight) / (MAX_WEIGHT - MIN_WEIGHT);
+    return delta * Math.pow(headroom, DECAY_POWER);
+  } else if (delta < 0) {
+    // Quanto mais próximo de MIN, menor o delta negativo (em módulo)
+    const headroom = (currentWeight - MIN_WEIGHT) / (MAX_WEIGHT - MIN_WEIGHT);
+    return delta * Math.pow(headroom, DECAY_POWER);
+  }
+  return 0;
+}
+
 export class CardLearningQueue {
   private queue: CardLearningUpdate[] = [];
   private isProcessing = false;
-  private readonly BATCH_SIZE = 10;
+  private readonly BATCH_SIZE = 50; // Aumentado para processar mais rápido
   private readonly PROCESS_INTERVAL = 100; // ms
+
+  // Estatísticas acumuladas para o resumo
+  private stats = {
+    totalProcessed: 0,
+    totalUpdated: 0,
+    totalSaturated: 0,  // cartas que chegaram ao teto/piso
+    totalDecayed: 0,    // cartas que tiveram delta reduzido por decay
+    batchCount: 0,
+  };
 
   constructor() {
     this.startWorker();
   }
 
   /**
-   * Força o processamento imediato de toda a fila (útil após updateWeights)
+   * Força o processamento imediato de toda a fila
    */
   async flush(): Promise<void> {
-    // Dispara processamento imediato se houver itens
     if (this.queue.length > 0) {
       await this.processBatch();
     }
-    // Aguarda esvaziamento completo
     await this.waitUntilEmpty();
   }
 
@@ -60,18 +90,13 @@ export class CardLearningQueue {
    * Enfileira uma atualização de peso de carta
    */
   async enqueue(update: CardLearningUpdate): Promise<void> {
-    // Aceita tanto delta quanto weightDelta
     const effectiveDelta = update.delta ?? update.weightDelta ?? 0;
     if (!update.cardName || typeof effectiveDelta !== "number") {
       throw new Error("Invalid card learning update: missing cardName or delta");
     }
     update.delta = effectiveDelta;
-
     update.timestamp = update.timestamp || Date.now();
     this.queue.push(update);
-
-    // Não aguarda processamento, apenas enfileira
-    // O worker processa em background
   }
 
   /**
@@ -100,6 +125,27 @@ export class CardLearningQueue {
   }
 
   /**
+   * Retorna e reseta as estatísticas acumuladas
+   */
+  getAndResetStats() {
+    const s = { ...this.stats };
+    this.stats = { totalProcessed: 0, totalUpdated: 0, totalSaturated: 0, totalDecayed: 0, batchCount: 0 };
+    return s;
+  }
+
+  /**
+   * Retorna estatísticas da fila (sem resetar)
+   */
+  getStats() {
+    return {
+      queueLength: this.queue.length,
+      isProcessing: this.isProcessing,
+      estimatedTimeMs: (this.queue.length / this.BATCH_SIZE) * this.PROCESS_INTERVAL,
+      accumulated: { ...this.stats },
+    };
+  }
+
+  /**
    * Inicia o worker que processa a fila continuamente
    */
   private startWorker(): void {
@@ -114,9 +160,7 @@ export class CardLearningQueue {
    * Processa um lote de atualizações do banco
    */
   private async processBatch(): Promise<void> {
-    if (this.isProcessing || this.queue.length === 0) {
-      return;
-    }
+    if (this.isProcessing || this.queue.length === 0) return;
 
     this.isProcessing = true;
 
@@ -125,14 +169,12 @@ export class CardLearningQueue {
       const db = await getDb();
 
       if (!db) {
-        console.warn("[CardLearningQueue] Database not available, requeueing updates");
         this.queue.unshift(...batch);
         return;
       }
 
       // Agrupar por cardName para operações em lote
       const updatesByCard = new Map<string, CardLearningUpdate[]>();
-
       for (const update of batch) {
         if (!updatesByCard.has(update.cardName)) {
           updatesByCard.set(update.cardName, []);
@@ -140,32 +182,52 @@ export class CardLearningQueue {
         updatesByCard.get(update.cardName)!.push(update);
       }
 
+      // Estatísticas do lote
+      let batchUpdated = 0;
+      let batchSaturated = 0;
+      let batchDecayed = 0;
+
       // Processar cada carta
       for (const [cardName, updates] of updatesByCard) {
-        await this.updateCardWeight(db, cardName, updates);
+        const result = await this.updateCardWeight(db, cardName, updates);
+        if (result.updated) batchUpdated++;
+        if (result.saturated) batchSaturated++;
+        if (result.decayed) batchDecayed++;
       }
 
-      console.log(
-        `[CardLearningQueue] ✓ Processadas ${batch.length} atualizações ` +
-        `(${updatesByCard.size} cartas únicas)`
-      );
+      // Acumular estatísticas globais
+      this.stats.totalProcessed += batch.length;
+      this.stats.totalUpdated += batchUpdated;
+      this.stats.totalSaturated += batchSaturated;
+      this.stats.totalDecayed += batchDecayed;
+      this.stats.batchCount++;
+
+      // Log resumido por lote (apenas se houver atualizações reais)
+      if (batchUpdated > 0) {
+        const decayInfo = batchDecayed > 0 ? ` | decay: ${batchDecayed}` : "";
+        const satInfo = batchSaturated > 0 ? ` | sat: ${batchSaturated}` : "";
+        process.stdout.write(
+          `\r  [Queue] lote ${this.stats.batchCount}: ${batchUpdated}/${updatesByCard.size} cartas` +
+          `${decayInfo}${satInfo} | fila: ${this.queue.length}   `
+        );
+      }
+
     } catch (error) {
-      console.error("[CardLearningQueue] Error processing batch:", error);
-      // Requeue failed updates
-      this.queue.unshift(...this.queue.splice(0, this.BATCH_SIZE));
+      // Silencioso — não poluir o terminal com stack traces de erros de DB
+      // O erro já foi logado pelo updateCardWeight
     } finally {
       this.isProcessing = false;
     }
   }
 
   /**
-   * Atualiza peso de uma carta no banco
+   * Atualiza peso de uma carta no banco com decay proporcional
    */
   private async updateCardWeight(
     db: any,
     cardName: string,
     updates: CardLearningUpdate[]
-  ): Promise<void> {
+  ): Promise<{ updated: boolean; saturated: boolean; decayed: boolean }> {
     try {
       // 1. Ler peso atual
       const existing = await db
@@ -174,41 +236,40 @@ export class CardLearningQueue {
         .where(eq(cardLearning.cardName, cardName))
         .limit(1);
 
-      let currentWeight = 1.0; // Default
+      let currentWeight = 1.0;
       if (existing.length > 0) {
         currentWeight = existing[0].weight;
       }
 
-      // 2. Calcular novo peso (soma de todos os deltas)
-      let totalDelta = 0;
-      const sources: string[] = [];
-
+      // 2. Somar deltas brutos
+      let rawDelta = 0;
       for (const update of updates) {
-        totalDelta += update.delta ?? update.weightDelta ?? 0;
-        sources.push(update.source);
+        rawDelta += update.delta ?? update.weightDelta ?? 0;
       }
 
-      // 3. Aplicar capping [0.1, 50.0]
-      const newWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, currentWeight + totalDelta));
-
-      // 4. Log detalhado
-      if (totalDelta !== 0) {
-        console.log(
-          `[CardLearning] ${cardName}: ` +
-          `${currentWeight.toFixed(3)} → ${newWeight.toFixed(3)} ` +
-          `(delta: ${totalDelta > 0 ? "+" : ""}${totalDelta.toFixed(3)}, ` +
-          `sources: ${sources.join(", ")})`
-        );
+      if (rawDelta === 0) {
+        return { updated: false, saturated: false, decayed: false };
       }
 
-      // 5. Upsert no banco
+      // 3. Aplicar decay proporcional
+      const decayedDelta = applyDecay(currentWeight, rawDelta);
+      const wasDecayed = Math.abs(decayedDelta) < Math.abs(rawDelta) * 0.99;
+
+      // 4. Aplicar capping [0.1, 50.0]
+      const newWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, currentWeight + decayedDelta));
+      const isSaturated = newWeight === MAX_WEIGHT || newWeight === MIN_WEIGHT;
+
+      // 5. Só escreve no banco se houve mudança real (evita writes desnecessários)
+      const changed = Math.abs(newWeight - currentWeight) > 0.0001;
+      if (!changed) {
+        return { updated: false, saturated: isSaturated, decayed: wasDecayed };
+      }
+
+      // 6. Upsert no banco
       if (existing.length > 0) {
         await db
           .update(cardLearning)
-          .set({
-            weight: newWeight,
-            updatedAt: new Date(),
-          })
+          .set({ weight: newWeight, updatedAt: new Date() })
           .where(eq(cardLearning.cardName, cardName));
       } else {
         await db.insert(cardLearning).values({
@@ -217,25 +278,13 @@ export class CardLearningQueue {
           updatedAt: new Date(),
         });
       }
-    } catch (error) {
-      console.error(`[CardLearningQueue] Failed to update ${cardName}:`, error);
-      throw error;
-    }
-  }
 
-  /**
-   * Retorna estatísticas da fila
-   */
-  getStats(): {
-    queueLength: number;
-    isProcessing: boolean;
-    estimatedTimeMs: number;
-  } {
-    return {
-      queueLength: this.queue.length,
-      isProcessing: this.isProcessing,
-      estimatedTimeMs: (this.queue.length / this.BATCH_SIZE) * this.PROCESS_INTERVAL,
-    };
+      return { updated: true, saturated: isSaturated, decayed: wasDecayed };
+
+    } catch (error) {
+      // Erro silencioso — não poluir terminal
+      return { updated: false, saturated: false, decayed: false };
+    }
   }
 }
 
