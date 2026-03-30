@@ -2,7 +2,7 @@ import { generateInitialDeck } from "../services/deckGenerator";
 import { modelLearningService } from "../services/modelLearning";
 import { evaluateDeckWithBrain } from "../services/deckEvaluationBrain";
 import { ExperimentTracker } from "../services/modelEvaluation";
-import { getDb } from "../db";
+import { getDb, closeDb } from "../db";
 import { cards } from "../../drizzle/schema";
 
 /**
@@ -30,7 +30,7 @@ async function runContinuousTraining(iterations: number = 100) {
   const database = await getDb();
   if (!database) {
     console.error("  [ERRO] Banco nao disponivel. Abortando.");
-    process.exit(1);
+    closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
   }
 
   console.log("\n  Carregando pool de cartas (limite: 2000)...");
@@ -105,10 +105,10 @@ async function runContinuousTraining(iterations: number = 100) {
   console.log(`  Fim: ${timestamp()}`);
   console.log("=".repeat(52) + "\n");
 
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }
 
 runContinuousTraining().catch((e) => {
   console.error("[continuousTraining] Erro fatal:", e?.message);
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 });

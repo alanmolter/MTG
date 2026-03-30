@@ -1,142 +1,158 @@
-import { getDb } from "./db";
+/**
+ * sync-bulk.ts
+ *
+ * Sincroniza cartas do Scryfall (Oracle Cards bulk) para o banco PostgreSQL.
+ * - Pula sincronizacao se banco ja foi atualizado ha menos de 24h
+ * - Cria conexao propria com max:1 e fecha explicitamente via finally
+ * - Garante process.exit(0) em TODOS os caminhos para nao travar o pipeline
+ */
+import "dotenv/config";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { cards, InsertCard } from "../drizzle/schema";
 import { sql } from "drizzle-orm";
 
-const SCRYFALL_BULK_URL = "https://api.scryfall.com/bulk-data";
+const SCRYFALL_BULK_URL    = "https://api.scryfall.com/bulk-data";
+const MIN_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 horas
+const FETCH_TIMEOUT_MS     = 20_000;               // 20s para meta
+const DOWNLOAD_TIMEOUT_MS  = 180_000;              // 3min para JSON grande
 
-// Intervalo mínimo entre sincronizações completas (24 horas em ms)
-const MIN_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-async function getImageUrl(card: any): Promise<string | null> {
+function getImageUrl(card: any): string | null {
   if (card.image_uris?.normal) return card.image_uris.normal;
   if (card.card_faces?.[0]?.image_uris?.normal) return card.card_faces[0].image_uris.normal;
   return null;
 }
 
-async function syncBulkOracleCards() {
-  console.log("\n[sync-bulk] Iniciando sincronizacao do Bulk (Oracle Cards) do Scryfall...");
+async function syncBulkOracleCards(): Promise<void> {
+  console.log("[sync-bulk] Verificando banco de cartas...");
 
-  const db = await getDb();
-  if (!db) {
-    console.error("[sync-bulk] Erro ao conectar ao banco.");
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    console.error("[sync-bulk] DATABASE_URL nao configurado. Pulando sync.");
     return;
   }
 
+  // Conexao dedicada com max:1 — garante que client.end() fecha tudo
+  const client = postgres(dbUrl, {
+    max: 1,
+    idle_timeout: 5,
+    connect_timeout: 10,
+    onnotice: () => {}, // suprimir notices do PostgreSQL
+  });
+  const db = drizzle(client);
+
   try {
-    // ── Verificação 1: banco já tem cartas suficientes? ──────────────────────
+    // ── Verificar se banco precisa de atualizacao ──────────────────────────
     const countRes = await db.execute(sql`SELECT COUNT(*) as cnt FROM cards`);
     const cardCount = Number((countRes as any)[0]?.cnt ?? 0);
 
     if (cardCount > 0) {
-      // Verificar quando foi a última atualização
       const lastUpdateRes = await db.execute(
         sql`SELECT MAX(updated_at) as last_update FROM cards`
       );
-      const lastUpdate = (lastUpdateRes as any)[0]?.last_update;
-      const lastUpdateMs = lastUpdate ? new Date(lastUpdate).getTime() : 0;
+      const lastUpdate    = (lastUpdateRes as any)[0]?.last_update;
+      const lastUpdateMs  = lastUpdate ? new Date(lastUpdate).getTime() : 0;
       const msSinceUpdate = Date.now() - lastUpdateMs;
 
       if (msSinceUpdate < MIN_SYNC_INTERVAL_MS) {
-        const hoursAgo = Math.round(msSinceUpdate / 1000 / 60 / 60);
-        console.log(
-          `[sync-bulk] Banco ja tem ${cardCount} cartas, atualizado ha ${hoursAgo}h. Pulando sync.`
-        );
-        console.log(
-          `[sync-bulk] Proxima sync disponivel em ${Math.round((MIN_SYNC_INTERVAL_MS - msSinceUpdate) / 1000 / 60)}min.`
-        );
-        return;
+        const hoursAgo  = Math.round(msSinceUpdate / 1000 / 60 / 60);
+        const nextInMin = Math.round((MIN_SYNC_INTERVAL_MS - msSinceUpdate) / 1000 / 60);
+        console.log(`[sync-bulk] Banco ja tem ${cardCount} cartas, atualizado ha ${hoursAgo}h. Pulando sync.`);
+        console.log(`[sync-bulk] Proxima sync disponivel em ${nextInMin}min.`);
+        return; // finally fecha o client
       }
 
-      console.log(
-        `[sync-bulk] Banco tem ${cardCount} cartas mas ultima sync foi ha mais de 24h. Atualizando...`
-      );
+      console.log(`[sync-bulk] Banco tem ${cardCount} cartas mas ultima sync foi ha mais de 24h. Atualizando...`);
     } else {
       console.log("[sync-bulk] Banco vazio. Realizando carga inicial completa...");
     }
 
-    // ── Verificação 2: Scryfall acessível? ──────────────────────────────────
+    // ── Buscar metadados do Scryfall ───────────────────────────────────────
     console.log("[sync-bulk] Buscando metadados do Bulk Data...");
-    const bulkRes = await fetch(SCRYFALL_BULK_URL, { signal: AbortSignal.timeout(15000) });
-    if (!bulkRes.ok) throw new Error(`Falha ao buscar endpoints do Bulk Data: HTTP ${bulkRes.status}`);
+    const bulkRes = await fetch(SCRYFALL_BULK_URL, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!bulkRes.ok) throw new Error(`HTTP ${bulkRes.status} ao buscar bulk-data`);
 
-    const bulkData = await bulkRes.json();
+    const bulkData   = await bulkRes.json();
     const oracleMeta = bulkData.data?.find((d: any) => d.type === "oracle_cards");
-
-    if (!oracleMeta?.download_uri) {
-      throw new Error("Nao encontrou o link para download das oracle_cards.");
-    }
+    if (!oracleMeta?.download_uri) throw new Error("Link de oracle_cards nao encontrado.");
 
     const sizeMB = Math.round((oracleMeta.compressed_size ?? 0) / 1024 / 1024);
     console.log(`[sync-bulk] Fazendo download do JSON (~${sizeMB}MB)...`);
 
-    const dataRes = await fetch(oracleMeta.download_uri, { signal: AbortSignal.timeout(120000) });
-    if (!dataRes.ok) throw new Error(`Falha ao fazer download do Bulk JSON: HTTP ${dataRes.status}`);
+    const dataRes = await fetch(oracleMeta.download_uri, {
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    });
+    if (!dataRes.ok) throw new Error(`HTTP ${dataRes.status} ao baixar bulk JSON`);
 
     console.log("[sync-bulk] Carregando cartas para memoria...");
     const cardsArray: any[] = await dataRes.json();
     console.log(`[sync-bulk] ${cardsArray.length} oracle cards encontradas. Inserindo no banco...`);
 
     const batchSize = 1000;
-    let processed = 0;
+    let processed   = 0;
 
     for (let i = 0; i < cardsArray.length; i += batchSize) {
-      const batch = cardsArray.slice(i, i + batchSize);
-      const insertDataBatch: InsertCard[] = [];
+      const batch: InsertCard[] = cardsArray.slice(i, i + batchSize).map((card: any) => ({
+        scryfallId: card.id,
+        oracleId:   card.oracle_id ?? null,
+        name:       card.name,
+        type:       card.type_line ?? null,
+        colors:     card.colors?.length ? card.colors.join("") : null,
+        cmc:        Math.floor(Number(card.cmc)) || 0,
+        rarity:     card.rarity || "unknown",
+        imageUrl:   getImageUrl(card),
+        power:      card.power ?? null,
+        toughness:  card.toughness ?? null,
+        text:       card.oracle_text ?? null,
+        priceUsd:   card.prices?.usd ? parseFloat(card.prices.usd) : null,
+        isArena:    card.games?.includes("arena") ? 1 : 0,
+      }));
 
-      for (const card of batch) {
-        const imageUrl = await getImageUrl(card);
-        insertDataBatch.push({
-          scryfallId: card.id,
-          oracleId: card.oracle_id ?? null,
-          name: card.name,
-          type: card.type_line ?? null,
-          colors: card.colors?.length ? card.colors.join("") : null,
-          cmc: Math.floor(Number(card.cmc)) || 0,
-          rarity: card.rarity || "unknown",
-          imageUrl,
-          power: card.power ?? null,
-          toughness: card.toughness ?? null,
-          text: card.oracle_text ?? null,
-          priceUsd: card.prices?.usd ? parseFloat(card.prices.usd) : null,
-          isArena: card.games?.includes("arena") ? 1 : 0,
-        });
-      }
-
-      if (insertDataBatch.length > 0) {
-        await db.insert(cards).values(insertDataBatch).onConflictDoUpdate({
+      if (batch.length > 0) {
+        await db.insert(cards).values(batch).onConflictDoUpdate({
           target: cards.scryfallId,
           set: {
-            oracleId:   sql`EXCLUDED.oracle_id`,
-            name:       sql`EXCLUDED.name`,
-            type:       sql`EXCLUDED.type`,
-            colors:     sql`EXCLUDED.colors`,
-            cmc:        sql`EXCLUDED.cmc`,
-            rarity:     sql`EXCLUDED.rarity`,
-            imageUrl:   sql`EXCLUDED.image_url`,
-            power:      sql`EXCLUDED.power`,
-            toughness:  sql`EXCLUDED.toughness`,
-            text:       sql`EXCLUDED.text`,
-            priceUsd:   sql`EXCLUDED.price_usd`,
-            isArena:    sql`EXCLUDED.is_arena`,
-            updatedAt:  sql`NOW()`,
+            oracleId:  sql`EXCLUDED.oracle_id`,
+            name:      sql`EXCLUDED.name`,
+            type:      sql`EXCLUDED.type`,
+            colors:    sql`EXCLUDED.colors`,
+            cmc:       sql`EXCLUDED.cmc`,
+            rarity:    sql`EXCLUDED.rarity`,
+            imageUrl:  sql`EXCLUDED.image_url`,
+            power:     sql`EXCLUDED.power`,
+            toughness: sql`EXCLUDED.toughness`,
+            text:      sql`EXCLUDED.text`,
+            priceUsd:  sql`EXCLUDED.price_usd`,
+            isArena:   sql`EXCLUDED.is_arena`,
+            updatedAt: sql`NOW()`,
           },
         });
       }
 
       processed = Math.min(i + batchSize, cardsArray.length);
-      console.log(`   Processado: ${processed} / ${cardsArray.length}...`);
+      const pct = ((processed / cardsArray.length) * 100).toFixed(0);
+      process.stdout.write(`\r[sync-bulk] Inserindo... ${processed}/${cardsArray.length} (${pct}%)`);
     }
 
-    const finalCount = await db.execute(sql`SELECT COUNT(*) as cnt FROM cards`);
-    console.log(`[sync-bulk] Concluido! Total no banco: ${(finalCount as any)[0]?.cnt}`);
+    process.stdout.write("\n");
+    const finalRes = await db.execute(sql`SELECT COUNT(*) as cnt FROM cards`);
+    console.log(`[sync-bulk] Concluido! Total no banco: ${(finalRes as any)[0]?.cnt} cartas.`);
 
   } catch (error: any) {
     if (error?.name === "TimeoutError" || error?.message?.includes("timeout")) {
-      console.warn("[sync-bulk] Timeout ao conectar ao Scryfall. Usando dados existentes no banco.");
+      console.warn("[sync-bulk] Timeout ao conectar ao Scryfall. Usando dados existentes.");
     } else {
       console.error("[sync-bulk] Erro:", error?.message ?? error);
     }
+  } finally {
+    // SEMPRE fechar a conexao — sem isso o processo Node.js nao encerra
+    try { await client.end({ timeout: 3 }); } catch (_) {}
   }
 }
 
-syncBulkOracleCards().catch(console.error);
+// Garantir process.exit(0) independente do resultado
+syncBulkOracleCards()
+  .catch((e) => console.error("[sync-bulk] Erro fatal:", e?.message))
+  .finally(() => process.exit(0));

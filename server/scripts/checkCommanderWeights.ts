@@ -1,4 +1,4 @@
-import { getDb } from "../db";
+import { getDb, closeDb } from "../db";
 import { cardLearning, cards } from "../../drizzle/schema";
 import { desc, eq, and, sql } from "drizzle-orm";
 
@@ -24,7 +24,7 @@ async function check() {
     console.log(`${i+1}. ${c.name.padEnd(25)} | Peso: ${c.weight.toFixed(2)}`);
   });
   
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }
 
 check().catch(console.error);

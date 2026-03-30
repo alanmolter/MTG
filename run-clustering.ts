@@ -1,13 +1,13 @@
 import "dotenv/config";
 import { clusterCompetitiveDecks, getClusterStatsByArchetype } from "./server/services/clustering.ts";
-import { getDb } from "./server/db.ts";
+import { getDb, closeDb } from "./server/db.ts";
 import { competitiveDecks } from "./drizzle/schema.ts";
 import { count } from "drizzle-orm";
 
 // Timeout global de 5 minutos
 const GLOBAL_TIMEOUT = setTimeout(() => {
   console.log("\n[clustering] Timeout global atingido (5min). Encerrando...");
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }, 5 * 60 * 1000);
 GLOBAL_TIMEOUT.unref();
 
@@ -39,7 +39,7 @@ async function main() {
   const db = await getDb();
   if (!db) {
     console.error("  [ERRO] Nao foi possivel conectar ao banco. Abortando.");
-    process.exit(1);
+    closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
   }
 
   const [{ value: totalDecks }] = await db.select({ value: count() }).from(competitiveDecks);
@@ -49,7 +49,7 @@ async function main() {
     console.warn("  [AVISO] Nenhum deck encontrado. Execute o passo de importacao primeiro.");
     console.warn("  Encerrando clustering.");
     clearTimeout(GLOBAL_TIMEOUT);
-    process.exit(0);
+    closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
   }
 
   // ─── 2. Clustering KMeans ─────────────────────────
@@ -72,7 +72,7 @@ async function main() {
     if (clusters.length === 0) {
       console.warn("  [AVISO] Nenhum cluster gerado. Verifique se as cartas possuem embeddings.");
       clearTimeout(GLOBAL_TIMEOUT);
-      process.exit(0);
+      closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
     }
 
     console.log(`  Clusters gerados       : ${clusters.length}`);
@@ -80,7 +80,7 @@ async function main() {
   } catch (e: any) {
     console.warn(`  [AVISO] Clustering falhou: ${e?.message}. Continuando...`);
     clearTimeout(GLOBAL_TIMEOUT);
-    process.exit(0);
+    closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
   }
 
   // ─── 3. Resultados ───────────────────────────────
@@ -108,10 +108,10 @@ async function main() {
   console.log("=".repeat(52) + "\n");
 
   clearTimeout(GLOBAL_TIMEOUT);
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }
 
 main().catch((e) => {
   console.error("[clustering] Erro fatal:", e?.message);
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 });

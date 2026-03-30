@@ -1,4 +1,4 @@
-import { getDb } from "../db";
+import { getDb, closeDb } from "../db";
 import { cardLearning } from "../../drizzle/schema";
 import { count } from "drizzle-orm";
 import { spawn } from "child_process";
@@ -29,7 +29,7 @@ async function launchMasterTraining() {
   const db = await getDb();
   if (!db) {
     console.error("  [ERRO] Nao foi possivel conectar ao banco. Abortando.");
-    process.exit(1);
+    closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
   }
 
   const [{ value: initialCount }] = await db.select({ value: count() }).from(cardLearning);
@@ -78,10 +78,10 @@ async function launchMasterTraining() {
   console.log(`  Fim: ${timestamp()}`);
   console.log("=".repeat(52) + "\n");
 
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }
 
 launchMasterTraining().catch((e) => {
   console.error("[fullBrainTraining] Erro fatal:", e?.message);
-  process.exit(1);
+  closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
 });

@@ -7,7 +7,8 @@
  * Suporta blocos DO $$ ... END $$ sem quebrar no ponto-e-virgula interno.
  */
 import "dotenv/config";
-import { getDb } from "../db";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
@@ -68,49 +69,62 @@ function splitStatements(sql: string): string[] {
 async function applyMigration() {
   console.log("[Migration] Verificando schema do banco...");
 
-  const db = await getDb();
-  if (!db) {
-    console.error("[Migration] Erro ao conectar ao banco.");
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    console.error("[Migration] DATABASE_URL nao configurado.");
     process.exit(1);
   }
 
-  const migrationPath = path.join(process.cwd(), "drizzle", "0004_mtg_ai_updates.sql");
-  if (!fs.existsSync(migrationPath)) {
-    console.error("[Migration] Arquivo 0004_mtg_ai_updates.sql nao encontrado.");
-    process.exit(1);
-  }
+  // Conexao dedicada com max:1 — garante que client.end() fecha tudo
+  const client = postgres(dbUrl, {
+    max: 1,
+    idle_timeout: 5,
+    connect_timeout: 10,
+    onnotice: () => {},
+  });
+  const db = drizzle(client);
 
-  const migrationSQL = fs.readFileSync(migrationPath, "utf-8");
-  const statements = splitStatements(migrationSQL);
+  try {
+    const migrationPath = path.join(process.cwd(), "drizzle", "0004_mtg_ai_updates.sql");
+    if (!fs.existsSync(migrationPath)) {
+      console.error("[Migration] Arquivo 0004_mtg_ai_updates.sql nao encontrado.");
+      return;
+    }
 
-  let applied = 0;
-  let skipped = 0;
+    const migrationSQL = fs.readFileSync(migrationPath, "utf-8");
+    const statements = splitStatements(migrationSQL);
 
-  for (const statement of statements) {
-    try {
-      await db.execute(sql.raw(statement));
-      applied++;
-    } catch (err: any) {
-      if (isExpectedError(err)) {
-        skipped++; // silencioso — objeto ja existe
-      } else {
-        const shortMsg = err?.message?.split("\n")[0] ?? "erro desconhecido";
-        console.warn(`[Migration] Aviso inesperado: ${shortMsg}`);
-        skipped++;
+    let applied = 0;
+    let skipped = 0;
+
+    for (const statement of statements) {
+      try {
+        await db.execute(sql.raw(statement));
+        applied++;
+      } catch (err: any) {
+        if (isExpectedError(err)) {
+          skipped++; // silencioso — objeto ja existe
+        } else {
+          const shortMsg = err?.message?.split("\n")[0] ?? "erro desconhecido";
+          console.warn(`[Migration] Aviso inesperado: ${shortMsg}`);
+          skipped++;
+        }
       }
     }
-  }
 
-  if (applied > 0) {
-    console.log(`[Migration] Schema atualizado: ${applied} alteracoes aplicadas.`);
-  } else {
-    console.log(`[Migration] Schema ja esta atualizado (${skipped} objetos ja existiam).`);
+    if (applied > 0) {
+      console.log(`[Migration] Schema atualizado: ${applied} alteracoes aplicadas.`);
+    } else {
+      console.log(`[Migration] Schema ja esta atualizado (${skipped} objetos ja existiam).`);
+    }
+  } catch (err: any) {
+    console.error("[Migration] Erro fatal:", err?.message);
+  } finally {
+    // SEMPRE fechar a conexao para o processo Node.js poder encerrar
+    try { await client.end({ timeout: 3 }); } catch (_) {}
   }
-
-  process.exit(0);
 }
 
-applyMigration().catch((err) => {
-  console.error("[Migration] Erro fatal:", err);
-  process.exit(1);
-});
+applyMigration()
+  .catch((err) => console.error("[Migration] Erro fatal:", err?.message))
+  .finally(() => process.exit(0));

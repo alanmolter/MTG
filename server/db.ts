@@ -6,19 +6,37 @@ import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _client: ReturnType<typeof postgres> | null = null;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      const client = postgres(process.env.DATABASE_URL);
-      _db = drizzle(client);
+      _client = postgres(process.env.DATABASE_URL, {
+        onnotice: () => {}, // suprimir notices do PostgreSQL
+      });
+      _db = drizzle(_client);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
+      _client = null;
     }
   }
   return _db;
+}
+
+/**
+ * Fecha o pool de conexoes do banco.
+ * DEVE ser chamado ao final de scripts de pipeline para que o processo Node.js encerre.
+ */
+export async function closeDb(): Promise<void> {
+  if (_client) {
+    try {
+      await _client.end({ timeout: 3 });
+    } catch (_) {}
+    _client = null;
+    _db = null;
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

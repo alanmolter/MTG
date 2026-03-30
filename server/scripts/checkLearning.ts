@@ -1,4 +1,4 @@
-import { getDb } from "../db";
+import { getDb, closeDb } from "../db";
 import { cardLearning } from "../../drizzle/schema";
 import { desc } from "drizzle-orm";
 
@@ -20,7 +20,7 @@ async function check() {
   
   const total = await db.select().from(cardLearning);
   console.log(`\n🧠 Total de cartas no cérebro: ${total.length}`);
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }
 
 check().catch(console.error);

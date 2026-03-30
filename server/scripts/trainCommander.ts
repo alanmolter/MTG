@@ -1,4 +1,5 @@
 import { generateDeckByArchetype, CardData } from "../services/archetypeGenerator";
+import { closeDb } from "../db";
 import { searchCards } from "../services/scryfall";
 import { modelLearningService } from "../services/modelLearning";
 import { ModelEvaluator } from "../services/modelEvaluation";
@@ -29,7 +30,7 @@ async function trainCommander(iterations = 300) {
   const cardPool = await searchCards({ isArena: false });
   if (cardPool.length === 0) {
     console.error("  [ERRO] Banco de dados vazio. Sincronize o Scryfall primeiro.");
-    process.exit(1);
+    closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
   }
   console.log(`  Pool carregado: ${cardPool.length} cartas`);
 
@@ -64,7 +65,7 @@ async function trainCommander(iterations = 300) {
   console.log(`  Duracao total : ${totalDur}s`);
   console.log(`  Fim: ${timestampCmd()}`);
   console.log("=".repeat(52) + "\n");
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }
 
 async function runIteration(i: number, archetype: string, cardPool: CardData[]): Promise<{ wins: number; matches: number } | null> {
@@ -121,5 +122,5 @@ async function runIteration(i: number, archetype: string, cardPool: CardData[]):
 
 trainCommander().catch((e) => {
   console.error("[trainCommander] Erro fatal:", e?.message);
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 });

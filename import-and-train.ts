@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { closeDb } from "./server/db.ts";
 import { importMTGGoldfishDecks } from "./server/services/mtggoldfishScraper.ts";
 import { importMTGTop8Decks } from "./server/services/mtgtop8Scraper.ts";
 import { trainEmbeddingsFromDecks } from "./server/services/embeddingTrainer.ts";
@@ -6,7 +7,7 @@ import { trainEmbeddingsFromDecks } from "./server/services/embeddingTrainer.ts"
 // Timeout global de 8 minutos
 const GLOBAL_TIMEOUT = setTimeout(() => {
   console.log("\n[import-and-train] Timeout global atingido (8min). Encerrando...");
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }, 8 * 60 * 1000);
 GLOBAL_TIMEOUT.unref();
 
@@ -87,10 +88,10 @@ async function main() {
   console.log("=".repeat(52) + "\n");
 
   clearTimeout(GLOBAL_TIMEOUT);
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 }
 
 main().catch((e) => {
   console.error("[import-and-train] Erro fatal:", e?.message);
-  process.exit(0);
+  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
 });
