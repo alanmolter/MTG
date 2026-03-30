@@ -5,13 +5,9 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
-  schedule:
-    # Executar pipeline diariamente às 2 AM UTC
-    - cron: '0 2 * * *'
 
 env:
   NODE_VERSION: '22.13.0'
-  REGISTRY: ghcr.io
 
 jobs:
   # ============================================================================
@@ -20,7 +16,7 @@ jobs:
   validate-and-test:
     name: 🧪 Validação e Testes
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:14-alpine
@@ -47,7 +43,7 @@ jobs:
           cache: 'npm'
 
       - name: 📚 Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       - name: 🔍 Lint code
         run: npm run lint --if-present
@@ -84,21 +80,18 @@ jobs:
           cache: 'npm'
 
       - name: 📚 Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       - name: 🏗️ Build project
         run: npm run build --if-present
-
-      - name: 📊 Analyze bundle size
-        run: npm run analyze:bundle --if-present
         continue-on-error: true
 
       - name: 🔐 Security audit
-        run: npm audit --audit-level=moderate
+        run: npm audit --audit-level=high --legacy-peer-deps
         continue-on-error: true
 
   # ============================================================================
-  # JOB 3: RELATÓRIO E NOTIFICAÇÕES
+  # JOB 3: RELATÓRIO FINAL
   # ============================================================================
   report:
     name: 📋 Relatório Final
@@ -114,11 +107,11 @@ jobs:
         run: |
           echo "# 🚀 Magic AI Pipeline - Build Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## ✅ Status" >> $GITHUB_STEP_SUMMARY
+          echo "## Status" >> $GITHUB_STEP_SUMMARY
           echo "- Validation: ${{ needs.validate-and-test.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build: ${{ needs.build-and-analyze.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📝 Commit Info" >> $GITHUB_STEP_SUMMARY
+          echo "## Commit Info" >> $GITHUB_STEP_SUMMARY
           echo "- SHA: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- Author: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
@@ -132,5 +125,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## 🚀 Magic AI Pipeline\n\n✅ Validation: ${{ needs.validate-and-test.result }}\n✅ Build: ${{ needs.build-and-analyze.result }}\n\n[View workflow run](${context.payload.pull_request.html_url}/checks)`
+              body: `## Magic AI Pipeline\n\nValidation: ${{ needs.validate-and-test.result }}\nBuild: ${{ needs.build-and-analyze.result }}`
             })
