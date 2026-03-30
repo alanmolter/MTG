@@ -387,31 +387,6 @@ export const appRouter = router({
     }),
   }),
 
-  moxfield: router({
-    importDecks: publicProcedure
-      .input(
-        z.object({
-          format: z
-            .enum(["standard", "modern", "commander", "legacy"])
-            .optional(),
-          limit: z.number().min(1).max(100).optional(),
-        })
-      )
-      .mutation(async ({ input }) => {
-        const { importMoxfieldDecks } =
-          await import("./services/moxfieldScraper");
-        return await importMoxfieldDecks(
-          input.format || "standard",
-          input.limit || 50
-        );
-      }),
-
-    getStats: publicProcedure.query(async () => {
-      const { getCompetitiveDeckStats } =
-        await import("./services/moxfieldScraper");
-      return await getCompetitiveDeckStats();
-    }),
-  }),
 
   mtgtop8: router({
     importDecks: publicProcedure

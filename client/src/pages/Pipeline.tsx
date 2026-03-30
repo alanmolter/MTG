@@ -18,10 +18,9 @@ export default function Pipeline() {
   const [trainResult, setTrainResult] = useState<any>(null);
   const [generatedDeck, setGeneratedDeck] = useState<any>(null);
 
-  const moxfieldStats = trpc.moxfield.getStats.useQuery();
   const trainingHistory = trpc.training.getHistory.useQuery();
 
-  const importMutation = trpc.moxfield.importDecks.useMutation({
+  const importMutation = trpc.mtggoldfish.importDecks.useMutation({
     onSuccess: (data) => {
       setImportResult(data);
       toast.success(`${data.decksImported} decks importados!`);
@@ -110,7 +109,7 @@ export default function Pipeline() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Pipeline Completo</h1>
           <p className="text-gray-400">
-            Importar decks do Moxfield → Treinar embeddings → Gerar deck otimizado
+            Importar decks de MTGGoldfish e MTGTop8 → Treinar embeddings → Gerar deck otimizado
           </p>
         </div>
 
@@ -207,24 +206,7 @@ export default function Pipeline() {
             </Card>
 
             {/* Moxfield Stats */}
-            {moxfieldStats.data && (
-              <Card className="bg-slate-900/50 border-purple-500/30">
-                <CardHeader>
-                  <CardTitle className="text-white text-sm">Decks Competitivos</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-3xl font-bold text-purple-300">{moxfieldStats.data.totalDecks}</p>
-                  <div className="space-y-1">
-                    {Object.entries(moxfieldStats.data.byFormat).map(([fmt, count]) => (
-                      <div key={fmt} className="flex justify-between text-sm">
-                        <span className="text-gray-400 capitalize">{fmt}</span>
-                        <span className="text-white font-semibold">{count as number}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+
           </div>
 
           {/* Results Panel */}
@@ -237,7 +219,7 @@ export default function Pipeline() {
               <CardContent>
                 <div className="space-y-4">
                   {[
-                    { key: "importing" as PipelineStep, label: "1. Importar Decks do Moxfield", icon: Download },
+                    { key: "importing" as PipelineStep, label: "1. Importar Decks (MTGGoldfish + MTGTop8)", icon: Download },
                     { key: "training" as PipelineStep, label: "2. Treinar Embeddings Word2Vec", icon: Brain },
                     { key: "generating" as PipelineStep, label: "3. Gerar Deck Otimizado", icon: Wand2 },
                   ].map(({ key, label, icon: Icon }) => {

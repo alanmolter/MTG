@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { importMTGGoldfishDecks } from "./server/services/mtggoldfishScraper.ts";
 import { importMTGTop8Decks } from "./server/services/mtgtop8Scraper.ts";
-import { importMoxfieldDecks } from "./server/services/moxfieldScraper.ts";
+
 import { trainEmbeddingsFromDecks, getTrainingJobHistory } from "./server/services/embeddingTrainer.ts";
 
 async function main() {
@@ -16,9 +16,7 @@ async function main() {
   const top8 = await importMTGTop8Decks("modern", 10);
   console.log(`   ✅ ${top8.decksImported} decks importados.`);
 
-  console.log("\n📊 [3/3] Importando do Moxfield...");
-  const moxfield = await importMoxfieldDecks("modern", 10);
-  console.log(`   ✅ ${moxfield.decksImported} decks importados.`);
+
 
   // 2. Treinar Embeddings
   console.log("\n🧠 Treinando Embeddings Word2Vec com dados reais...");

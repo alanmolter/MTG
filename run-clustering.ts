@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { importMoxfieldDecks } from "./server/services/moxfieldScraper.ts";
+import { importMTGGoldfishDecks } from "./server/services/mtggoldfishScraper.ts";
 import { clusterCompetitiveDecks, getClusterStatsByArchetype } from "./server/services/clustering.ts";
 import { getDb } from "./server/db.ts";
 
@@ -7,8 +7,8 @@ async function main() {
   console.log("🚀 Iniciando Pipeline de Clustering Real...");
 
   // 1. Importar alguns decks para ter dados
-  console.log("\n📦 Passo 1: Importando decks competitivos (Modern)...");
-  const importResult = await importMoxfieldDecks("modern", 2);
+  console.log("\n📋 Passo 1: Importando decks competitivos (Modern)...");
+  const importResult = await importMTGGoldfishDecks("modern", 2);
   console.log(`✅ Importação concluída: ${importResult.decksImported} decks importados, ${importResult.decksSkipped} pulados.`);
 
   // 2. Executar Clustering

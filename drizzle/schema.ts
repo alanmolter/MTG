@@ -145,7 +145,7 @@ export type InsertEmbeddingsCache = typeof embeddingsCache.$inferInsert;
 export const competitiveDecks = pgTable("competitive_decks", {
   id: serial("id").primaryKey(),
   sourceId: varchar("source_id", { length: 128 }).notNull().unique(),
-  source: varchar("source", { length: 50 }).notNull().default("moxfield"),
+  source: varchar("source", { length: 50 }).notNull().default("mtggoldfish"),
   name: varchar("name", { length: 255 }).notNull(),
   format: varchar("format", { length: 50 }).notNull(),
   archetype: varchar("archetype", { length: 100 }),
