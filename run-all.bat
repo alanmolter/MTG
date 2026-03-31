@@ -2,8 +2,12 @@
 setlocal EnableDelayedExpansion
 
 :: MTG AI - Pipeline Completo (Windows CMD)
-:: Uso: run-all.bat [formato] [iteracoes] [decks]
-:: Exemplo: run-all.bat commander 200 100
+:: Uso no CMD       : run-all.bat [formato] [iteracoes] [decks]
+:: Uso no PowerShell: .\run-all.bat  OU  .\run-all.ps1 (recomendado)
+:: Exemplo          : run-all.bat commander 200 100
+::
+:: ATENCAO: No PowerShell, use .\run-all.bat ou .\run-all.ps1
+:: O PowerShell nao executa .bat sem o prefixo .\
 
 set ARG1=%~1
 set ARG2=%~2
