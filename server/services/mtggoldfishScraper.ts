@@ -1,9 +1,5 @@
 import { getDb } from "../db";
-import {
-  competitiveDecks,
-  competitiveDeckCards,
-  InsertCompetitiveDeck,
-} from "../../drizzle/schema";
+import { sql } from "drizzle-orm";
 
 const MTGGOLDFISH_BASE_URL = "https://www.mtggoldfish.com";
 const USER_AGENT =
@@ -186,6 +182,9 @@ async function downloadDeck(
 }
 
 // ─── Persistência no banco ────────────────────────────────────────────────────
+// NOTA: Usa SQL raw em vez do Drizzle ORM para o INSERT principal.
+// O Drizzle 0.44.x tem um bug onde onConflictDoUpdate + returning() gera
+// parâmetros duplicados ($7 e $8 para o mesmo valor), causando "Failed query".
 
 async function saveDeckToDb(
   detail: MTGGoldfishDeckDetail,
@@ -194,28 +193,26 @@ async function saveDeckToDb(
   const db = await getDb();
   if (!db) return { imported: false, cards: 0 };
 
-  const competitiveDeck: InsertCompetitiveDeck = {
-    sourceId: `goldfish-${detail.id}`,
-    source: "mtggoldfish",
-    name: detail.name || `Deck ${detail.id}`,
-    format,
-    archetype: detail.archetype ?? null,
-    author: "MTGGoldfish",
-    // NOTA: likes/views/colors/rawJson omitidos — usam DEFAULT do banco
-    // Incluí-los explicitamente causa erro se a coluna não existir na migration
-    isSynthetic: false,
-  };
+  const sourceId = `goldfish-${detail.id}`;
+  const name     = detail.name || `Deck ${detail.id}`;
+  const archetype = detail.archetype ?? null;
 
-  const [insertedDeck] = await db
-    .insert(competitiveDecks)
-    .values(competitiveDeck)
-    .onConflictDoUpdate({
-      target: competitiveDecks.sourceId,
-      set: { name: competitiveDeck.name },
-    })
-    .returning({ id: competitiveDecks.id });
+  // INSERT com SQL raw — contorna o bug do Drizzle com parâmetros duplicados
+  // Usa apenas as colunas que SEMPRE existem no banco (migrations 0003 + 0004)
+  const rows = await db.execute(sql`
+    INSERT INTO competitive_decks
+      (source_id, source, name, format, archetype, author, is_synthetic)
+    VALUES
+      (${sourceId}, 'mtggoldfish', ${name}, ${format}, ${archetype}, 'MTGGoldfish', false)
+    ON CONFLICT (source_id)
+      DO UPDATE SET name = EXCLUDED.name
+    RETURNING id
+  `);
 
-  if (!insertedDeck) return { imported: false, cards: 0 };
+  // Drizzle retorna rows como array ou objeto com .rows dependendo da versão
+  const rowArr = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
+  const deckId = rowArr[0]?.id as number | undefined;
+  if (!deckId) return { imported: false, cards: 0 };
 
   const allCards = [
     ...detail.mainboard.map((c) => ({ ...c, section: "mainboard" as const })),
@@ -223,22 +220,12 @@ async function saveDeckToDb(
   ];
 
   for (const card of allCards) {
-    await db
-      .insert(competitiveDeckCards)
-      .values({
-        deckId: insertedDeck.id,
-        cardName: card.cardName,
-        quantity: card.quantity,
-        section: card.section,
-      })
-      .onConflictDoUpdate({
-        target: [
-          competitiveDeckCards.deckId,
-          competitiveDeckCards.cardName,
-          competitiveDeckCards.section,
-        ],
-        set: { quantity: card.quantity },
-      });
+    await db.execute(sql`
+      INSERT INTO competitive_deck_cards (deck_id, card_name, quantity, section)
+      VALUES (${deckId}, ${card.cardName}, ${card.quantity}, ${card.section})
+      ON CONFLICT (deck_id, card_name, section)
+        DO UPDATE SET quantity = EXCLUDED.quantity
+    `);
   }
 
   return { imported: true, cards: allCards.length };
