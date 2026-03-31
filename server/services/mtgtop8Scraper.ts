@@ -6,8 +6,34 @@ import {
 } from "../../drizzle/schema";
 
 const MTGTOP8_BASE_URL = "https://mtgtop8.com";
-const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-const FETCH_TIMEOUT_MS = 20000;
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+/** Timeout por requisição individual */
+const FETCH_TIMEOUT_MS = 20_000;
+
+/** Máximo de downloads simultâneos de decks */
+const DOWNLOAD_CONCURRENCY = 3;
+
+/** Delay entre batches de download (ms) */
+const BATCH_DELAY_MS = 600;
+
+/**
+ * Mapeamento de formato legível → código MTGTop8
+ * NOTA: Commander (EDH) não tem metagame público no MTGTop8, apenas eventos.
+ */
+export const TOP8_FORMAT_MAP: Record<string, string> = {
+  standard: "ST",
+  modern: "MO",
+  legacy: "LE",
+  pioneer: "PI",
+  pauper: "PAU",
+  vintage: "VI",
+};
+
+export const TOP8_FORMATS = Object.keys(TOP8_FORMAT_MAP) as Array<
+  keyof typeof TOP8_FORMAT_MAP
+>;
 
 export interface ImportResult {
   decksImported: number;
@@ -16,7 +42,12 @@ export interface ImportResult {
   errors: string[];
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+// ─── Utilitários ──────────────────────────────────────────────────────────────
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -27,14 +58,68 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
 }
 
 function bar(current: number, total: number, width = 20): string {
-  const filled = Math.round((current / total) * width);
-  return "[" + "#".repeat(filled) + "-".repeat(width - filled) + "]";
+  const filled = total > 0 ? Math.round((current / total) * width) : 0;
+  return "[" + "█".repeat(filled) + "░".repeat(width - filled) + "]";
 }
+
+async function runInBatches<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number,
+  delayMs = 0
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < tasks.length; i += concurrency) {
+    const batch = tasks.slice(i, i + concurrency).map((fn) => fn());
+    const batchResults = await Promise.all(batch);
+    results.push(...batchResults);
+    if (delayMs > 0 && i + concurrency < tasks.length) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return results;
+}
+
+// ─── Extração de archetypes da página de formato ──────────────────────────────
+
+/**
+ * CORREÇÃO CRÍTICA: O MTGTop8 usa HTML sem aspas nos atributos href.
+ * Padrão real: <a href=archetype?a=193&meta=54&f=MO>Boros Aggro</a>
+ * (sem aspas ao redor do valor do href)
+ *
+ * O regex anterior usava /archetype\?a=(\d+)&meta=(\d+)&f=[^>]+>([^<]+)<\/a>/g
+ * que só funciona com href="..." (com aspas). Corrigido para aceitar ambos.
+ */
+function extractArchetypes(
+  html: string
+): Array<{ id: string; meta: string; name: string }> {
+  const archetypes: Array<{ id: string; meta: string; name: string }> = [];
+  const seenIds = new Set<string>();
+
+  // Regex que aceita href com ou sem aspas
+  // Padrão sem aspas: href=archetype?a=193&meta=54&f=MO>Nome</a>
+  // Padrão com aspas: href="archetype?a=193&meta=54&f=MO">Nome</a>
+  const regex =
+    /href=["']?archetype\?a=(\d+)&(?:amp;)?meta=(\d+)&(?:amp;)?f=[A-Z]+["']?\s*>([^<]+)<\/a>/g;
+
+  let match;
+  while ((match = regex.exec(html)) !== null) {
+    const id = match[1];
+    const meta = match[2];
+    const name = match[3].trim();
+    if (!seenIds.has(id) && name.length > 0) {
+      seenIds.add(id);
+      archetypes.push({ id, meta, name });
+    }
+  }
+
+  return archetypes;
+}
+
+// ─── Extração de deck IDs por archetype ───────────────────────────────────────
 
 /**
  * Extrai pares (e, d) de deck da página de um archetype específico.
- * Exemplo: https://mtgtop8.com/archetype?a=193&meta=54&f=MO
- * Retorna pares { e, d } para construir URLs de download.
+ * Padrão: event?e=82539&d=827346 (sem aspas no href)
  */
 async function getDeckIdsFromArchetype(
   archetypeId: string,
@@ -42,16 +127,21 @@ async function getDeckIdsFromArchetype(
   formatCode: string,
   archetypeName: string,
   maxDecks = 5
-): Promise<{ e: string; d: string; name: string }[]> {
+): Promise<Array<{ e: string; d: string; name: string }>> {
   const url = `${MTGTOP8_BASE_URL}/archetype?a=${archetypeId}&meta=${metaId}&f=${formatCode}`;
   try {
-    const response = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT } });
+    const response = await fetchWithTimeout(url, {
+      headers: { "User-Agent": USER_AGENT },
+    });
     if (!response.ok) return [];
     const html = await response.text();
-    // Padrão: event?e=82539&d=827346
-    const deckRegex = /event\?e=(\d+)&d=(\d+)/g;
+
+    // Padrão real: href=event?e=82539&d=827346 (sem aspas)
+    // Aceita também href="event?e=82539&d=827346" (com aspas)
+    const deckRegex =
+      /href=["']?event\?e=(\d+)&(?:amp;)?d=(\d+)["']?/g;
     const seen = new Set<string>();
-    const results: { e: string; d: string; name: string }[] = [];
+    const results: Array<{ e: string; d: string; name: string }> = [];
     let match;
     while ((match = deckRegex.exec(html)) !== null && results.length < maxDecks) {
       const key = `${match[1]}_${match[2]}`;
@@ -66,194 +156,315 @@ async function getDeckIdsFromArchetype(
   }
 }
 
+// ─── Download e parse de deck individual ─────────────────────────────────────
+
+async function downloadDeck(
+  e: string,
+  d: string,
+  name: string,
+  archetype: string,
+  format: string
+): Promise<{
+  mainboard: Array<{ cardName: string; quantity: number }>;
+  sideboard: Array<{ cardName: string; quantity: number }>;
+  name: string;
+  archetype: string;
+  format: string;
+} | null> {
+  try {
+    // URL de download MTGO: https://mtgtop8.com/mtgo?e=82539&d=827346
+    const deckUrl = `${MTGTOP8_BASE_URL}/mtgo?e=${e}&d=${d}`;
+    const response = await fetchWithTimeout(deckUrl, {
+      headers: { "User-Agent": USER_AGENT },
+    });
+    if (!response.ok) return null;
+
+    const text = await response.text();
+    const lines = text.split("\n");
+    const mainboard: Array<{ cardName: string; quantity: number }> = [];
+    const sideboard: Array<{ cardName: string; quantity: number }> = [];
+    let isSideboard = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (trimmed.toLowerCase().startsWith("sideboard")) {
+        isSideboard = true;
+        continue;
+      }
+      const m = /^(\d+)\s+(.+)$/.exec(trimmed);
+      if (m) {
+        const entry = { quantity: parseInt(m[1]), cardName: m[2].trim() };
+        isSideboard ? sideboard.push(entry) : mainboard.push(entry);
+      }
+    }
+
+    if (mainboard.length === 0) return null;
+    return { mainboard, sideboard, name, archetype, format };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Persistência no banco ────────────────────────────────────────────────────
+
+async function saveDeckToDb(
+  sourceId: string,
+  detail: {
+    mainboard: Array<{ cardName: string; quantity: number }>;
+    sideboard: Array<{ cardName: string; quantity: number }>;
+    name: string;
+    archetype: string;
+    format: string;
+  }
+): Promise<{ imported: boolean; cards: number }> {
+  const db = await getDb();
+  if (!db) return { imported: false, cards: 0 };
+
+  const competitiveDeck: InsertCompetitiveDeck = {
+    sourceId: `top8-${sourceId}`,
+    source: "mtgtop8",
+    name: detail.name || `Deck ${sourceId}`,
+    format: detail.format,
+    archetype: detail.archetype || null,
+    author: "MTGTop8",
+    isSynthetic: false,
+  };
+
+  const [insertedDeck] = await db
+    .insert(competitiveDecks)
+    .values(competitiveDeck)
+    .onConflictDoUpdate({
+      target: competitiveDecks.sourceId,
+      set: { name: competitiveDeck.name },
+    })
+    .returning({ id: competitiveDecks.id });
+
+  if (!insertedDeck) return { imported: false, cards: 0 };
+
+  const allCards = [
+    ...detail.mainboard.map((c) => ({ ...c, section: "mainboard" as const })),
+    ...detail.sideboard.map((c) => ({ ...c, section: "sideboard" as const })),
+  ];
+
+  for (const card of allCards) {
+    await db
+      .insert(competitiveDeckCards)
+      .values({
+        deckId: insertedDeck.id,
+        cardName: card.cardName,
+        quantity: card.quantity,
+        section: card.section,
+      })
+      .onConflictDoUpdate({
+        target: [
+          competitiveDeckCards.deckId,
+          competitiveDeckCards.cardName,
+          competitiveDeckCards.section,
+        ],
+        set: { quantity: card.quantity },
+      });
+  }
+
+  return { imported: true, cards: allCards.length };
+}
+
+// ─── Importação por formato ───────────────────────────────────────────────────
+
+/**
+ * Importa até `decksPerFormat` decks de um único formato do MTGTop8.
+ *
+ * CORREÇÃO PRINCIPAL: O MTGTop8 usa HTML sem aspas nos atributos href.
+ * O regex foi corrigido para aceitar: href=archetype?a=N&meta=N&f=XX>Nome</a>
+ */
 export async function importMTGTop8Decks(
   format: string = "modern",
-  limit: number = 20
+  decksPerFormat: number = 10
 ): Promise<ImportResult> {
-  const result: ImportResult = { decksImported: 0, cardsImported: 0, decksSkipped: 0, errors: [] };
+  const result: ImportResult = {
+    decksImported: 0,
+    cardsImported: 0,
+    decksSkipped: 0,
+    errors: [],
+  };
 
-  const formatCode = format === "modern" ? "MO"
-    : format === "legacy" ? "LE"
-    : format === "commander" ? "EDH"
-    : format === "pioneer" ? "PI"
-    : format === "pauper" ? "PAU"
-    : "ST";
-
+  const formatCode = TOP8_FORMAT_MAP[format] ?? "MO";
   const url = `${MTGTOP8_BASE_URL}/format?f=${formatCode}`;
-  console.log(`  [MTGTop8] Conectando a: ${url}`);
-  console.log(`  [MTGTop8] Aguardando resposta (timeout: ${FETCH_TIMEOUT_MS / 1000}s)...`);
+  console.log(`  [MTGTop8/${format.toUpperCase()}] Conectando: ${url}`);
 
-  // Estrutura: { archetypeId, metaId, name }
-  let archetypes: { id: string; meta: string; name: string }[] = [];
+  let archetypes: Array<{ id: string; meta: string; name: string }> = [];
 
   try {
     const t0 = Date.now();
-    const response = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT } });
+    const response = await fetchWithTimeout(url, {
+      headers: { "User-Agent": USER_AGENT },
+    });
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
     if (!response.ok) {
-      console.warn(`  [MTGTop8] HTTP ${response.status} — site pode estar bloqueando. Pulando.`);
+      console.warn(
+        `  [MTGTop8/${format.toUpperCase()}] HTTP ${response.status} — bloqueado. Pulando.`
+      );
       return result;
     }
 
     const html = await response.text();
-    console.log(`  [MTGTop8] Resposta recebida em ${elapsed}s (${(html.length / 1024).toFixed(0)} KB)`);
+    console.log(
+      `  [MTGTop8/${format.toUpperCase()}] Resposta em ${elapsed}s (${(html.length / 1024).toFixed(0)} KB)`
+    );
 
-    // ESTRATÉGIA ATUALIZADA: extrair archetypes da página de formato
-    // Padrão: archetype?a=193&meta=54&f=MO>Boros Aggro</a>
-    const archetypeRegex = /archetype\?a=(\d+)&meta=(\d+)&f=[^>]+>([^<]+)<\/a>/g;
-    const seenIds = new Set<string>();
-    let match;
-    while ((match = archetypeRegex.exec(html)) !== null) {
-      const id = match[1];
-      const meta = match[2];
-      const name = match[3].trim();
-      if (!seenIds.has(id)) {
-        seenIds.add(id);
-        archetypes.push({ id, meta, name });
-      }
-    }
+    // CORREÇÃO: usar extractArchetypes que aceita href sem aspas
+    archetypes = extractArchetypes(html);
 
-    console.log(`  [MTGTop8] ${archetypes.length} arquetipos encontrados no formato ${format.toUpperCase()}`);
+    console.log(
+      `  [MTGTop8/${format.toUpperCase()}] ${archetypes.length} arquetipos encontrados`
+    );
 
     if (archetypes.length === 0) {
-      console.warn(`  [MTGTop8] Nenhum arquetipo encontrado. HTML pode ter mudado de estrutura.`);
+      console.warn(
+        `  [MTGTop8/${format.toUpperCase()}] Nenhum arquetipo. HTML pode ter mudado.`
+      );
       return result;
     }
   } catch (error: any) {
-    const msg = error?.name === "AbortError"
-      ? `Timeout (${FETCH_TIMEOUT_MS / 1000}s) ao conectar — site bloqueando ou lento`
-      : `Erro de conexao: ${error?.message}`;
-    console.warn(`  [MTGTop8] ${msg}`);
+    const msg =
+      error?.name === "AbortError"
+        ? `Timeout (${FETCH_TIMEOUT_MS / 1000}s) — site lento ou bloqueando`
+        : `Erro de conexao: ${error?.message}`;
+    console.warn(`  [MTGTop8/${format.toUpperCase()}] ${msg}`);
     result.errors.push(msg);
     return result;
   }
 
-  // Calcular quantos decks por archetype
-  const decksPerArchetype = Math.max(1, Math.ceil(limit / Math.min(archetypes.length, limit)));
-  const archetypesToProcess = archetypes.slice(0, Math.min(archetypes.length, limit));
+  // Visitar os primeiros N archetypes (1 deck por archetype = mais diversidade)
+  const archetypesToProcess = archetypes.slice(0, decksPerFormat);
 
-  console.log(`  [MTGTop8] Coletando ate ${decksPerArchetype} deck(s) de cada arquetipo (${archetypesToProcess.length} arquetipos)...`);
+  console.log(
+    `  [MTGTop8/${format.toUpperCase()}] Coletando 1 deck de cada um dos ${archetypesToProcess.length} arquetipos...`
+  );
 
-  // Coletar IDs de deck de cada archetype
-  const deckSummaries: { e: string; d: string; name: string; archetype: string }[] = [];
-  for (let i = 0; i < archetypesToProcess.length && deckSummaries.length < limit; i++) {
-    const arch = archetypesToProcess[i];
-    const entries = await getDeckIdsFromArchetype(arch.id, arch.meta, formatCode, arch.name, decksPerArchetype);
+  // Coletar pares (e, d) de cada archetype
+  const deckEntries: Array<{
+    e: string;
+    d: string;
+    name: string;
+    archetype: string;
+  }> = [];
+
+  for (const arch of archetypesToProcess) {
+    if (deckEntries.length >= decksPerFormat) break;
+    const entries = await getDeckIdsFromArchetype(
+      arch.id,
+      arch.meta,
+      formatCode,
+      arch.name,
+      1
+    );
     for (const entry of entries) {
-      if (deckSummaries.length >= limit) break;
-      deckSummaries.push({ ...entry, archetype: arch.name });
+      if (deckEntries.length >= decksPerFormat) break;
+      deckEntries.push({ ...entry, archetype: arch.name });
     }
-    await new Promise((r) => setTimeout(r, 200)); // Rate limiting
+    await new Promise((r) => setTimeout(r, 150));
   }
 
-  console.log(`  [MTGTop8] ${deckSummaries.length} decks encontrados no formato ${format.toUpperCase()}`);
+  console.log(
+    `  [MTGTop8/${format.toUpperCase()}] ${deckEntries.length} decks localizados. Baixando em paralelo (${DOWNLOAD_CONCURRENCY} simultâneos)...`
+  );
 
-  if (deckSummaries.length === 0) {
-    console.warn(`  [MTGTop8] Nenhum deck encontrado nos arquetipos.`);
+  if (deckEntries.length === 0) {
+    console.warn(
+      `  [MTGTop8/${format.toUpperCase()}] Nenhum deck encontrado nos arquetipos.`
+    );
     return result;
   }
 
-  console.log(`  [MTGTop8] Baixando detalhes de ${deckSummaries.length} decks...`);
+  // Downloads paralelos em batches
+  let completed = 0;
+  const downloadTasks = deckEntries.map((entry) => async () => {
+    const detail = await downloadDeck(
+      entry.e,
+      entry.d,
+      entry.name,
+      entry.archetype,
+      format
+    );
+    completed++;
+    process.stdout.write(
+      `\r  [MTGTop8/${format.toUpperCase()}] ${bar(completed, deckEntries.length)} ${completed}/${deckEntries.length}`
+    );
 
-  for (let i = 0; i < deckSummaries.length; i++) {
-    const summary = deckSummaries[i];
-    const progress = bar(i + 1, deckSummaries.length);
-    process.stdout.write(`\r  [MTGTop8] ${progress} ${i + 1}/${deckSummaries.length} deck: e=${summary.e}&d=${summary.d}`);
+    if (!detail) {
+      result.decksSkipped++;
+      return;
+    }
 
     try {
-      // URL de download MTGO: https://mtgtop8.com/mtgo?e=82539&d=827346
-      const deckUrl = `${MTGTOP8_BASE_URL}/mtgo?e=${summary.e}&d=${summary.d}`;
-      const response = await fetchWithTimeout(deckUrl, { headers: { "User-Agent": USER_AGENT } });
-
-      if (!response.ok) {
-        result.decksSkipped++;
-        continue;
-      }
-
-      const text = await response.text();
-      const lines = text.split("\n");
-      const mainboard: any[] = [];
-      const sideboard: any[] = [];
-      let isSideboard = false;
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        if (trimmed.toLowerCase().startsWith("sideboard")) { isSideboard = true; continue; }
-        const m = /^(\d+)\s+(.+)$/.exec(trimmed);
-        if (m) {
-          const entry = { quantity: parseInt(m[1]), cardName: m[2].trim() };
-          isSideboard ? sideboard.push(entry) : mainboard.push(entry);
-        }
-      }
-
-      // Ignorar decks vazios
-      if (mainboard.length === 0) {
-        result.decksSkipped++;
-        continue;
-      }
-
-      const deckId = `e=${summary.e}&d=${summary.d}`;
-      const competitiveDeck: InsertCompetitiveDeck = {
-        sourceId: `top8-${deckId}`,
-        source: "mtgtop8",
-        name: summary.name || `Deck ${deckId}`,
-        format,
-        archetype: summary.archetype || null,
-        author: "MTGTop8",
-        isSynthetic: false,
-      };
-
-      const db = await getDb();
-      if (!db) continue;
-
-      const [insertedDeck] = await db
-        .insert(competitiveDecks)
-        .values(competitiveDeck)
-        .onConflictDoUpdate({
-          target: competitiveDecks.sourceId,
-          set: { name: competitiveDeck.name },
-        })
-        .returning({ id: competitiveDecks.id });
-
-      if (insertedDeck) {
+      const sourceId = `e=${entry.e}&d=${entry.d}`;
+      const { imported, cards } = await saveDeckToDb(sourceId, detail);
+      if (imported) {
         result.decksImported++;
-        const allCards = [
-          ...mainboard.map((c: any) => ({ ...c, section: "mainboard" })),
-          ...sideboard.map((c: any) => ({ ...c, section: "sideboard" })),
-        ];
-        for (const card of allCards) {
-          await db.insert(competitiveDeckCards).values({
-            deckId: insertedDeck.id,
-            cardName: card.cardName,
-            quantity: card.quantity,
-            section: card.section as any,
-          }).onConflictDoUpdate({
-            target: [competitiveDeckCards.deckId, competitiveDeckCards.cardName, competitiveDeckCards.section],
-            set: { quantity: card.quantity },
-          });
-          result.cardsImported++;
-        }
+        result.cardsImported += cards;
       } else {
         result.decksSkipped++;
       }
-
-      await new Promise((r) => setTimeout(r, 400));
     } catch (error: any) {
-      const msg = error?.name === "AbortError"
-        ? `Timeout no deck e=${summary.e}&d=${summary.d}`
-        : `Erro no deck e=${summary.e}&d=${summary.d}: ${error?.message}`;
-      result.errors.push(msg);
+      result.errors.push(
+        `DB error e=${entry.e}&d=${entry.d}: ${error?.message}`
+      );
       result.decksSkipped++;
     }
-  }
+  });
 
+  await runInBatches(downloadTasks, DOWNLOAD_CONCURRENCY, BATCH_DELAY_MS);
   process.stdout.write("\n");
-  console.log(`  [MTGTop8] Concluido: ${result.decksImported} importados, ${result.decksSkipped} pulados, ${result.cardsImported} cartas.`);
+
+  console.log(
+    `  [MTGTop8/${format.toUpperCase()}] ✓ ${result.decksImported} importados | ${result.decksSkipped} pulados | ${result.cardsImported} cartas`
+  );
   if (result.errors.length > 0) {
-    console.warn(`  [MTGTop8] ${result.errors.length} avisos: ${result.errors.slice(0, 2).join("; ")}`);
+    console.warn(
+      `  [MTGTop8/${format.toUpperCase()}] ${result.errors.length} avisos: ${result.errors.slice(0, 2).join("; ")}`
+    );
   }
 
   return result;
+}
+
+// ─── Importação de TODOS os formatos ─────────────────────────────────────────
+
+/**
+ * Importa `decksPerFormat` decks de CADA formato do MTGTop8.
+ * Formatos: standard, modern, legacy, pioneer, pauper, vintage
+ * Total máximo: 6 formatos × decksPerFormat decks
+ */
+export async function importAllTop8Formats(
+  decksPerFormat: number = 10
+): Promise<ImportResult> {
+  const totals: ImportResult = {
+    decksImported: 0,
+    cardsImported: 0,
+    decksSkipped: 0,
+    errors: [],
+  };
+
+  console.log(`\n  [MTGTop8] Importando ${decksPerFormat} decks de cada formato:`);
+  console.log(`  [MTGTop8] Formatos: ${TOP8_FORMATS.join(", ")}`);
+  console.log(`  [MTGTop8] Total máximo: ${TOP8_FORMATS.length * decksPerFormat} decks\n`);
+
+  for (const format of TOP8_FORMATS) {
+    const r = await importMTGTop8Decks(format, decksPerFormat);
+    totals.decksImported += r.decksImported;
+    totals.cardsImported += r.cardsImported;
+    totals.decksSkipped += r.decksSkipped;
+    totals.errors.push(...r.errors);
+    // Delay entre formatos
+    await new Promise((res) => setTimeout(res, 1000));
+  }
+
+  console.log(`\n  [MTGTop8] TOTAL GERAL:`);
+  console.log(`    Decks importados : ${totals.decksImported}`);
+  console.log(`    Decks pulados    : ${totals.decksSkipped}`);
+  console.log(`    Cartas salvas    : ${totals.cardsImported}`);
+
+  return totals;
 }

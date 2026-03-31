@@ -6,8 +6,29 @@ import {
 } from "../../drizzle/schema";
 
 const MTGGOLDFISH_BASE_URL = "https://www.mtggoldfish.com";
-const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-const FETCH_TIMEOUT_MS = 20000;
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+/** Timeout por requisição individual */
+const FETCH_TIMEOUT_MS = 20_000;
+
+/** Máximo de downloads simultâneos de decks (evita rate-limit) */
+const DOWNLOAD_CONCURRENCY = 3;
+
+/** Delay entre batches de download (ms) */
+const BATCH_DELAY_MS = 500;
+
+/** Formatos suportados pelo MTGGoldfish metagame */
+export const GOLDFISH_FORMATS = [
+  "standard",
+  "modern",
+  "legacy",
+  "pioneer",
+  "pauper",
+  "vintage",
+] as const;
+
+export type GoldfishFormat = (typeof GOLDFISH_FORMATS)[number];
 
 export interface MTGGoldfishDeckSummary {
   id: string;
@@ -38,7 +59,12 @@ export interface ImportResult {
   errors: string[];
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+// ─── Utilitários ──────────────────────────────────────────────────────────────
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -49,31 +75,60 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
 }
 
 function bar(current: number, total: number, width = 20): string {
-  const filled = Math.round((current / total) * width);
-  return "[" + "#".repeat(filled) + "-".repeat(width - filled) + "]";
+  const filled = total > 0 ? Math.round((current / total) * width) : 0;
+  return "[" + "█".repeat(filled) + "░".repeat(width - filled) + "]";
 }
+
+/** Executa array de promises em batches de tamanho `concurrency` */
+async function runInBatches<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number,
+  delayMs = 0
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < tasks.length; i += concurrency) {
+    const batch = tasks.slice(i, i + concurrency).map((fn) => fn());
+    const batchResults = await Promise.all(batch);
+    results.push(...batchResults);
+    if (delayMs > 0 && i + concurrency < tasks.length) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return results;
+}
+
+// ─── Extração de deck IDs por archetype ───────────────────────────────────────
 
 /**
  * Extrai IDs de deck numéricos da página de um archetype específico.
  * Padrão atual do MTGGoldfish: href="/deck/7693069" ou href="/deck/7693069#paper"
  */
-async function getDeckIdsFromArchetype(archetypeSlug: string, maxDecks = 5): Promise<{ id: string; name: string }[]> {
+async function getDeckIdsFromArchetype(
+  archetypeSlug: string,
+  maxDecks = 5
+): Promise<{ id: string; name: string }[]> {
   const url = `${MTGGOLDFISH_BASE_URL}/archetype/${archetypeSlug}#paper`;
   try {
-    const response = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT } });
+    const response = await fetchWithTimeout(url, {
+      headers: { "User-Agent": USER_AGENT },
+    });
     if (!response.ok) return [];
     const html = await response.text();
+
     // Padrão atual: href="/deck/7693069" ou href="/deck/7693069#paper"
     const deckRegex = /href="\/deck\/(\d+)(?:#[^"]*)?"/g;
     const seen = new Set<string>();
     const results: { id: string; name: string }[] = [];
-    let match;
-    // Extrair nome do archetype do slug para usar como nome do deck
+
+    // Derivar nome legível do slug
     const archetypeName = archetypeSlug
       .replace(/^(modern|standard|legacy|pioneer|vintage|pauper)-/, "")
-      .replace(/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, "") // remover UUID
-      .replace(/-\d+$/, "") // remover sufixo numérico
-      .replace(/-/g, " ");
+      .replace(/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, "")
+      .replace(/-\d+$/, "")
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+    let match;
     while ((match = deckRegex.exec(html)) !== null && results.length < maxDecks) {
       const id = match[1];
       if (!seen.has(id)) {
@@ -87,33 +142,150 @@ async function getDeckIdsFromArchetype(archetypeSlug: string, maxDecks = 5): Pro
   }
 }
 
+// ─── Download e parse de deck individual ─────────────────────────────────────
+
+async function downloadDeck(
+  summary: MTGGoldfishDeckSummary
+): Promise<MTGGoldfishDeckDetail | null> {
+  try {
+    const deckUrl = `${MTGGOLDFISH_BASE_URL}/deck/download/${summary.id}`;
+    const response = await fetchWithTimeout(deckUrl, {
+      headers: { "User-Agent": USER_AGENT },
+    });
+    if (!response.ok) return null;
+
+    const text = await response.text();
+    const lines = text.split("\n");
+    const mainboard: { cardName: string; quantity: number }[] = [];
+    const sideboard: { cardName: string; quantity: number }[] = [];
+    let isSideboard = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        isSideboard = true;
+        continue;
+      }
+      const m = /^(\d+)\s+(.+)$/.exec(trimmed);
+      if (m) {
+        const entry = { quantity: parseInt(m[1]), cardName: m[2].trim() };
+        isSideboard ? sideboard.push(entry) : mainboard.push(entry);
+      }
+    }
+
+    if (mainboard.length === 0) return null;
+
+    return {
+      ...summary,
+      mainboard,
+      sideboard,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Persistência no banco ────────────────────────────────────────────────────
+
+async function saveDeckToDb(
+  detail: MTGGoldfishDeckDetail,
+  format: string
+): Promise<{ imported: boolean; cards: number }> {
+  const db = await getDb();
+  if (!db) return { imported: false, cards: 0 };
+
+  const competitiveDeck: InsertCompetitiveDeck = {
+    sourceId: `goldfish-${detail.id}`,
+    source: "mtggoldfish",
+    name: detail.name || `Deck ${detail.id}`,
+    format,
+    archetype: detail.archetype ?? null,
+    author: "MTGGoldfish",
+    likes: 0,
+    views: 0,
+    isSynthetic: false,
+  };
+
+  const [insertedDeck] = await db
+    .insert(competitiveDecks)
+    .values(competitiveDeck)
+    .onConflictDoUpdate({
+      target: competitiveDecks.sourceId,
+      set: { name: competitiveDeck.name },
+    })
+    .returning({ id: competitiveDecks.id });
+
+  if (!insertedDeck) return { imported: false, cards: 0 };
+
+  const allCards = [
+    ...detail.mainboard.map((c) => ({ ...c, section: "mainboard" as const })),
+    ...detail.sideboard.map((c) => ({ ...c, section: "sideboard" as const })),
+  ];
+
+  for (const card of allCards) {
+    await db
+      .insert(competitiveDeckCards)
+      .values({
+        deckId: insertedDeck.id,
+        cardName: card.cardName,
+        quantity: card.quantity,
+        section: card.section,
+      })
+      .onConflictDoUpdate({
+        target: [
+          competitiveDeckCards.deckId,
+          competitiveDeckCards.cardName,
+          competitiveDeckCards.section,
+        ],
+        set: { quantity: card.quantity },
+      });
+  }
+
+  return { imported: true, cards: allCards.length };
+}
+
+// ─── Importação por formato ───────────────────────────────────────────────────
+
+/**
+ * Importa até `decksPerFormat` decks de um único formato do MTGGoldfish.
+ * Usa downloads paralelos em batches de DOWNLOAD_CONCURRENCY para performance.
+ */
 export async function importMTGGoldfishDecks(
   format: string = "modern",
-  limit: number = 20
+  decksPerFormat: number = 10
 ): Promise<ImportResult> {
-  const result: ImportResult = { decksImported: 0, cardsImported: 0, decksSkipped: 0, errors: [] };
+  const result: ImportResult = {
+    decksImported: 0,
+    cardsImported: 0,
+    decksSkipped: 0,
+    errors: [],
+  };
 
   const url = `${MTGGOLDFISH_BASE_URL}/metagame/${format}/full`;
-  console.log(`  [MTGGoldfish] Conectando a: ${url}`);
-  console.log(`  [MTGGoldfish] Aguardando resposta (timeout: ${FETCH_TIMEOUT_MS / 1000}s)...`);
+  console.log(`  [MTGGoldfish/${format.toUpperCase()}] Conectando: ${url}`);
 
   let archetypeSlugs: string[] = [];
 
   try {
     const t0 = Date.now();
-    const response = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT } });
+    const response = await fetchWithTimeout(url, {
+      headers: { "User-Agent": USER_AGENT },
+    });
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
     if (!response.ok) {
-      console.warn(`  [MTGGoldfish] HTTP ${response.status} — site pode estar bloqueando. Pulando.`);
+      console.warn(
+        `  [MTGGoldfish/${format.toUpperCase()}] HTTP ${response.status} — bloqueado. Pulando.`
+      );
       return result;
     }
 
     const html = await response.text();
-    console.log(`  [MTGGoldfish] Resposta recebida em ${elapsed}s (${(html.length / 1024).toFixed(0)} KB)`);
+    console.log(
+      `  [MTGGoldfish/${format.toUpperCase()}] Resposta em ${elapsed}s (${(html.length / 1024).toFixed(0)} KB)`
+    );
 
-    // ESTRATÉGIA ATUALIZADA: extrair slugs de archetype da página de metagame
-    // Padrão atual: href="/archetype/modern-boros-energy#paper" ou com UUID
+    // Extrair slugs de archetype — padrão: href="/archetype/modern-boros-energy"
     const archetypeRegex = /href="\/archetype\/([^"#]+)(?:#[^"]*)?"/g;
     const seenSlugs = new Set<string>();
     let match;
@@ -125,34 +297,41 @@ export async function importMTGGoldfishDecks(
       }
     }
 
-    console.log(`  [MTGGoldfish] ${archetypeSlugs.length} arquetipos encontrados no metagame ${format.toUpperCase()}`);
+    console.log(
+      `  [MTGGoldfish/${format.toUpperCase()}] ${archetypeSlugs.length} arquetipos encontrados`
+    );
 
     if (archetypeSlugs.length === 0) {
-      console.warn(`  [MTGGoldfish] Nenhum arquetipo encontrado. HTML pode ter mudado de estrutura.`);
+      console.warn(
+        `  [MTGGoldfish/${format.toUpperCase()}] Nenhum arquetipo. HTML pode ter mudado.`
+      );
       return result;
     }
   } catch (error: any) {
-    const msg = error?.name === "AbortError"
-      ? `Timeout (${FETCH_TIMEOUT_MS / 1000}s) ao conectar — site bloqueando ou lento`
-      : `Erro de conexao: ${error?.message}`;
-    console.warn(`  [MTGGoldfish] ${msg}`);
+    const msg =
+      error?.name === "AbortError"
+        ? `Timeout (${FETCH_TIMEOUT_MS / 1000}s) — site lento ou bloqueando`
+        : `Erro de conexao: ${error?.message}`;
+    console.warn(`  [MTGGoldfish/${format.toUpperCase()}] ${msg}`);
     result.errors.push(msg);
     return result;
   }
 
-  // Calcular quantos decks por archetype para atingir o limite
-  const decksPerArchetype = Math.max(1, Math.ceil(limit / Math.min(archetypeSlugs.length, limit)));
-  const archetypesToProcess = archetypeSlugs.slice(0, Math.min(archetypeSlugs.length, limit));
+  // Calcular quantos archetypes visitar para atingir decksPerFormat decks
+  // (1 deck por archetype = mais diversidade)
+  const archetypesToProcess = archetypeSlugs.slice(0, decksPerFormat);
 
-  console.log(`  [MTGGoldfish] Coletando ate ${decksPerArchetype} deck(s) de cada arquetipo (${archetypesToProcess.length} arquetipos)...`);
+  console.log(
+    `  [MTGGoldfish/${format.toUpperCase()}] Coletando 1 deck de cada um dos ${archetypesToProcess.length} arquetipos...`
+  );
 
-  // Coletar IDs de deck de cada archetype
+  // Coletar IDs de deck de cada archetype (sequencial para não sobrecarregar)
   const deckSummaries: MTGGoldfishDeckSummary[] = [];
-  for (let i = 0; i < archetypesToProcess.length && deckSummaries.length < limit; i++) {
-    const slug = archetypesToProcess[i];
-    const deckEntries = await getDeckIdsFromArchetype(slug, decksPerArchetype);
-    for (const entry of deckEntries) {
-      if (deckSummaries.length >= limit) break;
+  for (const slug of archetypesToProcess) {
+    if (deckSummaries.length >= decksPerFormat) break;
+    const entries = await getDeckIdsFromArchetype(slug, 1);
+    for (const entry of entries) {
+      if (deckSummaries.length >= decksPerFormat) break;
       deckSummaries.push({
         id: entry.id,
         name: entry.name,
@@ -163,127 +342,98 @@ export async function importMTGGoldfishDecks(
         likes: 0,
       });
     }
-    await new Promise((r) => setTimeout(r, 150)); // Rate limiting
+    await new Promise((r) => setTimeout(r, 100));
   }
 
-  console.log(`  [MTGGoldfish] ${deckSummaries.length} decks encontrados no metagame ${format.toUpperCase()}`);
+  console.log(
+    `  [MTGGoldfish/${format.toUpperCase()}] ${deckSummaries.length} decks localizados. Baixando em paralelo (${DOWNLOAD_CONCURRENCY} simultâneos)...`
+  );
 
   if (deckSummaries.length === 0) {
-    console.warn(`  [MTGGoldfish] Nenhum deck encontrado nos arquetipos.`);
+    console.warn(
+      `  [MTGGoldfish/${format.toUpperCase()}] Nenhum deck encontrado nos arquetipos.`
+    );
     return result;
   }
 
-  console.log(`  [MTGGoldfish] Baixando detalhes de ${deckSummaries.length} decks...`);
+  // Downloads paralelos em batches
+  let completed = 0;
+  const downloadTasks = deckSummaries.map((summary) => async () => {
+    const detail = await downloadDeck(summary);
+    completed++;
+    process.stdout.write(
+      `\r  [MTGGoldfish/${format.toUpperCase()}] ${bar(completed, deckSummaries.length)} ${completed}/${deckSummaries.length}`
+    );
 
-  for (let i = 0; i < deckSummaries.length; i++) {
-    const summary = deckSummaries[i];
-    const progress = bar(i + 1, deckSummaries.length);
-    process.stdout.write(`\r  [MTGGoldfish] ${progress} ${i + 1}/${deckSummaries.length} deck ID:${summary.id}`);
+    if (!detail) {
+      result.decksSkipped++;
+      return;
+    }
 
     try {
-      const deckUrl = `${MTGGOLDFISH_BASE_URL}/deck/download/${summary.id}`;
-      const response = await fetchWithTimeout(deckUrl, { headers: { "User-Agent": USER_AGENT } });
-
-      if (!response.ok) {
-        result.decksSkipped++;
-        continue;
-      }
-
-      const text = await response.text();
-      const lines = text.split("\n");
-      const mainboard: any[] = [];
-      const sideboard: any[] = [];
-      let isSideboard = false;
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) { isSideboard = true; continue; }
-        const m = /^(\d+)\s+(.+)$/.exec(trimmed);
-        if (m) {
-          const entry = { quantity: parseInt(m[1]), cardName: m[2].trim() };
-          isSideboard ? sideboard.push(entry) : mainboard.push(entry);
-        }
-      }
-
-      // Ignorar decks vazios
-      if (mainboard.length === 0) {
-        result.decksSkipped++;
-        continue;
-      }
-
-      const deckDetail: MTGGoldfishDeckDetail = {
-        id: summary.id,
-        name: summary.name || `Deck ${summary.id}`,
-        format,
-        archetype: summary.archetype,
-        author: "MTGGoldfish",
-        views: 0,
-        likes: 0,
-        mainboard,
-        sideboard,
-      };
-
-      const competitiveDeck: InsertCompetitiveDeck = {
-        sourceId: `goldfish-${deckDetail.id}`,
-        source: "mtggoldfish",
-        name: deckDetail.name,
-        format,
-        archetype: summary.archetype ?? null,
-        author: deckDetail.author,
-        likes: deckDetail.likes,
-        views: deckDetail.views,
-        isSynthetic: false,
-      };
-
-      const db = await getDb();
-      if (!db) continue;
-
-      const [insertedDeck] = await db
-        .insert(competitiveDecks)
-        .values(competitiveDeck)
-        .onConflictDoUpdate({
-          target: competitiveDecks.sourceId,
-          set: { name: deckDetail.name },
-        })
-        .returning({ id: competitiveDecks.id });
-
-      if (insertedDeck) {
+      const { imported, cards } = await saveDeckToDb(detail, format);
+      if (imported) {
         result.decksImported++;
-        const allCards = [
-          ...deckDetail.mainboard.map((c) => ({ ...c, section: "mainboard" })),
-          ...deckDetail.sideboard.map((c) => ({ ...c, section: "sideboard" })),
-        ];
-        for (const card of allCards) {
-          await db.insert(competitiveDeckCards).values({
-            deckId: insertedDeck.id,
-            cardName: card.cardName,
-            quantity: card.quantity,
-            section: card.section as any,
-          }).onConflictDoUpdate({
-            target: [competitiveDeckCards.deckId, competitiveDeckCards.cardName, competitiveDeckCards.section],
-            set: { quantity: card.quantity },
-          });
-          result.cardsImported++;
-        }
+        result.cardsImported += cards;
       } else {
         result.decksSkipped++;
       }
-
-      await new Promise((r) => setTimeout(r, 300));
     } catch (error: any) {
-      const msg = error?.name === "AbortError"
-        ? `Timeout no deck ${summary.id}`
-        : `Erro no deck ${summary.id}: ${error?.message}`;
-      result.errors.push(msg);
+      result.errors.push(`DB error deck ${summary.id}: ${error?.message}`);
       result.decksSkipped++;
     }
-  }
+  });
 
+  await runInBatches(downloadTasks, DOWNLOAD_CONCURRENCY, BATCH_DELAY_MS);
   process.stdout.write("\n");
-  console.log(`  [MTGGoldfish] Concluido: ${result.decksImported} importados, ${result.decksSkipped} pulados, ${result.cardsImported} cartas.`);
+
+  console.log(
+    `  [MTGGoldfish/${format.toUpperCase()}] ✓ ${result.decksImported} importados | ${result.decksSkipped} pulados | ${result.cardsImported} cartas`
+  );
   if (result.errors.length > 0) {
-    console.warn(`  [MTGGoldfish] ${result.errors.length} avisos: ${result.errors.slice(0, 2).join("; ")}`);
+    console.warn(
+      `  [MTGGoldfish/${format.toUpperCase()}] ${result.errors.length} avisos: ${result.errors.slice(0, 2).join("; ")}`
+    );
   }
 
   return result;
+}
+
+// ─── Importação de TODOS os formatos ─────────────────────────────────────────
+
+/**
+ * Importa `decksPerFormat` decks de CADA formato do MTGGoldfish.
+ * Formatos: standard, modern, legacy, pioneer, pauper, vintage
+ * Total máximo: 6 formatos × decksPerFormat decks
+ */
+export async function importAllGoldfishFormats(
+  decksPerFormat: number = 10
+): Promise<ImportResult> {
+  const totals: ImportResult = {
+    decksImported: 0,
+    cardsImported: 0,
+    decksSkipped: 0,
+    errors: [],
+  };
+
+  console.log(`\n  [MTGGoldfish] Importando ${decksPerFormat} decks de cada formato:`);
+  console.log(`  [MTGGoldfish] Formatos: ${GOLDFISH_FORMATS.join(", ")}`);
+  console.log(`  [MTGGoldfish] Total máximo: ${GOLDFISH_FORMATS.length * decksPerFormat} decks\n`);
+
+  for (const format of GOLDFISH_FORMATS) {
+    const r = await importMTGGoldfishDecks(format, decksPerFormat);
+    totals.decksImported += r.decksImported;
+    totals.cardsImported += r.cardsImported;
+    totals.decksSkipped += r.decksSkipped;
+    totals.errors.push(...r.errors);
+    // Delay entre formatos para não sobrecarregar o servidor
+    await new Promise((res) => setTimeout(res, 1000));
+  }
+
+  console.log(`\n  [MTGGoldfish] TOTAL GERAL:`);
+  console.log(`    Decks importados : ${totals.decksImported}`);
+  console.log(`    Decks pulados    : ${totals.decksSkipped}`);
+  console.log(`    Cartas salvas    : ${totals.cardsImported}`);
+
+  return totals;
 }
