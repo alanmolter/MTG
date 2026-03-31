@@ -329,11 +329,32 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
 
   console.log(`[KMeans] Running ml-kmeans: k=${adjustedK}, dim=${maxDim}, n=${filteredData.length}, max_iterations=${maxIterations}`);
 
-  // Executar a biblioteca real
-  const result = kmeans(filteredData, adjustedK, {
-    maxIterations,
-    initialization: 'kmeans++',
-  });
+  // Executar a biblioteca real com fallback robusto.
+  // O kmeans++ pode falhar com "Row index out of range" quando existem
+  // vetores duplicados ou quase-duplicados que geram probabilidades NaN
+  // na etapa de inicialização (divisão por zero no cumSum).
+  let result;
+  try {
+    result = kmeans(filteredData, adjustedK, {
+      maxIterations,
+      initialization: 'kmeans++',
+    });
+  } catch (initErr: any) {
+    console.warn(`[KMeans] kmeans++ falhou (${initErr?.message}). Usando inicialização 'random'...`);
+    try {
+      result = kmeans(filteredData, adjustedK, {
+        maxIterations,
+        initialization: 'random',
+      });
+    } catch (randomErr: any) {
+      console.warn(`[KMeans] Fallback 'random' também falhou (${randomErr?.message}). Tentando k=${Math.max(2, Math.floor(adjustedK / 2))}...`);
+      const reducedK = Math.max(2, Math.floor(adjustedK / 2));
+      result = kmeans(filteredData, reducedK, {
+        maxIterations,
+        initialization: 'random',
+      });
+    }
+  }
 
   const assignments = result.clusters;
   const centroids = result.centroids;

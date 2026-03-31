@@ -71,16 +71,25 @@ export class ModelEvaluator {
   }
 
   private static calculateTurnPower(features: CardFeatures[], turn: number): number {
-    // Ameaças jogadas no turno baseado na média de curva
+    // Ameaças jogáveis no turno (CMC <= turno atual)
     const playable = features.filter(f => f.cmc <= turn && f.roles.includes("threat"));
-    const avgImpact = playable.length > 0 ? playable.reduce((s, f) => s + f.impactScore, 0) / 10 : 0;
-    return avgImpact * (turn * 0.5); // escala com o jogo
+    if (playable.length === 0) return 0;
+
+    // Simular mão de 7 cartas: em cada turno, o jogador tem acesso a ~7 + turno cartas
+    // do deck (mão inicial + draws). Limitar as ameaças ativas a esse número
+    // evita que decks Commander (100 cartas) dominem decks Standard (60 cartas)
+    // por puro volume de cartas jogáveis.
+    const handSize = Math.min(playable.length, 6 + turn);
+    const sampled = playable.slice(0, handSize);
+    const avgImpact = sampled.reduce((s, f) => s + f.impactScore, 0) / sampled.length;
+    return avgImpact * (turn * 0.4); // escala com o jogo
   }
 
   private static calculateInteraction(features: CardFeatures[], turn: number): number {
-    // Remoções/Counterspells disponíveis
+    // Remoções/Counterspells disponíveis — limitadas pela mão simulada
     const interaction = features.filter(f => f.cmc <= turn && (f.roles.includes("removal") || f.roles.includes("counterspell")));
-    return interaction.length * 0.3;
+    const available = Math.min(interaction.length, 3 + Math.floor(turn / 2));
+    return available * 0.3;
   }
 
   /**
@@ -141,8 +150,10 @@ export class ExperimentTracker {
       metrics
     };
     this.logs.push(entry);
-    console.log(`[TRACKER] ${name}:`, metrics);
-    // TODO: persistir em disco/banco
+    // Log silencioso: armazena em memória para getHistory().
+    // Não imprime no console para evitar spam de JSON multi-linha
+    // a cada iteração do self-play (100 iterações = 100 blocos JSON).
+    // O feedback visual é feito pela barra de progresso + printForgeSelfPlayStatus.
   }
 
   public static getHistory() {
