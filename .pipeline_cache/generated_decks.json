@@ -1,0 +1,2414 @@
+[
+  {
+    "cards": [
+      {
+        "name": "Spell33",
+        "type": "Creature",
+        "cmc": 4,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell40",
+        "type": "Creature",
+        "cmc": 5,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell37",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell20",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Land13",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land18",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land7",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land8",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land29",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land24",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land2",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land2",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land16",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land0",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land4",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land14",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land27",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land8",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land12",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land13",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land16",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land27",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land3",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land12",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land18",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      }
+    ],
+    "best_score": 50.012056657314304,
+    "seed": 17
+  },
+  {
+    "cards": [
+      {
+        "name": "Spell20",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell23",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell20",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell35",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell35",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell33",
+        "type": "Creature",
+        "cmc": 4,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Land14",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land10",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land29",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land19",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land26",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land10",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land16",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land14",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land13",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land25",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land26",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land24",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land20",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land25",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land13",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land12",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land12",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land17",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land14",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land18",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land20",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land18",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land28",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      }
+    ],
+    "best_score": 50.01289112234116,
+    "seed": 18
+  },
+  {
+    "cards": [
+      {
+        "name": "Spell29",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell41",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell11",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell11",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell33",
+        "type": "Creature",
+        "cmc": 4,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell33",
+        "type": "Creature",
+        "cmc": 4,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell33",
+        "type": "Creature",
+        "cmc": 4,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Land28",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land2",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land29",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land6",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land6",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land9",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land28",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land4",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land17",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land21",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land16",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land22",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land29",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land19",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land2",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land22",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land2",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land3",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land19",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land2",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land10",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land17",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land14",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      }
+    ],
+    "best_score": 50.012602039814,
+    "seed": 19
+  },
+  {
+    "cards": [
+      {
+        "name": "Spell1",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell10",
+        "type": "Creature",
+        "cmc": 5,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell20",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell20",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Land25",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land11",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land21",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land19",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land24",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land7",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land18",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land19",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land7",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land20",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land0",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land17",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land19",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land18",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land20",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land12",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land14",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land11",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land9",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land11",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land15",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land3",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      }
+    ],
+    "best_score": 50.012247392177585,
+    "seed": 20
+  },
+  {
+    "cards": [
+      {
+        "name": "Spell4",
+        "type": "Creature",
+        "cmc": 5,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell26",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell20",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell4",
+        "type": "Creature",
+        "cmc": 5,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell41",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell41",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell41",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Land24",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land0",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land12",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land23",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land8",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land4",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land12",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land19",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land28",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land13",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land15",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land28",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land14",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land3",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land13",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land15",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land8",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land10",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land22",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land7",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land16",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land7",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land24",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      }
+    ],
+    "best_score": 50.01242769622803,
+    "seed": 21
+  },
+  {
+    "cards": [
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell31",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell34",
+        "type": "Creature",
+        "cmc": 5,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell35",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell19",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell8",
+        "type": "Creature",
+        "cmc": 3,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell43",
+        "type": "Creature",
+        "cmc": 2,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell23",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Spell17",
+        "type": "Creature",
+        "cmc": 6,
+        "text": "",
+        "rarity": "common"
+      },
+      {
+        "name": "Land11",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land13",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land23",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land29",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land4",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land7",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land8",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land0",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land25",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land26",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land25",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land24",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land29",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land29",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land18",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land15",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land11",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land9",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land22",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      },
+      {
+        "name": "Land5",
+        "type": "Land",
+        "cmc": 0,
+        "text": "T: Add one mana of any color."
+      }
+    ],
+    "best_score": 50.01243514680863,
+    "seed": 22
+  }
+]

@@ -1,0 +1,290 @@
+[
+  {
+    "cardName": "Spell1",
+    "wins": 8,
+    "losses": 3,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell10",
+    "wins": 8,
+    "losses": 3,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell20",
+    "wins": 31,
+    "losses": 33,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell43",
+    "wins": 350,
+    "losses": 358,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell17",
+    "wins": 436,
+    "losses": 430,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell19",
+    "wins": 54,
+    "losses": 64,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell8",
+    "wins": 136,
+    "losses": 124,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land25",
+    "wins": 24,
+    "losses": 21,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land11",
+    "wins": 34,
+    "losses": 15,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land21",
+    "wins": 15,
+    "losses": 8,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land19",
+    "wins": 48,
+    "losses": 32,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land24",
+    "wins": 32,
+    "losses": 34,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land7",
+    "wins": 37,
+    "losses": 31,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land18",
+    "wins": 31,
+    "losses": 37,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land5",
+    "wins": 64,
+    "losses": 63,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land20",
+    "wins": 22,
+    "losses": 18,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land0",
+    "wins": 22,
+    "losses": 21,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land17",
+    "wins": 25,
+    "losses": 19,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land12",
+    "wins": 32,
+    "losses": 45,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land14",
+    "wins": 33,
+    "losses": 41,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land9",
+    "wins": 20,
+    "losses": 11,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land15",
+    "wins": 27,
+    "losses": 20,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land3",
+    "wins": 24,
+    "losses": 23,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell31",
+    "wins": 5,
+    "losses": 3,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell34",
+    "wins": 5,
+    "losses": 3,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell35",
+    "wins": 11,
+    "losses": 15,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell23",
+    "wins": 8,
+    "losses": 9,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land13",
+    "wins": 29,
+    "losses": 45,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land23",
+    "wins": 12,
+    "losses": 10,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land29",
+    "wins": 34,
+    "losses": 33,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land4",
+    "wins": 21,
+    "losses": 23,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land8",
+    "wins": 23,
+    "losses": 33,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land26",
+    "wins": 11,
+    "losses": 15,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land22",
+    "wins": 26,
+    "losses": 20,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell33",
+    "wins": 26,
+    "losses": 29,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell40",
+    "wins": 2,
+    "losses": 8,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell37",
+    "wins": 2,
+    "losses": 8,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land2",
+    "wins": 32,
+    "losses": 36,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land16",
+    "wins": 21,
+    "losses": 34,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land27",
+    "wins": 4,
+    "losses": 16,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell29",
+    "wins": 7,
+    "losses": 5,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell41",
+    "wins": 28,
+    "losses": 26,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell11",
+    "wins": 14,
+    "losses": 10,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land28",
+    "wins": 31,
+    "losses": 30,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land6",
+    "wins": 14,
+    "losses": 10,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Land10",
+    "wins": 20,
+    "losses": 24,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell4",
+    "wins": 14,
+    "losses": 14,
+    "avgSynergyScore": 0.5
+  },
+  {
+    "cardName": "Spell26",
+    "wins": 7,
+    "losses": 7,
+    "avgSynergyScore": 0.5
+  }
+]

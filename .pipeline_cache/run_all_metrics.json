@@ -1,0 +1,14 @@
+{
+  "savedAt": "2026-03-30T00:40:05Z",
+  "iteration": 0,
+  "n_decks": 6,
+  "n_matches": 48,
+  "winrate_player0": 0.6041666666666666,
+  "avg_turns_mini_engine": 91.70833333333333,
+  "meta_diversity_card_names": 48,
+  "matches_stub": 32,
+  "matches_mini_engine": 16,
+  "extra": {
+    "mode": "full"
+  }
+}
