@@ -1,7 +1,9 @@
 /**
  * Meta Decks Database
- * 
- * Exemplo de decks "Gold Standard" (MTGGoldfish/MTGTop8) para o sistema aprender padrões.
+ *
+ * Decks "Gold Standard" (MTGGoldfish/MTGTop8) para o sistema aprender padrões.
+ * Cada arquétipo deve ter pelo menos 2 oponentes para que o winrate não seja
+ * distorcido por um único deck muito forte ou muito fraco.
  */
 
 export const META_DECKS = {
@@ -25,6 +27,16 @@ export const META_DECKS = {
     4 Luminarch Aspirant
     4 Skyclave Apparition
     22 Plains
+    `,
+    `
+    4 Goblin Guide
+    4 Goblin Bushwhacker
+    4 Reckless Bushwhacker
+    4 Goblin Grenade
+    4 Lightning Bolt
+    4 Shard Volley
+    4 Goblin Rabblemaster
+    20 Mountain
     `
   ],
   control: [
@@ -46,6 +58,16 @@ export const META_DECKS = {
     4 Dissipate
     4 Negate
     26 Plains
+    `,
+    `
+    4 Snapcaster Mage
+    4 Force of Will
+    4 Brainstorm
+    4 Ponder
+    4 Daze
+    4 Spell Pierce
+    4 Jace, the Mind Sculptor
+    24 Island
     `
   ],
   midrange: [
@@ -57,6 +79,24 @@ export const META_DECKS = {
     4 Fatal Push
     4 Thoughtseize
     24 Swamp
+    `,
+    `
+    4 Questing Beast
+    4 Lovestruck Beast
+    4 Edgewall Innkeeper
+    4 Bonecrusher Giant
+    4 Embercleave
+    4 Rimrock Knight
+    24 Forest
+    `,
+    `
+    4 Tarmogoyf
+    4 Dark Confidant
+    4 Liliana of the Veil
+    4 Inquisition of Kozilek
+    4 Terminate
+    4 Bloodbraid Elf
+    20 Swamp
     `
   ]
 };

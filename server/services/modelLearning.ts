@@ -88,6 +88,9 @@ export class modelLearningService {
     // Log apenas uma vez por sessão de processo
     if (!_weightCacheLogged && weights.length > 0) {
       _weightCacheLogged = true;
+      // Garante que o log do Brain nao sobreponha a barra de progresso
+      // (que usa \r sem \n). O \n extra cria uma linha limpa antes dos logs.
+      process.stdout.write("\n");
       console.log(`[Brain] Dados de inteligencia carregados: ${weights.length} cartas`);
       console.log(`[Brain] Alta relevancia (>=10): ${highCount} | Media (2-9): ${midCount} | Base (<2): ${baseCount}`);
       console.log(`[Brain] Fontes: forge_reality + self_play + commander_train + user_generation + rl_policy`);
