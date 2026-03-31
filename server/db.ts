@@ -26,6 +26,17 @@ export async function getDb() {
 }
 
 /**
+ * Retorna o cliente postgres.js diretamente (para queries raw sem Drizzle).
+ * Útil para INSERT/UPSERT onde o Drizzle gera parâmetros duplicados.
+ */
+export async function getRawClient() {
+  if (!_client && process.env.DATABASE_URL) {
+    await getDb(); // inicializa _client
+  }
+  return _client;
+}
+
+/**
  * Fecha o pool de conexoes do banco.
  * DEVE ser chamado ao final de scripts de pipeline para que o processo Node.js encerre.
  */

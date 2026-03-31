@@ -1,5 +1,4 @@
-import { getDb } from "../db";
-import { sql } from "drizzle-orm";
+import { getRawClient } from "../db";
 
 const MTGTOP8_BASE_URL = "https://mtgtop8.com";
 const USER_AGENT =
@@ -204,25 +203,8 @@ async function downloadDeck(
 }
 
 // ─── Persistência no banco ────────────────────────────────────────────────────
-// NOTA: Usa SQL raw em vez do Drizzle ORM.
-// Detecta automaticamente se a coluna is_synthetic existe no banco.
-
-let _hasIsSynthetic: boolean | null = null;
-
-async function checkHasIsSynthetic(db: any): Promise<boolean> {
-  if (_hasIsSynthetic !== null) return _hasIsSynthetic;
-  try {
-    const result = await db.execute(sql`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'competitive_decks' AND column_name = 'is_synthetic'
-    `);
-    const rows = Array.isArray(result) ? result : (result as any).rows ?? [];
-    _hasIsSynthetic = rows.length > 0;
-  } catch {
-    _hasIsSynthetic = false;
-  }
-  return _hasIsSynthetic;
-}
+// Usa o cliente postgres.js DIRETAMENTE (tagged template literal nativa).
+// Contorna completamente o Drizzle ORM para evitar o bug de parâmetros duplicados.
 
 async function saveDeckToDb(
   sourceId: string,
@@ -234,37 +216,25 @@ async function saveDeckToDb(
     format: string;
   }
 ): Promise<{ imported: boolean; cards: number }> {
-  const db = await getDb();
-  if (!db) return { imported: false, cards: 0 };
+  const pgClient = await getRawClient();
+  if (!pgClient) return { imported: false, cards: 0 };
 
   const fullSourceId = `top8-${sourceId}`;
   const name        = detail.name || `Deck ${sourceId}`;
   const archetype   = detail.archetype || null;
-  const hasSynth    = await checkHasIsSynthetic(db);
 
-  // INSERT adaptativo: com ou sem is_synthetic dependendo do schema real
-  const rows = hasSynth
-    ? await db.execute(sql`
-        INSERT INTO competitive_decks
-          (source_id, source, name, format, archetype, author, is_synthetic)
-        VALUES
-          (${fullSourceId}, 'mtgtop8', ${name}, ${detail.format}, ${archetype}, 'MTGTop8', false)
-        ON CONFLICT (source_id)
-          DO UPDATE SET name = EXCLUDED.name
-        RETURNING id
-      `)
-    : await db.execute(sql`
-        INSERT INTO competitive_decks
-          (source_id, source, name, format, archetype, author)
-        VALUES
-          (${fullSourceId}, 'mtgtop8', ${name}, ${detail.format}, ${archetype}, 'MTGTop8')
-        ON CONFLICT (source_id)
-          DO UPDATE SET name = EXCLUDED.name
-        RETURNING id
-      `);
+  // INSERT usando postgres.js tagged template literal (sem Drizzle)
+  const rows = await pgClient`
+    INSERT INTO competitive_decks
+      (source_id, source, name, format, archetype, author)
+    VALUES
+      (${fullSourceId}, ${'mtgtop8'}, ${name}, ${detail.format}, ${archetype}, ${'MTGTop8'})
+    ON CONFLICT (source_id)
+      DO UPDATE SET name = EXCLUDED.name
+    RETURNING id
+  `;
 
-  const rowArr = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
-  const deckId = rowArr[0]?.id as number | undefined;
+  const deckId = rows[0]?.id as number | undefined;
   if (!deckId) return { imported: false, cards: 0 };
 
   const allCards = [
@@ -273,12 +243,12 @@ async function saveDeckToDb(
   ];
 
   for (const card of allCards) {
-    await db.execute(sql`
+    await pgClient`
       INSERT INTO competitive_deck_cards (deck_id, card_name, quantity, section)
       VALUES (${deckId}, ${card.cardName}, ${card.quantity}, ${card.section})
       ON CONFLICT (deck_id, card_name, section)
         DO UPDATE SET quantity = EXCLUDED.quantity
-    `);
+    `;
   }
 
   return { imported: true, cards: allCards.length };
