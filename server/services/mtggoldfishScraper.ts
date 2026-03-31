@@ -182,9 +182,25 @@ async function downloadDeck(
 }
 
 // ─── Persistência no banco ────────────────────────────────────────────────────
-// NOTA: Usa SQL raw em vez do Drizzle ORM para o INSERT principal.
-// O Drizzle 0.44.x tem um bug onde onConflictDoUpdate + returning() gera
-// parâmetros duplicados ($7 e $8 para o mesmo valor), causando "Failed query".
+// NOTA: Usa SQL raw em vez do Drizzle ORM.
+// Detecta automaticamente se a coluna is_synthetic existe no banco.
+
+let _hasIsSynthetic: boolean | null = null;
+
+async function checkHasIsSynthetic(db: any): Promise<boolean> {
+  if (_hasIsSynthetic !== null) return _hasIsSynthetic;
+  try {
+    const result = await db.execute(sql`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'competitive_decks' AND column_name = 'is_synthetic'
+    `);
+    const rows = Array.isArray(result) ? result : (result as any).rows ?? [];
+    _hasIsSynthetic = rows.length > 0;
+  } catch {
+    _hasIsSynthetic = false;
+  }
+  return _hasIsSynthetic;
+}
 
 async function saveDeckToDb(
   detail: MTGGoldfishDeckDetail,
@@ -193,23 +209,32 @@ async function saveDeckToDb(
   const db = await getDb();
   if (!db) return { imported: false, cards: 0 };
 
-  const sourceId = `goldfish-${detail.id}`;
-  const name     = detail.name || `Deck ${detail.id}`;
+  const sourceId  = `goldfish-${detail.id}`;
+  const name      = detail.name || `Deck ${detail.id}`;
   const archetype = detail.archetype ?? null;
+  const hasSynth  = await checkHasIsSynthetic(db);
 
-  // INSERT com SQL raw — contorna o bug do Drizzle com parâmetros duplicados
-  // Usa apenas as colunas que SEMPRE existem no banco (migrations 0003 + 0004)
-  const rows = await db.execute(sql`
-    INSERT INTO competitive_decks
-      (source_id, source, name, format, archetype, author, is_synthetic)
-    VALUES
-      (${sourceId}, 'mtggoldfish', ${name}, ${format}, ${archetype}, 'MTGGoldfish', false)
-    ON CONFLICT (source_id)
-      DO UPDATE SET name = EXCLUDED.name
-    RETURNING id
-  `);
+  // INSERT adaptativo: com ou sem is_synthetic dependendo do schema real
+  const rows = hasSynth
+    ? await db.execute(sql`
+        INSERT INTO competitive_decks
+          (source_id, source, name, format, archetype, author, is_synthetic)
+        VALUES
+          (${sourceId}, 'mtggoldfish', ${name}, ${format}, ${archetype}, 'MTGGoldfish', false)
+        ON CONFLICT (source_id)
+          DO UPDATE SET name = EXCLUDED.name
+        RETURNING id
+      `)
+    : await db.execute(sql`
+        INSERT INTO competitive_decks
+          (source_id, source, name, format, archetype, author)
+        VALUES
+          (${sourceId}, 'mtggoldfish', ${name}, ${format}, ${archetype}, 'MTGGoldfish')
+        ON CONFLICT (source_id)
+          DO UPDATE SET name = EXCLUDED.name
+        RETURNING id
+      `);
 
-  // Drizzle retorna rows como array ou objeto com .rows dependendo da versão
   const rowArr = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
   const deckId = rowArr[0]?.id as number | undefined;
   if (!deckId) return { imported: false, cards: 0 };
