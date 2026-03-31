@@ -9,6 +9,9 @@ export interface DeckVector {
   colors: string;
   format: string;
   cardCount: number;
+  creatureRatio: number;    // proporção de criaturas no deck
+  instantSorceryRatio: number; // proporção de instants+sorceries
+  avgCmc: number;           // custo de mana médio
 }
 
 export interface ClusterResult {
@@ -32,7 +35,8 @@ export interface ClusteringStats {
 }
 
 /**
- * Converte um deck competitivo para um vetor numérico usando embeddings das cartas
+ * Converte um deck competitivo para um vetor numérico usando embeddings das cartas.
+ * Agora também coleta creatureRatio, instantSorceryRatio e avgCmc para classificação.
  */
 export async function deckToVector(deckId: number): Promise<DeckVector | null> {
   const db = await getDb();
@@ -60,6 +64,10 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
     const cardVectors: number[][] = [];
     let totalQuantity = 0;
     const colorSet = new Set<string>();
+    let creatureCount = 0;
+    let instantSorceryCount = 0;
+    let totalCmc = 0;
+    let cmcCards = 0;
 
     for (const deckCard of deckCards) {
       const card = await db
@@ -69,11 +77,27 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
         .limit(1);
 
       if (card.length > 0) {
-        // Coletar cores das cartas para calcular identidade de cor do deck
+        // Coletar cores das cartas
         if (card[0].colors) {
           card[0].colors.split("").forEach(c => {
             if ("WUBRG".includes(c)) colorSet.add(c);
           });
+        }
+
+        // Coletar tipo para classificação de archetype
+        const typeLine = (card[0].type || "").toLowerCase();
+        if (typeLine.includes("creature")) {
+          creatureCount += deckCard.quantity;
+        }
+        if (typeLine.includes("instant") || typeLine.includes("sorcery")) {
+          instantSorceryCount += deckCard.quantity;
+        }
+
+        // Coletar CMC
+        const cmc = card[0].cmc ?? 0;
+        if (cmc > 0) {
+          totalCmc += cmc * deckCard.quantity;
+          cmcCards += deckCard.quantity;
         }
 
         const embedding = await getCardEmbedding(card[0].id);
@@ -111,6 +135,9 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
       colors: computedColors,
       format: deck[0].format,
       cardCount: totalQuantity,
+      creatureRatio: totalQuantity > 0 ? creatureCount / totalQuantity : 0,
+      instantSorceryRatio: totalQuantity > 0 ? instantSorceryCount / totalQuantity : 0,
+      avgCmc: cmcCards > 0 ? totalCmc / cmcCards : 0,
     };
   } catch (error) {
     console.error("Error converting deck to vector:", error);
@@ -122,7 +149,15 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
  * Calcula a distância euclidiana entre dois vetores
  */
 export function euclideanDistance(a: number[], b: number[]): number {
-  if (a.length !== b.length) return Infinity;
+  if (a.length !== b.length) {
+    const minLen = Math.min(a.length, b.length);
+    let sum = 0;
+    for (let i = 0; i < minLen; i++) {
+      const diff = a[i] - b[i];
+      sum += diff * diff;
+    }
+    return Math.sqrt(sum);
+  }
 
   let sum = 0;
   for (let i = 0; i < a.length; i++) {
@@ -142,7 +177,7 @@ export function calculateCentroid(vectors: number[][]): number[] {
   const centroid = new Array(vectorLength).fill(0);
 
   for (const vector of vectors) {
-    for (let i = 0; i < vectorLength; i++) {
+    for (let i = 0; i < Math.min(vectorLength, vector.length); i++) {
       centroid[i] += vector[i];
     }
   }
@@ -181,22 +216,18 @@ function normalizeVectors(vectors: DeckVector[]): DeckVector[] {
 
 // ─── Implementação KMeans manual robusta ────────────────────────────────────
 // Substitui ml-kmeans que tem bug no updateCenters com clusters vazios.
-// Trata: clusters vazios (re-seed), vetores NaN, dimensões inconsistentes.
 
 /**
- * Inicialização kmeans++ manual: escolhe centroids iniciais com probabilidade
- * proporcional à distância ao centroid mais próximo.
+ * Inicialização kmeans++ manual
  */
 function kmeansppInit(data: number[][], k: number): number[][] {
   const n = data.length;
   const dim = data[0].length;
   const centroids: number[][] = [];
 
-  // Primeiro centroid: aleatório
   centroids.push([...data[Math.floor(Math.random() * n)]]);
 
   for (let c = 1; c < k; c++) {
-    // Calcular distância mínima de cada ponto ao centroid mais próximo
     const distances = new Float64Array(n);
     let totalDist = 0;
 
@@ -214,13 +245,11 @@ function kmeansppInit(data: number[][], k: number): number[][] {
       totalDist += minDist;
     }
 
-    // Se totalDist é 0 (todos os pontos são idênticos), escolher aleatório
     if (totalDist === 0 || !isFinite(totalDist)) {
       centroids.push([...data[Math.floor(Math.random() * n)]]);
       continue;
     }
 
-    // Escolher próximo centroid com probabilidade proporcional à distância²
     let r = Math.random() * totalDist;
     let cumSum = 0;
     let chosen = 0;
@@ -238,8 +267,7 @@ function kmeansppInit(data: number[][], k: number): number[][] {
 }
 
 /**
- * Atribui cada ponto ao centroid mais próximo.
- * Retorna array de assignments (índice do cluster para cada ponto).
+ * Atribui cada ponto ao centroid mais próximo
  */
 function assignPoints(data: number[][], centroids: number[][]): number[] {
   const n = data.length;
@@ -269,8 +297,7 @@ function assignPoints(data: number[][], centroids: number[][]): number[] {
 }
 
 /**
- * Recalcula centroids a partir dos assignments.
- * TRATA CLUSTERS VAZIOS: re-seed com o ponto mais distante do cluster mais populoso.
+ * Recalcula centroids. TRATA CLUSTERS VAZIOS com re-seed.
  */
 function updateCentroids(data: number[][], assignments: number[], k: number): number[][] {
   const dim = data[0].length;
@@ -282,7 +309,6 @@ function updateCentroids(data: number[][], assignments: number[], k: number): nu
     sums.push(new Array(dim).fill(0));
   }
 
-  // Somar vetores por cluster
   for (let i = 0; i < data.length; i++) {
     const c = assignments[i];
     counts[c]++;
@@ -291,12 +317,10 @@ function updateCentroids(data: number[][], assignments: number[], k: number): nu
     }
   }
 
-  // Calcular médias
   for (let c = 0; c < k; c++) {
     if (counts[c] > 0) {
       centroids.push(sums[c].map(s => s / counts[c]));
     } else {
-      // CLUSTER VAZIO: re-seed com o ponto mais distante do cluster mais populoso
       const largestCluster = counts.indexOf(Math.max(...counts));
       let maxDist = -1;
       let farthestIdx = 0;
@@ -316,7 +340,7 @@ function updateCentroids(data: number[][], assignments: number[], k: number): nu
       }
 
       centroids.push([...data[farthestIdx]]);
-      console.log(`[KMeans] Cluster ${c} ficou vazio → re-seed com ponto mais distante do cluster ${largestCluster}`);
+      console.log(`[KMeans] Cluster ${c} vazio → re-seed com ponto do cluster ${largestCluster}`);
     }
   }
 
@@ -324,8 +348,7 @@ function updateCentroids(data: number[][], assignments: number[], k: number): nu
 }
 
 /**
- * Implementação KMeans manual robusta.
- * Substitui ml-kmeans que tem bug com clusters vazios no updateCenters.
+ * Implementação KMeans manual robusta
  */
 function robustKMeans(
   data: number[][],
@@ -334,20 +357,15 @@ function robustKMeans(
 ): { assignments: number[]; centroids: number[][]; converged: boolean; iterations: number } {
   const n = data.length;
 
-  // Inicialização kmeans++
   let centroids = kmeansppInit(data, k);
   let assignments = assignPoints(data, centroids);
   let converged = false;
   let iter = 0;
 
   for (iter = 0; iter < maxIterations; iter++) {
-    // Recalcular centroids (com tratamento de clusters vazios)
     centroids = updateCentroids(data, assignments, k);
-
-    // Re-atribuir pontos
     const newAssignments = assignPoints(data, centroids);
 
-    // Verificar convergência
     let changed = 0;
     for (let i = 0; i < n; i++) {
       if (newAssignments[i] !== assignments[i]) changed++;
@@ -365,112 +383,118 @@ function robustKMeans(
 }
 
 /**
- * Atribui nomes de arquétipos baseado nas características dos clusters
- * Usa análise de cores e tamanho de deck + heurística de CMC
+ * Atribui nomes de arquétipos baseado nas características REAIS dos decks.
+ * Usa creatureRatio, instantSorceryRatio, avgCmc e cores — não apenas cardCount.
  */
 function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { archetype: string; confidence: number } {
   if (clusterVectors.length === 0) return { archetype: "Unknown", confidence: 0 };
 
-  const avgCardCount = clusterVectors.reduce((sum, dv) => sum + dv.cardCount, 0) / clusterVectors.length;
+  const totalDecks = clusterVectors.length;
 
+  // ─── Calcular métricas médias do cluster ──────────────────────────
+  const avgCreatureRatio = clusterVectors.reduce((s, dv) => s + dv.creatureRatio, 0) / totalDecks;
+  const avgInstantSorceryRatio = clusterVectors.reduce((s, dv) => s + dv.instantSorceryRatio, 0) / totalDecks;
+  const avgCmc = clusterVectors.reduce((s, dv) => s + dv.avgCmc, 0) / totalDecks;
+  const avgCardCount = clusterVectors.reduce((s, dv) => s + dv.cardCount, 0) / totalDecks;
+
+  // ─── Calcular cores dominantes ─────────────────────────────────────
   const colorCounts: { [key: string]: number } = {};
   const colorMap: { [key: string]: string } = {
-    W: "White",
-    U: "Blue",
-    B: "Black",
-    R: "Red",
-    G: "Green",
+    W: "White", U: "Blue", B: "Black", R: "Red", G: "Green",
   };
 
   clusterVectors.forEach(dv => {
     if (dv.colors) {
       dv.colors.split("").forEach(color => {
-        colorCounts[color] = (colorCounts[color] || 0) + 1;
+        if ("WUBRG".includes(color)) {
+          colorCounts[color] = (colorCounts[color] || 0) + 1;
+        }
       });
     }
   });
 
-  const totalDecks = clusterVectors.length;
   const dominantColors = Object.entries(colorCounts)
-    .filter(([_, count]) => count / totalDecks > 0.25)
+    .filter(([_, count]) => count / totalDecks > 0.3)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3)
     .map(([color]) => color);
 
-  const colorConfidence = dominantColors.length > 0 
-    ? (colorCounts[dominantColors[0]] || 0) / totalDecks 
-    : 0.3;
+  // ─── Classificar archetype baseado em métricas reais ───────────────
+  // Aggro: muitas criaturas, CMC baixo
+  // Control: poucas criaturas, muitos instants/sorceries, CMC alto
+  // Midrange: equilíbrio entre criaturas e spells, CMC médio
+  // Combo: poucas criaturas, poucos instants, CMC variado (cartas específicas)
+  // Ramp: CMC alto, muitas criaturas grandes
 
-  let archetype = "Unknown";
-  let archetypeConfidence = 0;
+  let style = "Midrange";
+  let styleConfidence = 0.5;
 
-  if (dominantColors.length === 0) {
-    if (avgCardCount < 50) {
-      archetype = "Colorless Tempo";
-      archetypeConfidence = 0.5;
-    } else if (avgCardCount > 65) {
-      archetype = "Colorless Ramp";
-      archetypeConfidence = 0.5;
-    } else {
-      archetype = "Colorless Midrange";
-      archetypeConfidence = 0.6;
-    }
-  } else if (dominantColors.length === 1) {
-    const color = dominantColors[0];
-    const colorName = colorMap[color] || color;
-
-    if (avgCardCount < 44) {
-      archetype = `${colorName} Aggro`;
-      archetypeConfidence = Math.min(0.95, colorConfidence + 0.2);
-    } else if (avgCardCount < 52) {
-      archetype = `${colorName} Tempo`;
-      archetypeConfidence = Math.min(0.9, colorConfidence + 0.15);
-    } else if (avgCardCount < 62) {
-      archetype = `${colorName} Midrange`;
-      archetypeConfidence = Math.min(0.9, colorConfidence + 0.15);
-    } else if (avgCardCount < 75) {
-      archetype = `${colorName} Control`;
-      archetypeConfidence = Math.min(0.95, colorConfidence + 0.2);
-    } else {
-      archetype = `${colorName} Ramp`;
-      archetypeConfidence = Math.min(0.9, colorConfidence + 0.15);
-    }
-  } else if (dominantColors.length === 2) {
-    const colorPair = dominantColors.join("");
-
-    if (avgCardCount < 48) {
-      archetype = `${colorPair} Aggro`;
-      archetypeConfidence = Math.min(0.9, colorConfidence + 0.1);
-    } else if (avgCardCount < 60) {
-      archetype = `${colorPair} Midrange`;
-      archetypeConfidence = Math.min(0.85, colorConfidence + 0.1);
-    } else {
-      archetype = `${colorPair} Control`;
-      archetypeConfidence = Math.min(0.9, colorConfidence + 0.1);
-    }
-  } else if (dominantColors.length >= 3) {
-    if (avgCardCount < 50) {
-      archetype = "Multicolor Aggro";
-      archetypeConfidence = 0.6;
-    } else if (avgCardCount > 70) {
-      archetype = "Multicolor Control";
-      archetypeConfidence = 0.65;
-    } else {
-      archetype = "Multicolor Midrange/Goodstuff";
-      archetypeConfidence = 0.7;
-    }
+  if (avgCreatureRatio >= 0.45 && avgCmc <= 2.8) {
+    style = "Aggro";
+    styleConfidence = 0.7 + Math.min(0.25, (avgCreatureRatio - 0.45) * 2);
+  } else if (avgCreatureRatio >= 0.40 && avgCmc <= 3.2) {
+    style = "Aggro";
+    styleConfidence = 0.6 + Math.min(0.2, (avgCreatureRatio - 0.40) * 2);
+  } else if (avgInstantSorceryRatio >= 0.35 && avgCreatureRatio < 0.30) {
+    style = "Control";
+    styleConfidence = 0.7 + Math.min(0.25, (avgInstantSorceryRatio - 0.35) * 2);
+  } else if (avgInstantSorceryRatio >= 0.25 && avgCmc >= 3.0 && avgCreatureRatio < 0.35) {
+    style = "Control";
+    styleConfidence = 0.6 + Math.min(0.2, (avgCmc - 3.0) * 0.1);
+  } else if (avgCreatureRatio < 0.25 && avgInstantSorceryRatio < 0.25) {
+    style = "Combo";
+    styleConfidence = 0.55;
+  } else if (avgCmc >= 3.5 && avgCreatureRatio >= 0.30) {
+    style = "Ramp";
+    styleConfidence = 0.6 + Math.min(0.2, (avgCmc - 3.5) * 0.1);
+  } else if (avgCreatureRatio >= 0.30 && avgCreatureRatio < 0.45 && avgCmc >= 2.5 && avgCmc < 3.5) {
+    style = "Midrange";
+    styleConfidence = 0.65;
+  } else if (avgInstantSorceryRatio >= 0.30 && avgCreatureRatio >= 0.20 && avgCmc < 2.5) {
+    style = "Tempo";
+    styleConfidence = 0.6;
   }
 
-  return {
-    archetype,
-    confidence: Math.max(0.1, Math.min(1, archetypeConfidence)),
-  };
+  // ─── Construir nome do archetype ───────────────────────────────────
+  let colorPrefix: string;
+
+  if (dominantColors.length === 0) {
+    colorPrefix = "Colorless";
+  } else if (dominantColors.length === 1) {
+    colorPrefix = colorMap[dominantColors[0]] || dominantColors[0];
+  } else if (dominantColors.length === 2) {
+    // Usar nomes de guilds do MTG para pares de cores
+    const pair = dominantColors.sort().join("");
+    const guildNames: { [key: string]: string } = {
+      "BG": "Golgari", "BR": "Rakdos", "BU": "Dimir", "BW": "Orzhov",
+      "GR": "Gruul", "GU": "Simic", "GW": "Selesnya",
+      "RU": "Izzet", "RW": "Boros", "UW": "Azorius",
+    };
+    colorPrefix = guildNames[pair] || `${dominantColors.map(c => colorMap[c] || c).join("-")}`;
+  } else {
+    // 3+ cores: usar nomes de shards/wedges ou "Multicolor"
+    const triple = dominantColors.sort().join("");
+    const triNames: { [key: string]: string } = {
+      "BGW": "Abzan", "BRU": "Grixis", "GRW": "Naya", "BUW": "Esper", "GRU": "Temur",
+      "BGR": "Jund", "BRW": "Mardu", "GUW": "Bant", "BRG": "Jund", "RUW": "Jeskai",
+    };
+    colorPrefix = triNames[triple] || "Multicolor";
+  }
+
+  // Commander tem cardCount > 90
+  if (avgCardCount > 90) {
+    style = `Commander ${style}`;
+  }
+
+  const archetype = `${colorPrefix} ${style}`;
+  const confidence = Math.max(0.1, Math.min(1, styleConfidence));
+
+  return { archetype, confidence };
 }
 
 
 /**
  * Implementação do algoritmo K-Means usando implementação manual robusta.
- * Substitui ml-kmeans v7 que tem bug com clusters vazios no updateCenters.
  */
 export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: number = 150): { clusters: ClusterResult[]; stats: ClusteringStats } {
   if (vectors.length === 0 || k <= 0) {
@@ -495,13 +519,12 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
   const filteredVectors = vectors.filter((_, i) => validMask[i]);
 
   if (filteredData.length < adjustedK) {
-    console.warn(`[KMeans] Vetores válidos insuficientes (${filteredData.length}) para k=${adjustedK}. Abortando.`);
+    console.warn(`[KMeans] Vetores válidos insuficientes (${filteredData.length}) para k=${adjustedK}.`);
     return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
   }
 
   console.log(`[KMeans] Running robust KMeans: k=${adjustedK}, dim=${maxDim}, n=${filteredData.length}, max_iterations=${maxIterations}`);
 
-  // Executar KMeans manual robusto (sem dependência de ml-kmeans)
   const result = robustKMeans(filteredData, adjustedK, maxIterations);
 
   const assignments = result.assignments;
@@ -519,27 +542,26 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
     clusterMap.get(clusterId)!.push(i);
   }
 
-  // Criar resultados finais com informações enriquecidas
+  // Criar resultados finais
   const clusters: ClusterResult[] = [];
   clusterMap.forEach((vectorIndices, clusterId) => {
     const clusterVectors = vectorIndices.map(i => filteredVectors[i]);
     const centroid = centroids[clusterId];
 
-    // Calcular distâncias intra-cluster
-    const intraClusterDistances = vectorIndices.map(i =>
-      euclideanDistance(filteredVectors[i].vector, centroid)
+    // Distâncias intra-cluster (usando os vetores FILTRADOS, mesma escala dos centroids)
+    const clusterDataVecs = vectorIndices.map(i => filteredData[i]);
+    const intraClusterDistances = clusterDataVecs.map(vec =>
+      euclideanDistance(vec, centroid)
     );
     const avgIntraClusterDistance = intraClusterDistances.length > 0
       ? intraClusterDistances.reduce((a, b) => a + b, 0) / intraClusterDistances.length
       : 0;
 
-    // Calcular distância inter-cluster
+    // Distância inter-cluster
     const otherCentroids = centroids.filter((_, idx) => idx !== clusterId);
     let avgInterClusterDistance = 0;
     if (otherCentroids.length > 0) {
-      const distancesToOthers = otherCentroids.map(otherCentroid =>
-        euclideanDistance(centroid, otherCentroid)
-      );
+      const distancesToOthers = otherCentroids.map(oc => euclideanDistance(centroid, oc));
       avgInterClusterDistance = distancesToOthers.reduce((a, b) => a + b, 0) / distancesToOthers.length;
     }
 
@@ -548,7 +570,7 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
       ? clusterVectors.reduce((sum, dv) => sum + dv.cardCount, 0) / clusterVectors.length
       : 0;
 
-    // Calcular cores médias
+    // Cores médias
     const colorCounts: { [key: string]: number } = {};
     clusterVectors.forEach(dv => {
       if (dv.colors) {
@@ -579,14 +601,14 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
     });
   });
 
-  // Calcular estatísticas de clustering
-  const stats = calculateClusteringMetrics(clusters, vectors);
+  // Calcular estatísticas usando os MESMOS vetores filtrados (mesma escala dos centroids)
+  const stats = calculateClusteringMetrics(clusters, filteredVectors, filteredData);
 
   return { clusters, stats };
 }
 
 /**
- * Executa clustering KMeans em todos os decks competitivos com otimizações
+ * Executa clustering KMeans em todos os decks competitivos
  */
 export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters: ClusterResult[]; stats: ClusteringStats }> {
   const db = await getDb();
@@ -619,9 +641,13 @@ export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters
     const { clusters, stats } = kMeansReal(normalizedVectors, k, 150);
 
     console.log(`[Clustering] Generated ${clusters.length} clusters`);
+    clusters.forEach(c => {
+      console.log(`  Cluster ${c.clusterId}: ${c.archetype} (${c.deckIds.length} decks, colors=${c.avgColors}, conf=${c.confidence.toFixed(2)})`);
+    });
     console.log(`[Clustering] Silhouette Score: ${stats.silhouetteScore.toFixed(3)}`);
     console.log(`[Clustering] Calinski-Harabasz Index: ${stats.calinskiHarabaszIndex.toFixed(2)}`);
     console.log(`[Clustering] Davies-Bouldin Index: ${stats.daviesBouldinIndex.toFixed(3)}`);
+    console.log(`[Clustering] Inertia: ${stats.inertia.toFixed(4)}`);
 
     // Atualizar arquétipos no banco
     for (const cluster of clusters) {
@@ -643,80 +669,108 @@ export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters
 }
 
 /**
- * Calcula métricas de qualidade do clustering com implementação robusta
+ * Calcula métricas de qualidade do clustering.
+ * Agora recebe filteredData (mesma escala dos centroids) para cálculos corretos.
  */
-export function calculateClusteringMetrics(clusters: ClusterResult[], vectors: DeckVector[]): ClusteringStats {
+export function calculateClusteringMetrics(
+  clusters: ClusterResult[],
+  vectors: DeckVector[],
+  filteredData?: number[][]
+): ClusteringStats {
   if (clusters.length === 0 || vectors.length === 0) {
     return { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: true };
   }
+
+  // Usar filteredData se disponível (mesma escala dos centroids), senão extrair dos vectors
+  const dataVectors = filteredData || vectors.map(v => v.vector);
+
+  // Mapear deckId → índice no dataVectors para lookup rápido
+  const deckIdToIdx = new Map<number, number>();
+  vectors.forEach((v, i) => deckIdToIdx.set(v.deckId, i));
 
   // ─── Silhouette Score ───────────────────────────────────────────────
   let totalSilhouette = 0;
   let validSilhouettes = 0;
 
-  vectors.forEach(vector => {
+  for (let idx = 0; idx < vectors.length; idx++) {
+    const vector = vectors[idx];
+    const dataVec = dataVectors[idx];
     const cluster = clusters.find(c => c.deckIds.includes(vector.deckId));
-    if (!cluster) return;
+    if (!cluster) continue;
 
-    const sameClusterVectors = vectors.filter(v =>
-      cluster.deckIds.includes(v.deckId) && v.deckId !== vector.deckId
-    );
-    const a = sameClusterVectors.length > 0
-      ? sameClusterVectors.reduce((sum, v) => sum + euclideanDistance(vector.vector, v.vector), 0) / sameClusterVectors.length
+    // a(i) = distância média intra-cluster
+    const sameClusterIndices = cluster.deckIds
+      .filter(id => id !== vector.deckId)
+      .map(id => deckIdToIdx.get(id))
+      .filter((i): i is number => i !== undefined);
+
+    const a = sameClusterIndices.length > 0
+      ? sameClusterIndices.reduce((sum, i) => sum + euclideanDistance(dataVec, dataVectors[i]), 0) / sameClusterIndices.length
       : 0;
 
+    // b(i) = distância média mínima ao cluster vizinho mais próximo
     let minB = Infinity;
-    clusters.forEach(otherCluster => {
-      if (otherCluster.clusterId === cluster.clusterId) return;
+    for (const otherCluster of clusters) {
+      if (otherCluster.clusterId === cluster.clusterId) continue;
 
-      const otherVectors = vectors.filter(v => otherCluster.deckIds.includes(v.deckId));
-      if (otherVectors.length > 0) {
-        const avgDistance = otherVectors.reduce((sum, v) => sum + euclideanDistance(vector.vector, v.vector), 0) / otherVectors.length;
-        minB = Math.min(minB, avgDistance);
-      }
-    });
+      const otherIndices = otherCluster.deckIds
+        .map(id => deckIdToIdx.get(id))
+        .filter((i): i is number => i !== undefined);
 
-    // Tratar caso minB = Infinity (ponto em cluster único) ou a = 0
-    if (minB === Infinity || (a === 0 && minB === 0)) {
-      // Ponto isolado ou todos os pontos idênticos — silhouette = 0
-      totalSilhouette += 0;
-      validSilhouettes++;
-    } else {
-      const maxAB = Math.max(a, minB);
-      const silhouetteValue = maxAB > 0 ? (minB - a) / maxAB : 0;
-      if (isFinite(silhouetteValue) && silhouetteValue >= -1 && silhouetteValue <= 1) {
-        totalSilhouette += silhouetteValue;
-        validSilhouettes++;
+      if (otherIndices.length > 0) {
+        const avgDist = otherIndices.reduce((sum, i) => sum + euclideanDistance(dataVec, dataVectors[i]), 0) / otherIndices.length;
+        minB = Math.min(minB, avgDist);
       }
     }
-  });
+
+    if (minB === Infinity || (a === 0 && minB === 0)) {
+      totalSilhouette += 0;
+    } else {
+      const maxAB = Math.max(a, minB);
+      const s = maxAB > 0 ? (minB - a) / maxAB : 0;
+      if (isFinite(s)) {
+        totalSilhouette += Math.max(-1, Math.min(1, s));
+      }
+    }
+    validSilhouettes++;
+  }
 
   const silhouetteScore = validSilhouettes > 0 ? totalSilhouette / validSilhouettes : 0;
 
   // ─── Calinski-Harabasz Index ────────────────────────────────────────
-  const overallCentroid = calculateCentroid(vectors.map(v => v.vector));
-  
-  const SSB = clusters.reduce((sum, cluster) => {
-    const clusterSize = cluster.deckIds.length;
-    const distance = euclideanDistance(cluster.centroid, overallCentroid);
-    return sum + clusterSize * distance * distance;
-  }, 0);
+  const overallCentroid = calculateCentroid(dataVectors);
 
-  const SSW = clusters.reduce((sum, cluster) => {
-    const clusterVectors = vectors.filter(v => cluster.deckIds.includes(v.deckId));
-    return sum + clusterVectors.reduce((clusterSum, vector) => {
-      return clusterSum + euclideanDistance(vector.vector, cluster.centroid) ** 2;
-    }, 0);
-  }, 0);
+  let SSB = 0;
+  let SSW = 0;
+
+  for (const cluster of clusters) {
+    const clusterIndices = cluster.deckIds
+      .map(id => deckIdToIdx.get(id))
+      .filter((i): i is number => i !== undefined);
+
+    const nk = clusterIndices.length;
+
+    // SSB: distância do centroid do cluster ao centroid global × tamanho do cluster
+    const centroidDist = euclideanDistance(cluster.centroid, overallCentroid);
+    SSB += nk * centroidDist * centroidDist;
+
+    // SSW: soma das distâncias dos pontos ao centroid do cluster
+    for (const idx of clusterIndices) {
+      const dist = euclideanDistance(dataVectors[idx], cluster.centroid);
+      SSW += dist * dist;
+    }
+  }
 
   const numClusters = clusters.length;
   const numPoints = vectors.length;
   let calinskiHarabaszIndex = 0;
-  if (numClusters > 1 && numPoints > numClusters && SSW > 0) {
-    calinskiHarabaszIndex = (SSB / (numClusters - 1)) / (SSW / (numPoints - numClusters));
-  } else if (numClusters > 1 && SSW === 0) {
-    // SSW = 0 significa clusters perfeitos (todos os pontos idênticos ao centroid)
-    calinskiHarabaszIndex = SSB > 0 ? 999999 : 0;
+
+  if (numClusters > 1 && numPoints > numClusters) {
+    if (SSW > 1e-10) {
+      calinskiHarabaszIndex = (SSB / (numClusters - 1)) / (SSW / (numPoints - numClusters));
+    } else {
+      calinskiHarabaszIndex = SSB > 1e-10 ? 999999 : 0;
+    }
   }
   if (!isFinite(calinskiHarabaszIndex)) calinskiHarabaszIndex = 0;
 
@@ -724,19 +778,28 @@ export function calculateClusteringMetrics(clusters: ClusterResult[], vectors: D
   let totalDB = 0;
   for (let i = 0; i < clusters.length; i++) {
     let maxRatio = 0;
+
+    const clusterIIndices = clusters[i].deckIds
+      .map(id => deckIdToIdx.get(id))
+      .filter((idx): idx is number => idx !== undefined);
+
+    const avgI = clusterIIndices.length > 0
+      ? clusterIIndices.reduce((sum, idx) => sum + euclideanDistance(dataVectors[idx], clusters[i].centroid), 0) / clusterIIndices.length
+      : 0;
+
     for (let j = 0; j < clusters.length; j++) {
       if (i === j) continue;
 
-      const clusterIVectors = vectors.filter(v => clusters[i].deckIds.includes(v.deckId));
-      const clusterJVectors = vectors.filter(v => clusters[j].deckIds.includes(v.deckId));
+      const clusterJIndices = clusters[j].deckIds
+        .map(id => deckIdToIdx.get(id))
+        .filter((idx): idx is number => idx !== undefined);
 
-      if (clusterIVectors.length === 0 || clusterJVectors.length === 0) continue;
+      if (clusterIIndices.length === 0 || clusterJIndices.length === 0) continue;
 
-      const avgI = clusterIVectors.reduce((sum, v) => sum + euclideanDistance(v.vector, clusters[i].centroid), 0) / clusterIVectors.length;
-      const avgJ = clusterJVectors.reduce((sum, v) => sum + euclideanDistance(v.vector, clusters[j].centroid), 0) / clusterJVectors.length;
+      const avgJ = clusterJIndices.reduce((sum, idx) => sum + euclideanDistance(dataVectors[idx], clusters[j].centroid), 0) / clusterJIndices.length;
 
       const centroidDistance = euclideanDistance(clusters[i].centroid, clusters[j].centroid);
-      const ratio = centroidDistance > 0 ? (avgI + avgJ) / centroidDistance : 0;
+      const ratio = centroidDistance > 1e-10 ? (avgI + avgJ) / centroidDistance : 0;
 
       maxRatio = Math.max(maxRatio, ratio);
     }
@@ -833,7 +896,7 @@ export async function findOptimalK(deckVectors: DeckVector[], maxK: number = 15)
     inertias.push(stats.inertia);
     silhouettes.push(stats.silhouetteScore);
 
-    console.log(`[Clustering] K=${k}: Inertia=${stats.inertia.toFixed(2)}, Silhouette=${stats.silhouetteScore.toFixed(3)}`);
+    console.log(`[Clustering] K=${k}: Inertia=${stats.inertia.toFixed(4)}, Silhouette=${stats.silhouetteScore.toFixed(3)}`);
   }
 
   let optimalK = minK;

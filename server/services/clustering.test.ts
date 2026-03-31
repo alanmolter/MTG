@@ -67,10 +67,10 @@ describe("Clustering Service (Real ML-KMeans)", () => {
   describe("kMeansReal avec ml-kmeans", () => {
     it("should cluster simple 2D data correctly using ml-kmeans++", () => {
       const vectors: DeckVector[] = [
-        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60 },
-        { deckId: 2, vector: [1, 1], colors: "W", format: "standard", cardCount: 60 },
-        { deckId: 3, vector: [10, 10], colors: "R", format: "standard", cardCount: 60 },
-        { deckId: 4, vector: [11, 11], colors: "R", format: "standard", cardCount: 60 },
+        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
+        { deckId: 2, vector: [1, 1], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
+        { deckId: 3, vector: [10, 10], colors: "R", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
+        { deckId: 4, vector: [11, 11], colors: "R", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
       ];
 
       const { clusters, stats } = kMeansReal(vectors, 2, 10);
@@ -92,7 +92,7 @@ describe("Clustering Service (Real ML-KMeans)", () => {
 
     it("should handle k=0", () => {
       const vectors: DeckVector[] = [
-        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60 },
+        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
       ];
       const { clusters } = kMeansReal(vectors, 0);
       expect(clusters).toEqual([]);
@@ -100,8 +100,8 @@ describe("Clustering Service (Real ML-KMeans)", () => {
 
     it("should limit K to number of vectors", () => {
       const vectors: DeckVector[] = [
-        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60 },
-        { deckId: 2, vector: [1, 1], colors: "W", format: "standard", cardCount: 60 },
+        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
+        { deckId: 2, vector: [1, 1], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
       ];
 
       const { clusters } = kMeansReal(vectors, 10);
@@ -137,10 +137,10 @@ describe("Clustering Service (Real ML-KMeans)", () => {
       ];
 
       const vectors: DeckVector[] = [
-        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60 },
-        { deckId: 2, vector: [1, 1], colors: "W", format: "standard", cardCount: 60 },
-        { deckId: 3, vector: [10, 10], colors: "R", format: "standard", cardCount: 60 },
-        { deckId: 4, vector: [11, 11], colors: "R", format: "standard", cardCount: 60 },
+        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
+        { deckId: 2, vector: [1, 1], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
+        { deckId: 3, vector: [10, 10], colors: "R", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
+        { deckId: 4, vector: [11, 11], colors: "R", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
       ];
 
       const metrics = calculateClusteringMetrics(clusters, vectors);
