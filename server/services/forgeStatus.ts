@@ -179,9 +179,10 @@ export function printForgeSelfPlayStatus(
   rulesApplied: number
 ): void {
   const winrate = totalMatches > 0 ? ((forgeWins / totalMatches) * 100).toFixed(1) : "0.0";
+  // Usa \n (nova linha) em vez de \r para nao sobrepor a linha do [Queue]
   process.stdout.write(
-    `\r  [Forge] it:${iteration} | partidas: ${totalMatches} | ` +
-    `wins: ${forgeWins} (${winrate}%) | partidas com regras MTG: ${rulesApplied}   `
+    `\n  [Forge] it:${iteration} | partidas: ${totalMatches} | ` +
+    `wins: ${forgeWins} (${winrate}%) | partidas com regras MTG: ${rulesApplied}`
   );
 }
 

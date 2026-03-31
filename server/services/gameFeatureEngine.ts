@@ -193,13 +193,27 @@ export function extractCardFeatures(card: {
   const isPlaneswalker = type.includes("planeswalker");
 
   // 3. Impact Score (0-10)
+  // Base: 1 para qualquer carta
+  // Bônus por função:
+  //   board_wipe (+4), finisher (+3), heavy_draw (+2), tutor (+2)
+  //   removal/targeted_removal (+1), discard de mão (+1)
+  // Bônus por CMC (criaturas com CMC alto são naturalmente mais poderosas):
+  //   CMC 3-4: +1, CMC 5+: +2
+  // Bônus por raridade:
+  //   mythic: +1, rare: +0.5 (arredondado para baixo)
   let impactScore = 1;
   if (roles.includes("board_wipe")) impactScore += 4;
   if (roles.includes("finisher")) impactScore += 3;
   if (roles.includes("heavy_draw")) impactScore += 2;
   if (roles.includes("tutor")) impactScore += 2;
+  if (roles.includes("removal") || roles.includes("targeted_removal")) impactScore += 1;
+  if (text.includes("discard") && (isInstant || isSorcery)) impactScore += 1; // Thoughtseize, Inquisition
+  if (isCreature && cmc >= 3 && cmc <= 4) impactScore += 1;
+  if (isCreature && cmc >= 5) impactScore += 2;
   if (card.rarity?.toLowerCase() === "mythic") impactScore += 1;
-  impactScore = Math.min(10, impactScore);
+  // rare: +0.5 (arredondado para baixo, mas acumula com outros bônus)
+  if (card.rarity?.toLowerCase() === "rare") impactScore += 0.5;
+  impactScore = Math.min(10, Math.floor(impactScore * 10) / 10); // 1 casa decimal
 
   return {
     name: card.name,

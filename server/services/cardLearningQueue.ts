@@ -206,10 +206,11 @@ export class CardLearningQueue {
       if (batchUpdated > 0) {
         const decayInfo = batchDecayed > 0 ? ` | decay: ${batchDecayed}` : "";
         const satInfo = batchSaturated > 0 ? ` | sat: ${batchSaturated}` : "";
-        process.stdout.write(
-          `\r  [Queue] lote ${this.stats.batchCount}: ${batchUpdated}/${updatesByCard.size} cartas` +
-          `${decayInfo}${satInfo} | fila: ${this.queue.length}   `
-        );
+        const queueLine =
+          `  [Queue] lote ${this.stats.batchCount}: ${batchUpdated}/${updatesByCard.size} cartas` +
+          `${decayInfo}${satInfo} | fila: ${this.queue.length}`;
+        // Padding de 25 espaços para apagar restos de linhas anteriores mais longas
+        process.stdout.write(`\r${queueLine.padEnd(queueLine.length + 25)}`);
       }
 
     } catch (error) {

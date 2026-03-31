@@ -25,33 +25,49 @@ async function check() {
 
   // Deduplicação em dois níveis:
   //   1. Cartas double-faced (com " // "): usar parte antes do " // "
-  //      Ex: "Aang, at the Crossroads // Aang, Fully Realized" → "Aang, at the Crossroads"
   //   2. Mesmo personagem (múltiplas versões): usar parte antes da primeira vírgula
-  //      Ex: "Aang, at the Crossroads" e "Aang, Swift Savior" → personagem "Aang"
-  //      Mantém apenas a versão de maior peso para cada personagem.
-  const seenPersonagem = new Set<string>();
-  const topCommanders: typeof rawCommanders = [];
+  //      Mantém a versão com MAIS PARTIDAS REAIS para cada personagem (não apenas maior peso).
+  //      Isso evita mostrar cartas com peso inflado por decay mas sem partidas reais.
+
+  // Primeiro passo: agrupar por personagem e escolher a melhor versão
+  const personagemMap = new Map<string, typeof rawCommanders[0]>();
 
   for (const c of rawCommanders) {
-    // Nível 1: remover face B de cartas double-faced
     const singleFaceName = c.name.includes(" // ")
       ? c.name.split(" // ")[0].trim()
       : c.name.trim();
 
-    // Nível 2: extrair personagem (parte antes da primeira vírgula)
-    // Ex: "Sheoldred, the Apocalypse" → "Sheoldred"
-    // Ex: "Aang, at the Crossroads" → "Aang"
-    // Ex: "Purphoros, God of the Forge" → "Purphoros"
     const personagem = singleFaceName.includes(",")
       ? singleFaceName.split(",")[0].trim().toLowerCase()
       : singleFaceName.toLowerCase();
 
-    if (seenPersonagem.has(personagem)) continue;
-    seenPersonagem.add(personagem);
-
-    topCommanders.push(c);
-    if (topCommanders.length >= 10) break;
+    const existing = personagemMap.get(personagem);
+    if (!existing) {
+      personagemMap.set(personagem, c);
+    } else {
+      // Preferir a versão com mais partidas reais (winCount + lossCount)
+      const existingTotal = (existing.winCount ?? 0) + (existing.lossCount ?? 0);
+      const newTotal = (c.winCount ?? 0) + (c.lossCount ?? 0);
+      if (newTotal > existingTotal) {
+        personagemMap.set(personagem, c);
+      }
+    }
   }
+
+  // Segundo passo: ordenar por (tem partidas reais DESC, peso DESC) e pegar top 10
+  const topCommanders = Array.from(personagemMap.values())
+    .sort((a, b) => {
+      const aTotal = (a.winCount ?? 0) + (a.lossCount ?? 0);
+      const bTotal = (b.winCount ?? 0) + (b.lossCount ?? 0);
+      // Primeiro: cartas com partidas reais
+      if (aTotal > 0 && bTotal === 0) return -1;
+      if (bTotal > 0 && aTotal === 0) return 1;
+      // Depois: por peso
+      return b.weight - a.weight;
+    })
+    .slice(0, 10);
+
+  const seenPersonagem = personagemMap;
 
   const total = rawCommanders.length;
   const uniquePersonagens = seenPersonagem.size;
