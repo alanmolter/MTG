@@ -2,7 +2,6 @@ import { getDb } from "../db";
 import { competitiveDecks, competitiveDeckCards, CompetitiveDeck, CompetitiveDeckCard, cards } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { getCardEmbedding } from "./embeddings";
-import { kmeans } from "ml-kmeans";
 
 export interface DeckVector {
   deckId: number;
@@ -40,7 +39,6 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
   if (!db) return null;
 
   try {
-    // Obter informações do deck
     const deck = await db
       .select()
       .from(competitiveDecks)
@@ -49,7 +47,6 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
 
     if (deck.length === 0) return null;
 
-    // Obter cartas do deck
     const deckCards = await db
       .select()
       .from(competitiveDeckCards)
@@ -60,12 +57,10 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
 
     if (deckCards.length === 0) return null;
 
-    // Calcular vetor médio das cartas
     const cardVectors: number[][] = [];
     let totalQuantity = 0;
 
     for (const deckCard of deckCards) {
-      // Encontrar a carta no banco principal
       const card = await db
         .select()
         .from(cards)
@@ -75,7 +70,6 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
       if (card.length > 0) {
         const embedding = await getCardEmbedding(card[0].id);
         if (embedding) {
-          // Adicionar o vetor múltiplas vezes baseado na quantidade
           for (let i = 0; i < deckCard.quantity; i++) {
             cardVectors.push(embedding);
           }
@@ -86,7 +80,6 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
 
     if (cardVectors.length === 0) return null;
 
-    // Calcular vetor médio
     const vectorLength = cardVectors[0].length;
     const avgVector = new Array(vectorLength).fill(0);
 
@@ -174,6 +167,191 @@ function normalizeVectors(vectors: DeckVector[]): DeckVector[] {
   }));
 }
 
+// ─── Implementação KMeans manual robusta ────────────────────────────────────
+// Substitui ml-kmeans que tem bug no updateCenters com clusters vazios.
+// Trata: clusters vazios (re-seed), vetores NaN, dimensões inconsistentes.
+
+/**
+ * Inicialização kmeans++ manual: escolhe centroids iniciais com probabilidade
+ * proporcional à distância ao centroid mais próximo.
+ */
+function kmeansppInit(data: number[][], k: number): number[][] {
+  const n = data.length;
+  const dim = data[0].length;
+  const centroids: number[][] = [];
+
+  // Primeiro centroid: aleatório
+  centroids.push([...data[Math.floor(Math.random() * n)]]);
+
+  for (let c = 1; c < k; c++) {
+    // Calcular distância mínima de cada ponto ao centroid mais próximo
+    const distances = new Float64Array(n);
+    let totalDist = 0;
+
+    for (let i = 0; i < n; i++) {
+      let minDist = Infinity;
+      for (const centroid of centroids) {
+        let dist = 0;
+        for (let d = 0; d < dim; d++) {
+          const diff = data[i][d] - centroid[d];
+          dist += diff * diff;
+        }
+        minDist = Math.min(minDist, dist);
+      }
+      distances[i] = minDist;
+      totalDist += minDist;
+    }
+
+    // Se totalDist é 0 (todos os pontos são idênticos), escolher aleatório
+    if (totalDist === 0 || !isFinite(totalDist)) {
+      centroids.push([...data[Math.floor(Math.random() * n)]]);
+      continue;
+    }
+
+    // Escolher próximo centroid com probabilidade proporcional à distância²
+    let r = Math.random() * totalDist;
+    let cumSum = 0;
+    let chosen = 0;
+    for (let i = 0; i < n; i++) {
+      cumSum += distances[i];
+      if (cumSum >= r) {
+        chosen = i;
+        break;
+      }
+    }
+    centroids.push([...data[chosen]]);
+  }
+
+  return centroids;
+}
+
+/**
+ * Atribui cada ponto ao centroid mais próximo.
+ * Retorna array de assignments (índice do cluster para cada ponto).
+ */
+function assignPoints(data: number[][], centroids: number[][]): number[] {
+  const n = data.length;
+  const k = centroids.length;
+  const dim = data[0].length;
+  const assignments = new Array(n);
+
+  for (let i = 0; i < n; i++) {
+    let minDist = Infinity;
+    let bestCluster = 0;
+
+    for (let c = 0; c < k; c++) {
+      let dist = 0;
+      for (let d = 0; d < dim; d++) {
+        const diff = data[i][d] - centroids[c][d];
+        dist += diff * diff;
+      }
+      if (dist < minDist) {
+        minDist = dist;
+        bestCluster = c;
+      }
+    }
+    assignments[i] = bestCluster;
+  }
+
+  return assignments;
+}
+
+/**
+ * Recalcula centroids a partir dos assignments.
+ * TRATA CLUSTERS VAZIOS: re-seed com o ponto mais distante do cluster mais populoso.
+ */
+function updateCentroids(data: number[][], assignments: number[], k: number): number[][] {
+  const dim = data[0].length;
+  const centroids: number[][] = [];
+  const counts = new Array(k).fill(0);
+  const sums: number[][] = [];
+
+  for (let c = 0; c < k; c++) {
+    sums.push(new Array(dim).fill(0));
+  }
+
+  // Somar vetores por cluster
+  for (let i = 0; i < data.length; i++) {
+    const c = assignments[i];
+    counts[c]++;
+    for (let d = 0; d < dim; d++) {
+      sums[c][d] += data[i][d];
+    }
+  }
+
+  // Calcular médias
+  for (let c = 0; c < k; c++) {
+    if (counts[c] > 0) {
+      centroids.push(sums[c].map(s => s / counts[c]));
+    } else {
+      // CLUSTER VAZIO: re-seed com o ponto mais distante do cluster mais populoso
+      const largestCluster = counts.indexOf(Math.max(...counts));
+      let maxDist = -1;
+      let farthestIdx = 0;
+
+      for (let i = 0; i < data.length; i++) {
+        if (assignments[i] === largestCluster) {
+          let dist = 0;
+          for (let d = 0; d < dim; d++) {
+            const diff = data[i][d] - (sums[largestCluster][d] / counts[largestCluster]);
+            dist += diff * diff;
+          }
+          if (dist > maxDist) {
+            maxDist = dist;
+            farthestIdx = i;
+          }
+        }
+      }
+
+      centroids.push([...data[farthestIdx]]);
+      console.log(`[KMeans] Cluster ${c} ficou vazio → re-seed com ponto mais distante do cluster ${largestCluster}`);
+    }
+  }
+
+  return centroids;
+}
+
+/**
+ * Implementação KMeans manual robusta.
+ * Substitui ml-kmeans que tem bug com clusters vazios no updateCenters.
+ */
+function robustKMeans(
+  data: number[][],
+  k: number,
+  maxIterations: number = 150
+): { assignments: number[]; centroids: number[][]; converged: boolean; iterations: number } {
+  const n = data.length;
+
+  // Inicialização kmeans++
+  let centroids = kmeansppInit(data, k);
+  let assignments = assignPoints(data, centroids);
+  let converged = false;
+  let iter = 0;
+
+  for (iter = 0; iter < maxIterations; iter++) {
+    // Recalcular centroids (com tratamento de clusters vazios)
+    centroids = updateCentroids(data, assignments, k);
+
+    // Re-atribuir pontos
+    const newAssignments = assignPoints(data, centroids);
+
+    // Verificar convergência
+    let changed = 0;
+    for (let i = 0; i < n; i++) {
+      if (newAssignments[i] !== assignments[i]) changed++;
+    }
+
+    assignments = newAssignments;
+
+    if (changed === 0) {
+      converged = true;
+      break;
+    }
+  }
+
+  return { assignments, centroids, converged, iterations: iter + 1 };
+}
+
 /**
  * Atribui nomes de arquétipos baseado nas características dos clusters
  * Usa análise de cores e tamanho de deck + heurística de CMC
@@ -181,17 +359,9 @@ function normalizeVectors(vectors: DeckVector[]): DeckVector[] {
 function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { archetype: string; confidence: number } {
   if (clusterVectors.length === 0) return { archetype: "Unknown", confidence: 0 };
 
-  // Calcular estatísticas do cluster
   const avgCardCount = clusterVectors.reduce((sum, dv) => sum + dv.cardCount, 0) / clusterVectors.length;
-  const minCardCount = Math.min(...clusterVectors.map(dv => dv.cardCount));
-  const maxCardCount = Math.max(...clusterVectors.map(dv => dv.cardCount));
-  const cardCountStdDev = Math.sqrt(
-    clusterVectors.reduce((sum, dv) => sum + Math.pow(dv.cardCount - avgCardCount, 2), 0) / clusterVectors.length
-  );
 
-  // Contar cores com frequência
   const colorCounts: { [key: string]: number } = {};
-  const colorFrequency: { [key: string]: number } = {};
   const colorMap: { [key: string]: string } = {
     W: "White",
     U: "Blue",
@@ -204,30 +374,25 @@ function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { ar
     if (dv.colors) {
       dv.colors.split("").forEach(color => {
         colorCounts[color] = (colorCounts[color] || 0) + 1;
-        colorFrequency[color] = (colorCounts[color] || 0) / clusterVectors.length;
       });
     }
   });
 
   const totalDecks = clusterVectors.length;
   const dominantColors = Object.entries(colorCounts)
-    .filter(([_, count]) => count / totalDecks > 0.25) // Pelo menos 25% dos decks
+    .filter(([_, count]) => count / totalDecks > 0.25)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3)
     .map(([color]) => color);
 
-  // Confiança baseada na homogeneidade de cores
   const colorConfidence = dominantColors.length > 0 
     ? (colorCounts[dominantColors[0]] || 0) / totalDecks 
     : 0.3;
 
-  // Heurística de arquétipo baseada em cores e tamanho
   let archetype = "Unknown";
   let archetypeConfidence = 0;
 
-  // Lógica de classificação
   if (dominantColors.length === 0) {
-    // Colorless/Artifact
     if (avgCardCount < 50) {
       archetype = "Colorless Tempo";
       archetypeConfidence = 0.5;
@@ -242,7 +407,6 @@ function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { ar
     const color = dominantColors[0];
     const colorName = colorMap[color] || color;
 
-    // Classificação por tamanho
     if (avgCardCount < 44) {
       archetype = `${colorName} Aggro`;
       archetypeConfidence = Math.min(0.95, colorConfidence + 0.2);
@@ -293,22 +457,18 @@ function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { ar
 
 
 /**
- * Implementação do algoritmo K-Means usando a biblioteca 'ml-kmeans' (real library)
+ * Implementação do algoritmo K-Means usando implementação manual robusta.
+ * Substitui ml-kmeans v7 que tem bug com clusters vazios no updateCenters.
  */
 export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: number = 150): { clusters: ClusterResult[]; stats: ClusteringStats } {
   if (vectors.length === 0 || k <= 0) {
     return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
   }
 
-  // Limite máximo de K
   const adjustedK = Math.min(k, vectors.length);
   
-  // Extrair apenas os dados numéricos para a biblioteca
+  // Extrair dados numéricos e normalizar dimensões
   const rawData = vectors.map(v => v.vector);
-
-  // CORREÇÃO: Normalizar dimensões para evitar RangeError: Inconsistent array dimensions
-  // Ocorre quando embeddings de generateSimpleEmbedding (dim=50) e Word2Vec (dim=64)
-  // coexistem no banco. Padding com zeros para alinhar todas as dimensões.
   const maxDim = rawData.reduce((max, vec) => Math.max(max, vec.length), 0);
   const data = rawData.map(vec => {
     if (vec.length === maxDim) return vec;
@@ -317,8 +477,8 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
     return padded;
   });
 
-  // Filtrar vetores completamente zerados (embeddings inválidos)
-  const validMask = data.map(vec => vec.some(v => v !== 0));
+  // Filtrar vetores completamente zerados ou com NaN
+  const validMask = data.map(vec => vec.some(v => v !== 0 && isFinite(v)));
   const filteredData = data.filter((_, i) => validMask[i]);
   const filteredVectors = vectors.filter((_, i) => validMask[i]);
 
@@ -327,36 +487,12 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
     return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
   }
 
-  console.log(`[KMeans] Running ml-kmeans: k=${adjustedK}, dim=${maxDim}, n=${filteredData.length}, max_iterations=${maxIterations}`);
+  console.log(`[KMeans] Running robust KMeans: k=${adjustedK}, dim=${maxDim}, n=${filteredData.length}, max_iterations=${maxIterations}`);
 
-  // Executar a biblioteca real com fallback robusto.
-  // O kmeans++ pode falhar com "Row index out of range" quando existem
-  // vetores duplicados ou quase-duplicados que geram probabilidades NaN
-  // na etapa de inicialização (divisão por zero no cumSum).
-  let result;
-  try {
-    result = kmeans(filteredData, adjustedK, {
-      maxIterations,
-      initialization: 'kmeans++',
-    });
-  } catch (initErr: any) {
-    console.warn(`[KMeans] kmeans++ falhou (${initErr?.message}). Usando inicialização 'random'...`);
-    try {
-      result = kmeans(filteredData, adjustedK, {
-        maxIterations,
-        initialization: 'random',
-      });
-    } catch (randomErr: any) {
-      console.warn(`[KMeans] Fallback 'random' também falhou (${randomErr?.message}). Tentando k=${Math.max(2, Math.floor(adjustedK / 2))}...`);
-      const reducedK = Math.max(2, Math.floor(adjustedK / 2));
-      result = kmeans(filteredData, reducedK, {
-        maxIterations,
-        initialization: 'random',
-      });
-    }
-  }
+  // Executar KMeans manual robusto (sem dependência de ml-kmeans)
+  const result = robustKMeans(filteredData, adjustedK, maxIterations);
 
-  const assignments = result.clusters;
+  const assignments = result.assignments;
   const centroids = result.centroids;
 
   console.log(`[KMeans] Clustering complete! Converged: ${result.converged}. Iterations: ${result.iterations}`);
@@ -445,12 +581,10 @@ export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters
   if (!db) return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
 
   try {
-    // Obter todos os decks competitivos
     const decks = await db.select().from(competitiveDecks);
 
     console.log(`[Clustering] Starting KMeans clustering with ${decks.length} decks, k=${k}`);
 
-    // Converter decks para vetores
     const deckVectors: DeckVector[] = [];
     for (const deck of decks) {
       const vector = await deckToVector(deck.id);
@@ -469,7 +603,7 @@ export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters
     // Normalizar vetores para melhor clustering
     const normalizedVectors = normalizeVectors(deckVectors);
 
-    // Executar KMeans com biblioteca real
+    // Executar KMeans com implementação manual robusta
     const { clusters, stats } = kMeansReal(normalizedVectors, k, 150);
 
     console.log(`[Clustering] Generated ${clusters.length} clusters`);
@@ -512,7 +646,6 @@ export function calculateClusteringMetrics(clusters: ClusterResult[], vectors: D
     const cluster = clusters.find(c => c.deckIds.includes(vector.deckId));
     if (!cluster) return;
 
-    // a: distância média dentro do cluster
     const sameClusterVectors = vectors.filter(v =>
       cluster.deckIds.includes(v.deckId) && v.deckId !== vector.deckId
     );
@@ -520,7 +653,6 @@ export function calculateClusteringMetrics(clusters: ClusterResult[], vectors: D
       ? sameClusterVectors.reduce((sum, v) => sum + euclideanDistance(vector.vector, v.vector), 0) / sameClusterVectors.length
       : 0;
 
-    // b: menor distância média para outros clusters
     let minB = Infinity;
     clusters.forEach(otherCluster => {
       if (otherCluster.clusterId === cluster.clusterId) return;
@@ -680,7 +812,6 @@ export async function findOptimalK(deckVectors: DeckVector[], maxK: number = 15)
     console.log(`[Clustering] K=${k}: Inertia=${stats.inertia.toFixed(2)}, Silhouette=${stats.silhouetteScore.toFixed(3)}`);
   }
 
-  // Encontrar o ponto de cotovelo (maior mudança de inércia)
   let optimalK = minK;
   let maxInertiaChange = 0;
 
@@ -692,7 +823,6 @@ export async function findOptimalK(deckVectors: DeckVector[], maxK: number = 15)
     }
   }
 
-  // Alternativamente, considerar silhueta mais alta
   if (silhouettes.length > 0) {
     const maxSilhouetteIdx = silhouettes.indexOf(Math.max(...silhouettes));
     if (Math.max(...silhouettes) > 0.5) {
