@@ -59,3 +59,12 @@ DO $$ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN null;
 END $$;
+
+-- 7. Garantir UNIQUE constraints em competitive_decks e competitive_deck_cards
+-- (necessário para ON CONFLICT funcionar — pode não existir se a tabela foi criada
+-- antes da migration 0003 ou por outra versão do schema)
+CREATE UNIQUE INDEX IF NOT EXISTS "competitive_decks_source_id_unique"
+  ON "competitive_decks" ("source_id");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "competitive_deck_cards_deck_card_section_unique"
+  ON "competitive_deck_cards" ("deck_id", "card_name", "section");
