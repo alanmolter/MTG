@@ -188,7 +188,7 @@ export class CardLearningQueue {
       let batchDecayed = 0;
 
       // Processar cada carta
-      for (const [cardName, updates] of updatesByCard) {
+      for (const [cardName, updates] of Array.from(updatesByCard.entries())) {
         const result = await this.updateCardWeight(db, cardName, updates);
         if (result.updated) batchUpdated++;
         if (result.saturated) batchSaturated++;

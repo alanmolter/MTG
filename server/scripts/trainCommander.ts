@@ -1,104 +1,319 @@
-import { generateDeckByArchetype, CardData } from "../services/archetypeGenerator";
-import { closeDb } from "../db";
-import { searchCards } from "../services/scryfall";
-import { modelLearningService } from "../services/modelLearning";
-import { ModelEvaluator } from "../services/modelEvaluation";
-import { evaluateDeckWithBrain } from "../services/deckGenerator";
+/**
+ * trainCommander.ts — Commander Intelligence com suporte a diversidade
+ *
+ * Novos args CLI:
+ *   --forbidden-color=W|U|B|R|G   Exclui identidades que contenham essa cor
+ *   --exploration-mode=true        Inverte bias de peso (favorece cartas sub-exploradas)
+ *   --source=commander_diversity   Nome da fonte gravada no card_learning
+ *   --mutation-rate=0.25           Taxa de mutação para o loop genético
+ *   --iterations=300               Número de iterações
+ *
+ * NOTA: O banco usa os campos:
+ *   - type   (string, ex: "Legendary Creature — Elf Warrior")
+ *   - colors (string concatenada, ex: "WU", "R", "BG")
+ *   - cmc    (integer)
+ * Não há colunas legalities, color_identity ou type_line no schema.
+ */
+
+import { parseArgs, getFloat, getInt, getBool, getString } from './utils/parseArgs';
+import { getDb, closeDb } from '../db';
+import { cardLearning, cards as cardsTable } from '../../drizzle/schema';
+import { getCardLearningQueue } from '../services/cardLearningQueue';
+import { ModelEvaluator } from '../services/modelEvaluation';
+import { evaluateDeckQuick } from '../services/deckEvaluationBrain';
+import { sql, inArray, asc } from 'drizzle-orm';
 import {
   printForgeSelfPlayStatus,
   printForgeTrainingComplete,
-} from "../services/forgeStatus";
+} from '../services/forgeStatus';
 
-/**
- * Script de Treinamento Especializado em Comandantes
- * Foca em evoluir a escolha do Comandante via ciclos de geracao, simulacao e reforco.
- *
- * O Forge é utilizado como motor de regras em cada partida simulada:
- *   - Valida identidade de cor do Comandante (Commander EDH)
- *   - Aplica regras de 100 cartas, legalidade e singleton
- *   - Simula partidas com variância estocástica (handFactor 0.5–1.5)
- *   - Grava resultados como commander_train na CardLearningQueue
- */
+// ── Parse de argumentos CLI ──────────────────────────────────────
+const cliArgs        = parseArgs(process.argv.slice(2));
+const FORBIDDEN_COLOR: string | null = getString(cliArgs, 'forbidden-color', '') || null;
+const EXPLORATION_MODE: boolean      = getBool(cliArgs, 'exploration-mode', false);
+const SOURCE                         = getString(cliArgs, 'source', 'commander_train') as
+  'commander_train' | 'forge_reality' | 'self_play' | 'rl_policy' | 'user_generation';
+const MUTATION_RATE: number          = getFloat(cliArgs, 'mutation-rate', 0.15);
+const ITERATIONS: number             = getInt(cliArgs, 'iterations', 300);
+const MATCHES_PER_IT: number         = 5;
 
-function barCmd(current: number, total: number, width = 18): string {
-  const filled = total > 0 ? Math.round((current / total) * width) : 0;
-  return "[" + "█".repeat(filled) + "░".repeat(width - filled) + "]";
+// ── Tipo local alinhado com o schema real do banco ───────────────
+// O banco usa: id, name, type (string), colors (string), cmc (int)
+type CardRow = {
+  id: number;
+  name: string;
+  type: string | null;
+  colors: string | null;  // ex: "WU", "R", "BG", "" (incolor)
+  cmc: number | null;
+  text: string | null;
+  rarity: string | null;
+  [key: string]: unknown;
+};
+
+// ── Helpers de identidade de cor ─────────────────────────────────
+// No banco, colors é uma string concatenada (ex: "WU", "R", "BG")
+// Para Commander, usamos colors como proxy de color_identity
+
+function isAllowedColor(colors: string): boolean {
+  if (!FORBIDDEN_COLOR) return true;
+  return !colors.includes(FORBIDDEN_COLOR);
 }
 
-function timestampCmd(): string {
-  return new Date().toLocaleTimeString("pt-BR");
-}
-
-async function trainCommander(iterations = 300) {
-  const startTotal = Date.now();
-
-  console.log("═".repeat(52));
-  console.log(`  COMMANDER INTELLIGENCE — FORGE ENGINE (${iterations} iteracoes)`);
-  console.log(`  Inicio: ${timestampCmd()}`);
-  console.log("═".repeat(52));
-  console.log("  Motor de regras : Forge (Commander EDH — regras completas)");
-  console.log("  Formato         : Commander (100 cartas, singleton, identidade de cor)");
-  console.log("  Aprendizado     : commander_train → CardLearningQueue → banco");
-  console.log("─".repeat(52));
-
-  console.log("\n  [Forge] Carregando pool de cartas (Arena + Fisico)...");
-  const cardPool = await searchCards({ isArena: false });
-  if (cardPool.length === 0) {
-    console.error("  [ERRO] Banco de dados vazio. Sincronize o Scryfall primeiro.");
-    closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
-    return;
+function isSubsetColors(cardColors: string, commanderColors: string): boolean {
+  if (!cardColors || cardColors === '') return true; // incolor é sempre legal
+  for (const color of cardColors) {
+    if (!commanderColors.includes(color)) return false;
   }
-  console.log(`  [Forge] Pool carregado : ${cardPool.length} cartas`);
-  console.log(`  [Forge] Arquetipos     : aggro, control, midrange, combo, ramp`);
-  console.log(`  [Forge] Partidas/it    : 5 (Commander vs Commander oponente)`);
-  console.log("─".repeat(52) + "\n");
+  return true;
+}
 
-  const archetypes: any[] = ["aggro", "control", "midrange", "combo", "ramp"];
-  const batchSize = 5;
-  let totalWins = 0;
-  let totalMatches = 0;
-  let totalRulesApplied = 0;
+// ── Carregamento do pool Commander ──────────────────────────────
+// Como não há coluna legalities, carregamos cartas com cmc <= 6
+// e filtramos por tipo para simular o pool Commander
+async function loadCommanderPool(): Promise<CardRow[]> {
+  const db = await getDb();
+  if (!db) throw new Error('[Commander] Banco de dados indisponível');
 
-  // Intervalo de feedback do Forge (a cada 50 iterações)
-  const FORGE_FEEDBACK_INTERVAL = 50;
+  // Filtramos por cmc <= 8 para incluir cartas Commander típicas
+  // e excluímos a cor proibida se especificada
+  let pool: CardRow[];
 
-  for (let i = 0; i < iterations; i += batchSize) {
-    const progBar = barCmd(Math.min(i + batchSize, iterations), iterations);
-    process.stdout.write(
-      `\r  ${progBar} ${Math.min(i + batchSize, iterations)}/${iterations} | ` +
-      `forge: ${totalWins}/${totalMatches} partidas | ` +
-      `regras MTG: ${totalRulesApplied} partidas | ${timestampCmd()}`
-    );
+  if (FORBIDDEN_COLOR) {
+    // Excluir cartas que contenham a cor proibida
+    pool = await db.execute(sql`
+      SELECT id, name, type, colors, cmc, text, rarity
+      FROM cards
+      WHERE (colors IS NULL OR colors NOT LIKE ${'%' + FORBIDDEN_COLOR + '%'})
+        AND (cmc IS NULL OR cmc <= 8)
+      ORDER BY RANDOM()
+      LIMIT 2000
+    `) as unknown as CardRow[];
+  } else {
+    pool = await db.execute(sql`
+      SELECT id, name, type, colors, cmc, text, rarity
+      FROM cards
+      WHERE (cmc IS NULL OR cmc <= 8)
+      ORDER BY RANDOM()
+      LIMIT 2000
+    `) as unknown as CardRow[];
+  }
 
-    const batch = Array.from({ length: Math.min(batchSize, iterations - i) }, (_, index) => {
-      const itIndex = i + index;
-      const archetype = archetypes[itIndex % archetypes.length];
-      return runIteration(itIndex, archetype, cardPool).then((r: any) => {
-        if (r) {
-          totalWins += r.wins;
-          totalMatches += r.matches;
-          // Cada partida aplica o conjunto completo de regras MTG
-          totalRulesApplied += r.matches;
-        }
-      });
-    });
-    await Promise.all(batch);
+  if (FORBIDDEN_COLOR) {
+    console.log(`[Commander] Pool carregado: ${pool.length} cartas (sem cor ${FORBIDDEN_COLOR})`);
+  } else {
+    console.log(`[Commander] Pool carregado: ${pool.length} cartas`);
+  }
 
-    // Feedback do Forge a cada FORGE_FEEDBACK_INTERVAL iterações
-    const currentIt = Math.min(i + batchSize, iterations);
-    if (currentIt % FORGE_FEEDBACK_INTERVAL === 0) {
-      process.stdout.write("\n");
-      printForgeSelfPlayStatus(currentIt, totalMatches, totalWins, totalRulesApplied);
-      process.stdout.write("\n");
+  return pool;
+}
+
+// ── Carregamento de pesos com inversão opcional ──────────────────
+async function loadWeights(pool: CardRow[]): Promise<Map<string, number>> {
+  const db = await getDb();
+  if (!db) throw new Error('[Commander] Banco de dados indisponível');
+  const names = pool.map(c => c.name);
+
+  const rows = await db
+    .select()
+    .from(cardLearning)
+    .where(inArray(cardLearning.cardName, names));
+
+  const weights = new Map<string, number>();
+
+  for (const row of rows) {
+    let weight = (row.weight as number) ?? 1.0;
+
+    if (EXPLORATION_MODE) {
+      // Inversão: cartas com peso baixo ganham bias alto (modo exploração)
+      // peso=1   → exploração=25   (muito sub-explorada)
+      // peso=10  → exploração=4.5  (moderadamente explorada)
+      // peso=50  → exploração=0.98 (já saturada, ignorar)
+      weight = 50 / (weight + 1);
+    }
+
+    weights.set(row.cardName, weight);
+  }
+
+  // Cartas sem histórico recebem peso neutro (ou alto em exploração)
+  for (const card of pool) {
+    if (!weights.has(card.name)) {
+      weights.set(card.name, EXPLORATION_MODE ? 15.0 : 1.0);
     }
   }
 
-  process.stdout.write("\n");
+  if (EXPLORATION_MODE) {
+    const highExplore = Array.from(weights.values()).filter(w => w > 10).length;
+    console.log(`[Commander] Modo exploração: ${highExplore} cartas com bias alto (peso invertido)`);
+  }
 
-  const totalDur = ((Date.now() - startTotal) / 1000).toFixed(1);
-  const winratePct = totalMatches > 0 ? ((totalWins / totalMatches) * 100).toFixed(1) : "N/A";
+  return weights;
+}
 
-  // ── Resumo do Forge ───────────────────────────────────────────────────────
+// ── Geração de deck Commander com bias de peso ───────────────────
+function generateCommanderDeck(pool: CardRow[], weights: Map<string, number>): CardRow[] {
+  // Selecionar comandante (lendário, cor permitida)
+  const legendaries = pool.filter(c =>
+    c.type?.toLowerCase().includes('legendary') &&
+    c.type?.toLowerCase().includes('creature') &&
+    isAllowedColor(c.colors ?? '')
+  );
+
+  if (legendaries.length === 0) return [];
+
+  const commander = weightedSample(legendaries, weights);
+  if (!commander) return [];
+
+  const commanderColors = commander.colors ?? '';
+
+  // Filtrar pool pela identidade de cor do comandante (subset de cores)
+  const legalPool = pool.filter(c =>
+    c.name !== commander.name &&
+    isSubsetColors(c.colors ?? '', commanderColors)
+  );
+
+  // Selecionar 99 cartas restantes com bias de peso (singleton)
+  const deck = [commander];
+  const selected = new Set<string>([commander.name]);
+
+  while (deck.length < 100 && legalPool.length > 0) {
+    const available = legalPool.filter(c => !selected.has(c.name));
+    if (available.length === 0) break;
+
+    const card = weightedSample(available, weights);
+    if (!card) break;
+    deck.push(card);
+    selected.add(card.name);
+  }
+
+  return deck;
+}
+
+function weightedSample<T extends { name: string }>(pool: T[], weights: Map<string, number>): T | null {
+  if (pool.length === 0) return null;
+  const totalWeight = pool.reduce((sum, c) => sum + (weights.get(c.name) ?? 1.0), 0);
+  if (totalWeight <= 0) return pool[Math.floor(Math.random() * pool.length)];
+
+  let rand = Math.random() * totalWeight;
+  for (const card of pool) {
+    rand -= weights.get(card.name) ?? 1.0;
+    if (rand <= 0) return card;
+  }
+  return pool[pool.length - 1];
+}
+
+// ── Mutação com taxa configurável ────────────────────────────────
+function mutateDeck(deck: CardRow[], pool: CardRow[], weights: Map<string, number>): CardRow[] {
+  if (deck.length === 0) return deck;
+  const commander = deck[0];
+  const commanderColors = commander.colors ?? '';
+  const legalPool = pool.filter(c =>
+    c.name !== commander.name &&
+    isSubsetColors(c.colors ?? '', commanderColors) &&
+    !deck.some(d => d.name === c.name)
+  );
+
+  return deck.map((card, idx) => {
+    if (idx === 0) return card; // comandante não muta
+    if (Math.random() < MUTATION_RATE && legalPool.length > 0) {
+      const replacement = weightedSample(legalPool, weights);
+      return replacement ?? card;
+    }
+    return card;
+  });
+}
+
+// ── Loop principal ───────────────────────────────────────────────
+async function main() {
+  const startTotal = Date.now();
+  console.log('\n════════════════════════════════════════════════════════');
+  console.log('  COMMANDER INTELLIGENCE — FORGE ENGINE');
+  console.log(`  Inicio: ${new Date().toLocaleTimeString()}`);
+  console.log('════════════════════════════════════════════════════════');
+  console.log(`  Motor de regras : Forge (Commander EDH — regras completas)`);
+  console.log(`  Formato         : Commander (100 cartas, singleton, identidade de cor)`);
+  console.log(`  Fonte gravada   : ${SOURCE}`);
+  console.log(`  Cor excluída    : ${FORBIDDEN_COLOR ?? 'nenhuma'}`);
+  console.log(`  Modo exploração : ${EXPLORATION_MODE}`);
+  console.log(`  Taxa de mutação : ${MUTATION_RATE}`);
+  console.log(`  Iterações       : ${ITERATIONS}`);
+  console.log('────────────────────────────────────────────────────────');
+
+  const pool    = await loadCommanderPool();
+  const weights = await loadWeights(pool);
+  const queue   = getCardLearningQueue();
+
+  const archetypes = ['aggro', 'control', 'midrange', 'combo', 'ramp'];
+
+  let totalWins    = 0;
+  let totalMatches = 0;
+  let totalRulesApplied = 0;
+
+  // Gerar população inicial (5 decks, um por arquétipo)
+  let population = archetypes
+    .map(() => generateCommanderDeck(pool, weights))
+    .filter(d => d.length === 100);
+
+  if (population.length === 0) {
+    console.log('[Commander] AVISO: Nenhum deck Commander gerado. Verifique o pool de cartas.');
+    await closeDb();
+    return;
+  }
+
+  console.log(`  [Forge] Decks iniciais : ${population.length} decks Commander gerados`);
+  console.log('────────────────────────────────────────────────────────');
+
+  for (let it = 1; it <= ITERATIONS; it++) {
+    // Avaliar população
+    const scored = population.map(deck => ({
+      deck,
+      score: evaluateDeckQuick(deck, 'commander')
+    })).sort((a, b) => b.score - a.score);
+
+    // Selecionar elite (top 25%)
+    const eliteSize = Math.max(1, Math.floor(scored.length * 0.25));
+    const elite     = scored.slice(0, eliteSize).map(s => s.deck);
+
+    // Simular partidas (Forge)
+    for (const deck of elite) {
+      for (let m = 0; m < MATCHES_PER_IT; m++) {
+        // Oponente Commander (mesmo formato)
+        const opponent = generateCommanderDeck(pool, weights);
+        if (opponent.length < 100) continue;
+
+        const result = ModelEvaluator.simulateMatch(deck, opponent);
+        const won    = result.winner === 'A';
+        if (won) totalWins++;
+        totalMatches++;
+        totalRulesApplied++;
+
+        // Atualizar pesos via queue
+        const delta = won ? 0.05 : -0.02;
+        await queue.enqueueBatch(deck.map(c => ({
+          cardName: c.name,
+          delta,
+          source: SOURCE,
+          win: won,
+        })));
+      }
+    }
+
+    // Evoluir — crossover + mutação
+    const offspring: CardRow[][] = [];
+    while (offspring.length < population.length - elite.length) {
+      const parent = elite[Math.floor(Math.random() * elite.length)];
+      offspring.push(mutateDeck(parent, pool, weights));
+    }
+    population = [...elite, ...offspring].filter(d => d.length === 100);
+
+    // Log a cada 50 iterações
+    if (it % 50 === 0 || it === ITERATIONS) {
+      printForgeSelfPlayStatus(it, totalMatches, totalWins, totalRulesApplied);
+    }
+  }
+
+  // Flush da queue
+  await queue.flush();
+
   printForgeTrainingComplete(
     totalMatches,
     totalWins,
@@ -106,85 +321,11 @@ async function trainCommander(iterations = 300) {
     Date.now() - startTotal
   );
 
-  // ── Resumo do Commander Intelligence ─────────────────────────────────────
-  console.log("═".repeat(52));
-  console.log("  COMMANDER INTELLIGENCE CONCLUIDO");
-  console.log("═".repeat(52));
-  console.log(`  Iteracoes     : ${iterations}`);
-  console.log(`  Partidas      : ${totalMatches}`);
-  console.log(`  Vitorias      : ${totalWins} (${winratePct}%)`);
-  console.log(`  Partidas com regras MTG : ${totalRulesApplied}`);
-  console.log(`  Fonte gravada : commander_train (CardLearningQueue)`);
-  console.log(`  Duracao total : ${totalDur}s`);
-  console.log(`  Fim: ${timestampCmd()}`);
-  console.log("═".repeat(52) + "\n");
+  console.log(`  Cor excluída  : ${FORBIDDEN_COLOR ?? 'nenhuma'}`);
+  console.log(`  Fonte gravada : ${SOURCE}`);
+  console.log('════════════════════════════════════════════════════════');
 
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+  await closeDb();
 }
 
-async function runIteration(
-  i: number,
-  archetype: string,
-  cardPool: CardData[]
-): Promise<{ wins: number; matches: number } | null> {
-
-  // ── 1. Carregar pesos atuais (cache TTL 60s) ──────────────────────────────
-  const learnedWeights = await modelLearningService.getCardWeights();
-
-  // ── 2. Gerar Deck de Commander com pesos aprendidos ───────────────────────
-  // O Forge valida: singleton, identidade de cor, 100 cartas, legalidade
-  const result = generateDeckByArchetype(cardPool, {
-    archetype: archetype as any,
-    format: "commander",
-    learnedWeights
-  });
-
-  const commander = result.cards.find(c => c.role === "commander");
-  if (!commander) {
-    return null;
-  }
-
-  // ── 3. Avaliação pelo Cérebro (deckEvaluationBrain) ───────────────────────
-  const metrics = await evaluateDeckWithBrain(result.cards as any, archetype as any);
-
-  // ── 4. Simulação de Combate via Forge ─────────────────────────────────────
-  // O Forge aplica: curva de mana, interação, ameaças, variância de draws (0.5-1.5x)
-  // Oponente é Commander também (mesmo formato) para simulação justa
-  const opponentArchetypes = ["aggro", "control", "midrange", "combo", "ramp"];
-  const opponentArch = opponentArchetypes[Math.floor(Math.random() * opponentArchetypes.length)];
-  const opponent = await generateDeckByArchetype(cardPool, { archetype: opponentArch as any, format: "commander" });
-
-  let wins = 0;
-  const matches = 5;
-  for (let m = 0; m < matches; m++) {
-    const simResult = ModelEvaluator.simulateMatch(result.cards as any, opponent.cards as any);
-    if (simResult.winner === "A") wins++;
-  }
-
-  const winrate = wins / matches;
-
-  // ── 5. Aprendizado de Reforço (commander_train) ───────────────────────────
-  // Comandante recebe peso maior (2.5x) por ser a peça central do deck
-  const weightDelta = winrate > 0.5 ? 0.2 : -0.1;
-  const updates: any = {};
-  updates[commander.name] = {
-    weightDelta: weightDelta * 2.5,
-    win: winrate > 0.5,
-    scoreDelta: metrics.normalizedScore
-  };
-
-  result.cards.forEach(c => {
-    if (c.role !== "commander") {
-      updates[c.name] = { weightDelta: weightDelta * 0.1, win: winrate > 0.5 };
-    }
-  });
-
-  // source="commander_train" para rastreabilidade e roteamento pela fila
-  await modelLearningService.updateWeights(updates, "commander_train");
-  return { wins, matches };
-}
-
-trainCommander().catch((e) => {
-  console.error("[trainCommander] Erro fatal:", e?.message);
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
-});
+main().catch(console.error);

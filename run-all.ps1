@@ -2,34 +2,44 @@
 <#
 .SYNOPSIS
     MTG AI - Pipeline Completo (PowerShell nativo)
-
 .DESCRIPTION
     Executa todas as 12 etapas do pipeline de treinamento da IA MTG.
     Funciona diretamente no PowerShell sem precisar do prefixo .\
-
 .USAGE
     # Opção 1 — Diretamente no PowerShell (recomendado):
     .\run-all.ps1
-
     # Opção 2 — Com parâmetros:
     .\run-all.ps1 -Format commander -Iterations 200 -Decks 100
-
     # Opção 3 — Se der erro de ExecutionPolicy:
     powershell -ExecutionPolicy Bypass -File .\run-all.ps1
-
 .NOTES
     Para não precisar do .\ , execute uma vez no PowerShell:
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 #>
-
 param(
     [string]$Format     = "modern",
     [int]   $Iterations = 100,
     [int]   $Decks      = 50
 )
 
+# ─── Detectar run number para rotacionar cores proibidas ──────────
+$runNum = 0
+if (Test-Path ".run_counter") {
+    $runNum = [int](Get-Content ".run_counter")
+}
+$runNum++
+Set-Content -Path ".run_counter" -Value $runNum
+
+# Rotacionar cor proibida: W U B R G (ciclo de 5 runs)
+$colors = @("W", "U", "B", "R", "G")
+$forbiddenColor = $colors[$runNum % 5]
+
+# Pool offset para Self-Play (2000 por run, máx ~50000 cartas)
+$poolOffset = ($runNum % 25) * 2000
+
 # ─── Cores e helpers ──────────────────────────────────────────────────────────
 $ESC = [char]27
+
 function Write-Header {
     Write-Host ""
     Write-Host "  ============================================================" -ForegroundColor Cyan
@@ -39,6 +49,10 @@ function Write-Header {
     Write-Host "     Iteracoes : $Iterations" -ForegroundColor White
     Write-Host "     Decks     : $Decks" -ForegroundColor White
     Write-Host "     Inicio    : $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')" -ForegroundColor White
+    Write-Host "  ============================================================" -ForegroundColor Cyan
+    Write-Host "     Run number  : $runNum" -ForegroundColor Yellow
+    Write-Host "     Cor excluída: $forbiddenColor (Commander step 8)" -ForegroundColor Yellow
+    Write-Host "     Pool offset : $poolOffset (Self-Play step 9)" -ForegroundColor Yellow
     Write-Host "  ============================================================" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -61,10 +75,8 @@ function Run-Step {
     } else {
         & $Cmd
     }
-    return $LASTEXITCODE
 }
 
-# ─── Início ───────────────────────────────────────────────────────────────────
 $errors = 0
 Write-Header
 
@@ -77,6 +89,7 @@ try {
     Write-Fail "Node.js nao encontrado. Instale em https://nodejs.org"
     exit 1
 }
+
 if (-not (Test-Path "package.json")) {
     Write-Fail "Execute na raiz do projeto MTG (onde esta o package.json)"
     exit 1
@@ -121,15 +134,17 @@ npm run teach
 if ($LASTEXITCODE -ne 0) { Write-Warn "Brain v2 training falhou"; $errors++ }
 
 # ─── Passo 8: Commander ───────────────────────────────────────────────────────
-Write-Step "8/12" "Treinando especialista Commander (300 iteracoes)..."
-Write-Host "     Aguarde - barra de progresso aparecera em instantes..." -ForegroundColor DarkGray
-npx tsx server/scripts/trainCommander.ts
+Write-Step "8/12" "Commander - DIVERSIDADE DE COR (excluindo $forbiddenColor)..."
+Write-Host "     Foca nas 4 cores restantes — garante que o modelo aprenda" -ForegroundColor DarkGray
+Write-Host "     identidades de cor sub-representadas no step 7" -ForegroundColor DarkGray
+npx tsx server/scripts/trainCommander.ts --iterations=300 --forbidden-color=$forbiddenColor --exploration-mode=true --source=commander_diversity --mutation-rate=0.25
 if ($LASTEXITCODE -ne 0) { Write-Warn "Commander training falhou"; $errors++ }
 
 # ─── Passo 9: Self-Play ───────────────────────────────────────────────────────
-Write-Step "9/12" "Self-Play Loop ($Iterations iteracoes)..."
-Write-Host "     Aguarde - barra de progresso aparecera em instantes..." -ForegroundColor DarkGray
-npx tsx server/scripts/continuousTraining.ts
+Write-Step "9/12" "Self-Play - POOL ALTERNATIVO (offset=$poolOffset)..."
+Write-Host "     Usa fatia diferente do catalogo de 52000 cartas +" -ForegroundColor DarkGray
+Write-Host "     mutation rate alto para forcar exploracao de estrategias" -ForegroundColor DarkGray
+npx tsx server/scripts/continuousTraining.ts --iterations=$Iterations --pool-offset=$poolOffset --pool-size=2000 --mutation-rate=0.35 --exploration-mode=true --source=self_play_explore --inject-random-pct=0.20
 if ($LASTEXITCODE -ne 0) { Write-Warn "continuousTraining falhou"; $errors++ }
 
 # ─── Passo 10: Verificar pesos ────────────────────────────────────────────────
@@ -159,6 +174,9 @@ if ($errors -eq 0) {
     Write-Host "     Avisos  : $errors" -ForegroundColor DarkYellow
 }
 Write-Host "     Termino : $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')" -ForegroundColor White
+Write-Host ""
+Write-Host "     Cor treinada   : todas exceto $forbiddenColor" -ForegroundColor Yellow
+Write-Host "     Pool explorado : cartas $poolOffset a $($poolOffset+2000)" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "     Proximos passos:" -ForegroundColor White
 Write-Host "       1. Inicie o servidor : npm run dev" -ForegroundColor DarkGray

@@ -13,6 +13,7 @@ import * as fs from "fs/promises";
 import * as crypto from "crypto";
 import { getDb } from "../db";
 import { competitiveDecks } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 interface CompetitiveTrainMetadata {
   version: number;
@@ -61,10 +62,10 @@ export class CompetitiveLearningBridge {
 
     try {
       // 1. Ler decks competitivos
-      const competitiveDecksData = await db.query.competitiveDecks.findMany({
-        where: (cd) => cd.format === format,
-        // with: { cards: { with: { card: true } } },
-      });
+      const competitiveDecksData = await db
+        .select()
+        .from(competitiveDecks)
+        .where(eq(competitiveDecks.format, format));
 
       if (competitiveDecksData.length === 0) {
         console.warn(`[CompetitiveLearning] No competitive decks found for ${format}`);
@@ -72,12 +73,12 @@ export class CompetitiveLearningBridge {
       }
 
       // 2. Transformar para formato de treino
-      const decks = competitiveDecksData.map((cd) => ({
+      const decks = competitiveDecksData.map((cd: any) => ({
         id: cd.id.toString(),
         name: cd.name,
         format: cd.format,
         source: cd.source,
-        cards: [], // Preenchido com dados do DB
+        cards: [] as Array<{ name: string; count: number }>,
       }));
 
       // 3. Calcular hash dos dados

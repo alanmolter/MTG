@@ -24,7 +24,8 @@ export async function generateDeckVisualization(options: DeckArtOptions): Promis
   const { deckId, style = "fantasy", includeCardNames = true, customPrompt } = options;
 
   // Get deck information
-  const db = getDb();
+  const db = await getDb();
+  if (!db) throw new Error('[DeckVisualization] Banco de dados indisponível');
   const { decks, deckCards, cards } = await import("../../drizzle/schema");
 
   const deckResult = await db

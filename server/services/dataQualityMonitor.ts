@@ -10,6 +10,7 @@
  */
 
 import { getDb } from "../db";
+import { competitiveDecks } from "../../drizzle/schema";
 
 export interface DataQualityMetrics {
   source: string;
@@ -49,7 +50,7 @@ export class DataQualityMonitor {
 
     try {
       // 1. Ler todos os decks competitivos
-      const allDecks = await db.query.competitiveDecks.findMany();
+      const allDecks = await db.select().from(competitiveDecks);
 
       // 2. Agrupar por fonte
       const bySource = new Map<string, DataQualityMetrics>();
@@ -87,7 +88,7 @@ export class DataQualityMonitor {
       }
 
       // 3. Calcular percentuais
-      for (const metrics of bySource.values()) {
+      for (const metrics of Array.from(bySource.values())) {
         metrics.syntheticPercentage =
           metrics.totalDecks > 0
             ? (metrics.syntheticDecks / metrics.totalDecks) * 100

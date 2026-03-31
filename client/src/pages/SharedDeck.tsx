@@ -1,50 +1,53 @@
 import { useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Copy, ExternalLink, Share2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+
+interface DeckShareData {
+  shareId: string;
+  deckId: number;
+  title?: string;
+  description?: string;
+  format?: string;
+  colors?: string[];
+  decklist?: string;
+  imageUrl?: string;
+  createdAt?: string;
+  expiresAt?: string;
+}
 
 export default function SharedDeck() {
-  const { toast } = useToast();
   const params = useParams();
-  const shareId = params.shareId;
+  const shareId = (params as any).shareId as string | undefined;
 
-  // Get shared deck data
-  const { data: sharedDeck, isLoading, error } = useQuery({
-    queryKey: ["shared-deck", shareId],
-    queryFn: async () => {
-      if (!shareId) throw new Error("No share ID provided");
-      return await trpc.sharing.getSharedDeck.query({ shareId });
-    },
-    enabled: !!shareId,
-  });
+  // Get shared deck data usando hook nativo do tRPC
+  const { data: sharedDeck, isLoading, error } = trpc.sharing.getSharedDeck.useQuery(
+    { shareId: shareId ?? "" },
+    { enabled: !!shareId }
+  );
+
+  const typedDeck = sharedDeck as unknown as DeckShareData | null | undefined;
 
   const handleCopyDecklist = () => {
-    if (sharedDeck?.decklist) {
-      navigator.clipboard.writeText(sharedDeck.decklist);
-      toast({
-        title: "Copied!",
-        description: "Decklist copied to clipboard.",
-      });
+    if (typedDeck?.decklist) {
+      navigator.clipboard.writeText(typedDeck.decklist);
+      toast.success("Decklist copiada para a área de transferência!");
     }
   };
 
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: sharedDeck?.title,
-        text: sharedDeck?.description,
+        title: typedDeck?.title,
+        text: typedDeck?.description,
         url: window.location.href,
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      toast({
-        title: "Link copied!",
-        description: "Share link copied to clipboard.",
-      });
+      toast.success("Link copiado para a área de transferência!");
     }
   };
 
@@ -53,20 +56,20 @@ export default function SharedDeck() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-purple-400 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading shared deck...</p>
+          <p className="text-gray-400">Carregando deck compartilhado...</p>
         </div>
       </div>
     );
   }
 
-  if (error || !sharedDeck) {
+  if (error || !typedDeck) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 flex items-center justify-center">
         <Card className="bg-slate-900/50 border-red-500/30 max-w-md">
           <CardHeader>
-            <CardTitle className="text-white">Deck Not Found</CardTitle>
+            <CardTitle className="text-white">Deck Não Encontrado</CardTitle>
             <CardDescription className="text-gray-400">
-              This shared deck link may have expired or is invalid.
+              Este link de deck compartilhado pode ter expirado ou é inválido.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -74,7 +77,7 @@ export default function SharedDeck() {
               onClick={() => window.location.href = "/"}
               className="w-full bg-purple-600 hover:bg-purple-700"
             >
-              Go Home
+              Ir para o Início
             </Button>
           </CardContent>
         </Card>
@@ -90,8 +93,8 @@ export default function SharedDeck() {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h1 className="text-4xl font-bold text-white mb-2">{sharedDeck.title}</h1>
-                <p className="text-gray-400">{sharedDeck.description}</p>
+                <h1 className="text-4xl font-bold text-white mb-2">{typedDeck.title}</h1>
+                <p className="text-gray-400">{typedDeck.description}</p>
               </div>
               <div className="flex gap-2">
                 <Button
@@ -101,7 +104,7 @@ export default function SharedDeck() {
                   className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
                 >
                   <Copy className="w-4 h-4 mr-2" />
-                  Copy Decklist
+                  Copiar Decklist
                 </Button>
                 <Button
                   onClick={handleShare}
@@ -110,15 +113,15 @@ export default function SharedDeck() {
                   className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
                 >
                   <Share2 className="w-4 h-4 mr-2" />
-                  Share
+                  Compartilhar
                 </Button>
               </div>
             </div>
 
             {/* Deck Metadata */}
             <div className="flex gap-2 flex-wrap">
-              <Badge variant="secondary">{sharedDeck.format}</Badge>
-              {sharedDeck.colors.map(color => (
+              {typedDeck.format && <Badge variant="secondary">{typedDeck.format}</Badge>}
+              {typedDeck.colors?.map((color: string) => (
                 <Badge key={color} variant="outline">{color}</Badge>
               ))}
             </div>
@@ -126,15 +129,15 @@ export default function SharedDeck() {
 
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Deck Image */}
-            {sharedDeck.imageUrl && (
+            {typedDeck.imageUrl && (
               <Card className="bg-slate-900/50 border-purple-500/30">
                 <CardHeader>
-                  <CardTitle className="text-white">Deck Art</CardTitle>
+                  <CardTitle className="text-white">Arte do Deck</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <img
-                    src={sharedDeck.imageUrl}
-                    alt="Deck visualization"
+                    src={typedDeck.imageUrl}
+                    alt="Visualização do deck"
                     className="w-full rounded-lg border border-purple-500/20"
                   />
                 </CardContent>
@@ -146,13 +149,13 @@ export default function SharedDeck() {
               <CardHeader>
                 <CardTitle className="text-white">Decklist</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Click "Copy Decklist" to copy the full deck to your clipboard
+                  Clique em "Copiar Decklist" para copiar o deck completo
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="bg-slate-800/50 p-4 rounded-lg max-h-96 overflow-y-auto">
                   <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
-                    {sharedDeck.decklist}
+                    {typedDeck.decklist}
                   </pre>
                 </div>
               </CardContent>
@@ -162,10 +165,12 @@ export default function SharedDeck() {
           {/* Footer */}
           <div className="mt-8 text-center">
             <p className="text-gray-500 text-sm mb-4">
-              Shared on {new Date(sharedDeck.createdAt).toLocaleDateString()}
-              {sharedDeck.expiresAt && (
+              {typedDeck.createdAt && (
+                <>Compartilhado em {new Date(typedDeck.createdAt).toLocaleDateString('pt-BR')}</>
+              )}
+              {typedDeck.expiresAt && (
                 <span className="ml-2">
-                  • Expires on {new Date(sharedDeck.expiresAt).toLocaleDateString()}
+                  • Expira em {new Date(typedDeck.expiresAt).toLocaleDateString('pt-BR')}
                 </span>
               )}
             </p>
@@ -175,7 +180,7 @@ export default function SharedDeck() {
               className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
             >
               <ExternalLink className="w-4 h-4 mr-2" />
-              Explore More Decks
+              Explorar Mais Decks
             </Button>
           </div>
         </div>
