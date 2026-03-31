@@ -59,6 +59,7 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
 
     const cardVectors: number[][] = [];
     let totalQuantity = 0;
+    const colorSet = new Set<string>();
 
     for (const deckCard of deckCards) {
       const card = await db
@@ -68,6 +69,13 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
         .limit(1);
 
       if (card.length > 0) {
+        // Coletar cores das cartas para calcular identidade de cor do deck
+        if (card[0].colors) {
+          card[0].colors.split("").forEach(c => {
+            if ("WUBRG".includes(c)) colorSet.add(c);
+          });
+        }
+
         const embedding = await getCardEmbedding(card[0].id);
         if (embedding) {
           for (let i = 0; i < deckCard.quantity; i++) {
@@ -93,10 +101,14 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
       avgVector[i] /= cardVectors.length;
     }
 
+    // Usar cores calculadas das cartas se o campo colors do deck estiver vazio
+    const deckColors = deck[0].colors || "";
+    const computedColors = deckColors.length > 0 ? deckColors : Array.from(colorSet).sort().join("");
+
     return {
       deckId,
       vector: avgVector,
-      colors: deck[0].colors || "",
+      colors: computedColors,
       format: deck[0].format,
       cardCount: totalQuantity,
     };
@@ -664,10 +676,18 @@ export function calculateClusteringMetrics(clusters: ClusterResult[], vectors: D
       }
     });
 
-    const silhouetteValue = minB > a ? (minB - a) / minB : (a - minB) / a;
-    if (silhouetteValue >= -1 && silhouetteValue <= 1) {
-      totalSilhouette += silhouetteValue;
+    // Tratar caso minB = Infinity (ponto em cluster único) ou a = 0
+    if (minB === Infinity || (a === 0 && minB === 0)) {
+      // Ponto isolado ou todos os pontos idênticos — silhouette = 0
+      totalSilhouette += 0;
       validSilhouettes++;
+    } else {
+      const maxAB = Math.max(a, minB);
+      const silhouetteValue = maxAB > 0 ? (minB - a) / maxAB : 0;
+      if (isFinite(silhouetteValue) && silhouetteValue >= -1 && silhouetteValue <= 1) {
+        totalSilhouette += silhouetteValue;
+        validSilhouettes++;
+      }
     }
   });
 
@@ -691,10 +711,14 @@ export function calculateClusteringMetrics(clusters: ClusterResult[], vectors: D
 
   const numClusters = clusters.length;
   const numPoints = vectors.length;
-  const calinskiHarabaszIndex =
-    numClusters > 1 && numPoints > numClusters
-      ? (SSB / (numClusters - 1)) / (SSW / (numPoints - numClusters))
-      : 0;
+  let calinskiHarabaszIndex = 0;
+  if (numClusters > 1 && numPoints > numClusters && SSW > 0) {
+    calinskiHarabaszIndex = (SSB / (numClusters - 1)) / (SSW / (numPoints - numClusters));
+  } else if (numClusters > 1 && SSW === 0) {
+    // SSW = 0 significa clusters perfeitos (todos os pontos idênticos ao centroid)
+    calinskiHarabaszIndex = SSB > 0 ? 999999 : 0;
+  }
+  if (!isFinite(calinskiHarabaszIndex)) calinskiHarabaszIndex = 0;
 
   // ─── Davies-Bouldin Index ───────────────────────────────────────────
   let totalDB = 0;
@@ -725,10 +749,10 @@ export function calculateClusteringMetrics(clusters: ClusterResult[], vectors: D
   const inertia = SSW;
 
   return {
-    silhouetteScore: Math.max(-1, Math.min(1, silhouetteScore)),
-    calinskiHarabaszIndex: Math.max(0, calinskiHarabaszIndex),
-    daviesBouldinIndex: Math.max(0, daviesBouldinIndex),
-    inertia,
+    silhouetteScore: isFinite(silhouetteScore) ? Math.max(-1, Math.min(1, silhouetteScore)) : 0,
+    calinskiHarabaszIndex: isFinite(calinskiHarabaszIndex) ? Math.max(0, calinskiHarabaszIndex) : 0,
+    daviesBouldinIndex: isFinite(daviesBouldinIndex) ? Math.max(0, daviesBouldinIndex) : 0,
+    inertia: isFinite(inertia) ? inertia : 0,
     converged: true,
   };
 }

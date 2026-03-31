@@ -50,7 +50,7 @@ async function trainCommander(iterations = 300) {
   }
   console.log(`  [Forge] Pool carregado : ${cardPool.length} cartas`);
   console.log(`  [Forge] Arquetipos     : aggro, control, midrange, combo, ramp`);
-  console.log(`  [Forge] Partidas/it    : 5 (Commander vs Aggro oponente)`);
+  console.log(`  [Forge] Partidas/it    : 5 (Commander vs Commander oponente)`);
   console.log("─".repeat(52) + "\n");
 
   const archetypes: any[] = ["aggro", "control", "midrange", "combo", "ramp"];
@@ -149,7 +149,10 @@ async function runIteration(
 
   // ── 4. Simulação de Combate via Forge ─────────────────────────────────────
   // O Forge aplica: curva de mana, interação, ameaças, variância de draws (0.5-1.5x)
-  const opponent = await generateDeckByArchetype(cardPool, { archetype: "aggro", format: "standard" });
+  // Oponente é Commander também (mesmo formato) para simulação justa
+  const opponentArchetypes = ["aggro", "control", "midrange", "combo", "ramp"];
+  const opponentArch = opponentArchetypes[Math.floor(Math.random() * opponentArchetypes.length)];
+  const opponent = await generateDeckByArchetype(cardPool, { archetype: opponentArch as any, format: "commander" });
 
   let wins = 0;
   const matches = 5;
