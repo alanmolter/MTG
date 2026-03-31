@@ -136,10 +136,11 @@ async function getDeckIdsFromArchetype(
     if (!response.ok) return [];
     const html = await response.text();
 
-    // Padrão real: href=event?e=82539&d=827346 (sem aspas)
-    // Aceita também href="event?e=82539&d=827346" (com aspas)
+    // Padrão real do HTML do MTGTop8 (sem aspas, com barra inicial e &f=):
+    //   href=/event?e=82623&d=828015&f=MO
+    // O regex aceita: barra opcional, & ou &amp;, parâmetro &f= opcional, com ou sem aspas
     const deckRegex =
-      /href=["']?event\?e=(\d+)&(?:amp;)?d=(\d+)["']?/g;
+      /href=["']?\/?event\?e=(\d+)&(?:amp;)?d=(\d+)(?:&(?:amp;)?f=[A-Z]+)?["']?/g;
     const seen = new Set<string>();
     const results: Array<{ e: string; d: string; name: string }> = [];
     let match;

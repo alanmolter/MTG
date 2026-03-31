@@ -201,8 +201,8 @@ async function saveDeckToDb(
     format,
     archetype: detail.archetype ?? null,
     author: "MTGGoldfish",
-    likes: 0,
-    views: 0,
+    // NOTA: likes/views/colors/rawJson omitidos — usam DEFAULT do banco
+    // Incluí-los explicitamente causa erro se a coluna não existir na migration
     isSynthetic: false,
   };
 
