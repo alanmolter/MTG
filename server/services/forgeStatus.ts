@@ -181,7 +181,7 @@ export function printForgeSelfPlayStatus(
   const winrate = totalMatches > 0 ? ((forgeWins / totalMatches) * 100).toFixed(1) : "0.0";
   process.stdout.write(
     `\r  [Forge] it:${iteration} | partidas: ${totalMatches} | ` +
-    `wins: ${forgeWins} (${winrate}%) | regras MTG aplicadas: ${rulesApplied}   `
+    `wins: ${forgeWins} (${winrate}%) | partidas com regras MTG: ${rulesApplied}   `
   );
 }
 
@@ -203,7 +203,7 @@ export function printForgeTrainingComplete(
   console.log(divider("─"));
   console.log(`  Partidas simuladas (Forge)  : ${totalMatches}`);
   console.log(`  Vitorias do modelo          : ${forgeWins} (${winrate}%)`);
-  console.log(`  Regras MTG aplicadas        : ${totalRulesApplied}`);
+  console.log(`  Partidas com regras MTG     : ${totalRulesApplied}`);
   console.log(`  Duracao do ciclo            : ${durSec}s`);
   console.log(`  Dados gravados em           : forge_reality (CardLearningQueue)`);
   console.log(divider("─") + "\n");

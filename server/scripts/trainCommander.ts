@@ -67,7 +67,7 @@ async function trainCommander(iterations = 300) {
     process.stdout.write(
       `\r  ${progBar} ${Math.min(i + batchSize, iterations)}/${iterations} | ` +
       `forge: ${totalWins}/${totalMatches} partidas | ` +
-      `regras: ${totalRulesApplied} | ${timestampCmd()}`
+      `regras MTG: ${totalRulesApplied} partidas | ${timestampCmd()}`
     );
 
     const batch = Array.from({ length: Math.min(batchSize, iterations - i) }, (_, index) => {
@@ -77,9 +77,8 @@ async function trainCommander(iterations = 300) {
         if (r) {
           totalWins += r.wins;
           totalMatches += r.matches;
-          // Cada partida Commander aplica ~8 regras (singleton, identidade, 100 cartas,
-          // curva, interação, ameaças, variância, empate)
-          totalRulesApplied += r.matches * 8;
+          // Cada partida aplica o conjunto completo de regras MTG
+          totalRulesApplied += r.matches;
         }
       });
     });
@@ -114,7 +113,7 @@ async function trainCommander(iterations = 300) {
   console.log(`  Iteracoes     : ${iterations}`);
   console.log(`  Partidas      : ${totalMatches}`);
   console.log(`  Vitorias      : ${totalWins} (${winratePct}%)`);
-  console.log(`  Regras MTG    : ${totalRulesApplied} aplicadas`);
+  console.log(`  Partidas com regras MTG : ${totalRulesApplied}`);
   console.log(`  Fonte gravada : commander_train (CardLearningQueue)`);
   console.log(`  Duracao total : ${totalDur}s`);
   console.log(`  Fim: ${timestampCmd()}`);

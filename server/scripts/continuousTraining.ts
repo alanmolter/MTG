@@ -116,8 +116,8 @@ async function runContinuousTraining(iterations: number = 100) {
       if (selfPlayResult) {
         totalForgeMatches += selfPlayResult.matches ?? 0;
         totalForgeWins += selfPlayResult.wins ?? 0;
-        // Cada partida aplica ~6 regras MTG (curva, interação, ameaças, variância, empate, capping)
-        totalRulesApplied += (selfPlayResult.matches ?? 0) * 6;
+        // Cada partida aplica o conjunto completo de regras MTG
+        totalRulesApplied += selfPlayResult.matches ?? 0;
       }
     });
 
