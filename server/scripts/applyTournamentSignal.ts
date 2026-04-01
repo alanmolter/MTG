@@ -17,7 +17,7 @@
  */
 
 import "dotenv/config";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import {
   cardLearning,
   competitiveDeckCards,
@@ -79,7 +79,7 @@ export async function applyTournamentSignal(): Promise<{
   // Acumular deltas por carta (mesma carta em vários decks = delta somado)
   const deltaMap = new Map<string, number>();
 
-  // Buscar em batches de 50 para não sobrecarregar o banco
+  // Buscar em batches de 50 usando inArray (suportado pelo driver postgres.js)
   const BATCH_SIZE = 50;
   for (let i = 0; i < deckIds.length; i += BATCH_SIZE) {
     const batch = deckIds.slice(i, i + BATCH_SIZE);
@@ -91,12 +91,7 @@ export async function applyTournamentSignal(): Promise<{
         quantity: competitiveDeckCards.quantity,
       })
       .from(competitiveDeckCards)
-      .where(
-        sql`${competitiveDeckCards.deckId} = ANY(ARRAY[${sql.join(
-          batch.map((id) => sql`${id}`),
-          sql`, `
-        )}])`
-      );
+      .where(inArray(competitiveDeckCards.deckId, batch));
 
     for (const row of rows) {
       const delta =
