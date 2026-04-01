@@ -3,6 +3,7 @@ import { closeDb } from "./server/db.ts";
 import { importAllGoldfishFormats } from "./server/services/mtggoldfishScraper.ts";
 import { importAllTop8Formats } from "./server/services/mtgtop8Scraper.ts";
 import { trainEmbeddingsFromDecks } from "./server/services/embeddingTrainer.ts";
+import { applyTournamentSignal } from "./server/scripts/applyTournamentSignal.ts";
 
 /**
  * Pipeline de importação de decks competitivos + treinamento de embeddings.
@@ -91,13 +92,27 @@ async function main() {
     console.warn(`  [AVISO] MTGTop8 falhou: ${e?.message}. Continuando...`);
   }
 
-  // ─── 3. Embeddings Word2Vec ───────────────────────────────────────────────
-  divider("3/3  Treinamento de Embeddings Word2Vec");
+  // ─── 3. Sinal de torneio → card_learning ─────────────────────────────────
+  divider("3/4  Sinal de Torneio → card_learning (pesos reais)");
   const t3 = Date.now();
+  try {
+    const signalResult = await applyTournamentSignal();
+    const dur3 = ((Date.now() - t3) / 1000).toFixed(1);
+    console.log(`    Cartas reforçadas : ${signalResult.cardsReinforced}`);
+    console.log(`    Delta total       : +${signalResult.totalDelta.toFixed(2)}`);
+    console.log(`    Decks processados : ${signalResult.decksProcessed}`);
+    console.log(`    Duracao           : ${dur3}s`);
+  } catch (e: any) {
+    console.warn(`  [AVISO] Sinal de torneio falhou: ${e?.message}. Continuando...`);
+  }
+
+  // ─── 4. Embeddings Word2Vec ───────────────────────────────────────────────
+  divider("4/4  Treinamento de Embeddings Word2Vec");
+  const t4 = Date.now();
   console.log("  Carregando decks competitivos do banco para treinamento...");
   try {
     const result = await trainEmbeddingsFromDecks();
-    const dur3 = ((Date.now() - t3) / 1000).toFixed(1);
+    const dur3 = ((Date.now() - t4) / 1000).toFixed(1);
     if (result.status === "completed") {
       console.log(`  Embeddings treinados : ${result.embeddingsTrained}`);
       console.log(`  Sinergias atualizadas: ${result.synergiesUpdated}`);

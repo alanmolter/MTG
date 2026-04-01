@@ -222,6 +222,22 @@ async function main() {
   console.log(`  Iterações       : ${ITERATIONS}`);
   console.log('────────────────────────────────────────────────────────');
 
+  // ── Global weight decay (anti-saturação) ────────────────────────
+  // Multiplica todos os pesos por 0.97 antes de cada run.
+  // Cartas que pararam de aparecer nos decks regridem naturalmente a 1.0.
+  // Garante que o sistema nunca sature: há sempre headroom para aprender.
+  {
+    const db = await getDb();
+    if (db) {
+      const MIN_WEIGHT = 0.1;
+      const result = await db.update(cardLearning).set({
+        weight: sql`GREATEST(${MIN_WEIGHT}, weight * 0.97)`,
+        updatedAt: new Date(),
+      });
+      console.log(`  [Decay] Pesos decaídos 3% (fator 0.97) — anti-saturação ativa`);
+    }
+  }
+
   const pool    = await loadPool();
   const weights = await loadWeights(pool);
   const queue   = getCardLearningQueue();

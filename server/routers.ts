@@ -366,6 +366,29 @@ export const appRouter = router({
         }
         return await evaluateDeckWithBrain(expanded, input.archetype || "default");
       }),
+
+    // -----------------------------------------------------------------------
+    // generateWithAI — Pipeline LLM + Validator + Meta Scorer
+    // -----------------------------------------------------------------------
+    // Usa o LLM como GERADOR DE CANDIDATOS e a stack existente como validador
+    // e ranqueador. O LLM recebe oracle_text real + win_rate/play_rate do banco
+    // e devolve JSON estruturado. O Constraint Validator (validateDeck) garante
+    // legalidade. O Meta Scorer (cardLearning weights) ranqueia por desempenho.
+    //
+    // Requer: ANTHROPIC_API_KEY no .env
+    // -----------------------------------------------------------------------
+    generateWithAI: publicProcedure
+      .input(
+        z.object({
+          format: z.enum(["Standard", "Commander", "Modern", "Pioneer"]),
+          archetype: z.enum(["Aggro", "Midrange", "Control", "Combo", "Ramp"]),
+          commander: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { generateDeckWithLLM } = await import("./services/llmDeckGenerator");
+        return await generateDeckWithLLM(input);
+      }),
   }),
 
   sync: router({
