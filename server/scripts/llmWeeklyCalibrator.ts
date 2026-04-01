@@ -254,13 +254,11 @@ export async function runLLMWeeklyCalibration(): Promise<{
 }
 
 // ── Execução standalone ───────────────────────────────────────────
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runLLMWeeklyCalibration()
-    .catch((e) => {
-      console.error("[LLMCalibrator] Erro fatal:", e?.message);
-      process.exit(1);
-    })
-    .finally(() => {
-      closeDb().then(() => process.exit(0)).catch(() => process.exit(1));
-    });
-}
+runLLMWeeklyCalibration()
+  .catch((e) => {
+    console.error("[LLMCalibrator] Erro fatal:", e?.message);
+    process.exit(1);
+  })
+  .finally(() => {
+    closeDb().then(() => process.exit(0)).catch(() => process.exit(1));
+  });
