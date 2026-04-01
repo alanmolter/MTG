@@ -43,6 +43,7 @@ const ITERATIONS       = getInt(cliArgs, 'iterations', 100);
 const ARCHETYPES       = ['aggro', 'control', 'midrange', 'combo', 'ramp'];
 const DECKS_PER_ARCH   = 20;
 const MATCHES_PER_DECK = 5;
+const POPULATION_SIZE  = ARCHETYPES.length * DECKS_PER_ARCH;
 
 // ── Tipo local alinhado com o schema real do banco ───────────────
 type CardRow = {
@@ -274,6 +275,9 @@ async function main() {
     const eliteSize = Math.max(1, Math.floor(scored.length * 0.25));
     const elite     = scored.slice(0, eliteSize).map(s => s.deck);
 
+    // ── Agregar updates de pesos por iteração (evita milhões de enqueues) ──
+    const weightDeltas: Record<string, number> = {};
+
     // ── Simular partidas (Forge) ─────────────────────────────────
     for (const { deck } of scored.slice(0, eliteSize)) {
       for (let m = 0; m < MATCHES_PER_DECK; m++) {
@@ -287,40 +291,64 @@ async function main() {
         totalRulesApplied++;
 
         const delta = won ? 0.05 : -0.02;
-        await queue.enqueueBatch(deck.map(c => ({
-          cardName: c.name,
-          delta,
-          source: SOURCE,
-          win: won,
-        })));
+        for (const c of deck) {
+          weightDeltas[c.name] = (weightDeltas[c.name] ?? 0) + delta;
+        }
       }
     }
 
-    // ── Evoluir próxima geração ──────────────────────────────────
+    // Enfileira updates consolidados da iteração
+    const updates = Object.entries(weightDeltas).map(([cardName, delta]) => ({
+      cardName,
+      delta,
+      source: SOURCE,
+      win: delta > 0 ? true : delta < 0 ? false : undefined,
+    }));
+    if (updates.length > 0) {
+      await queue.enqueueBatch(updates);
+    }
+
+    // ── Evoluir próxima geração (mantém POPULATION_SIZE constante) ─────────
+    const targetOffspring = Math.max(0, POPULATION_SIZE - elite.length);
     const offspring: CardRow[][] = [];
 
+    const crossoverTarget = Math.floor(targetOffspring * 0.5);
+    const mutateTarget    = Math.floor(targetOffspring * 0.8);
+
     // Crossover entre pares da elite
-    while (offspring.length < population.length * 0.5) {
+    while (offspring.length < crossoverTarget) {
       const a = elite[Math.floor(Math.random() * elite.length)];
       const b = elite[Math.floor(Math.random() * elite.length)];
       offspring.push(mutateDeck(crossover(a, b), pool, weights));
     }
 
     // Mutação simples da elite
-    while (offspring.length < population.length * 0.8) {
+    while (offspring.length < mutateTarget) {
       const parent = elite[Math.floor(Math.random() * elite.length)];
       offspring.push(mutateDeck(parent, pool, weights));
     }
 
     // Reinjeção de decks aleatórios a cada 20 iterações (anti-convergência)
     if (INJECT_RANDOM > 0 && it % 20 === 0) {
-      const injectCount = Math.floor(population.length * INJECT_RANDOM);
-      const injected    = Array.from({ length: injectCount }, () => generateRandomDeck(pool));
-      offspring.push(...injected);
-      process.stdout.write(`\n  [Explore] it:${it} — ${injectCount} decks aleatórios injetados`);
+      const remainingSlots = targetOffspring - offspring.length;
+      const injectCount = Math.min(
+        remainingSlots,
+        Math.max(0, Math.floor(POPULATION_SIZE * INJECT_RANDOM))
+      );
+      if (injectCount > 0) {
+        const injected = Array.from({ length: injectCount }, () => generateRandomDeck(pool));
+        offspring.push(...injected);
+        process.stdout.write(`\n  [Explore] it:${it} — ${injectCount} decks aleatórios injetados`);
+      }
     }
 
-    population = [...elite, ...offspring];
+    // Completar slots restantes com mutações
+    while (offspring.length < targetOffspring) {
+      const parent = elite[Math.floor(Math.random() * elite.length)];
+      offspring.push(mutateDeck(parent, pool, weights));
+    }
+
+    population = [...elite, ...offspring].slice(0, POPULATION_SIZE);
 
     // ── Log a cada 10 iterações ──────────────────────────────────
     if (it % 10 === 0 || it === ITERATIONS) {

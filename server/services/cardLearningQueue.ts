@@ -63,6 +63,8 @@ export class CardLearningQueue {
   private readonly BATCH_SIZE = 50; // Aumentado para processar mais rápido
   private readonly PROCESS_INTERVAL = 100; // ms
 
+  private workerTimer: NodeJS.Timeout | null = null;
+
   // Estatísticas acumuladas para o resumo
   private stats = {
     totalProcessed: 0,
@@ -149,11 +151,15 @@ export class CardLearningQueue {
    * Inicia o worker que processa a fila continuamente
    */
   private startWorker(): void {
-    setInterval(async () => {
+    this.workerTimer = setInterval(async () => {
       if (this.queue.length > 0 && !this.isProcessing) {
         await this.processBatch();
       }
     }, this.PROCESS_INTERVAL);
+
+    // Permite que o processo Node finalize mesmo com o timer ativo
+    // (quando não há mais trabalho pendente na fila)
+    this.workerTimer.unref?.();
   }
 
   /**
