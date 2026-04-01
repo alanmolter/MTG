@@ -193,7 +193,19 @@ async function launchMasterTraining() {
       });
 
       const tStart = Date.now();
+
+      let lastHeartbeat = Date.now();
+      const heartbeat = setInterval(() => {
+        const now = Date.now();
+        if (now - lastHeartbeat < 15_000) return;
+        lastHeartbeat = now;
+
+        const elapsedSec = ((now - tStart) / 1000).toFixed(0);
+        const pid = child.pid ?? 'n/a';
+        console.log(`[Orchestrator] ${name} ainda executando... pid=${pid} | +${elapsedSec}s | ${timestamp()}`);
+      }, 1000);
       child.on("close", (code) => {
+        clearInterval(heartbeat);
         const dur = ((Date.now() - tStart) / 1000).toFixed(1);
         if (code === 0) {
           console.log(`\n  [OK] Modulo "${name}" concluido em ${dur}s`);

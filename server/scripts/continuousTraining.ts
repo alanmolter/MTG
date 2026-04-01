@@ -231,6 +231,8 @@ async function main() {
   let bestScore    = 0;
   const scoreHistory: number[] = [];
 
+  let lastHeartbeat = Date.now();
+
   // Gerar população inicial (5 arquétipos × 20 decks)
   let population = ARCHETYPES.flatMap(arch =>
     Array.from({ length: DECKS_PER_ARCH }, () => generateDeck(pool, weights, arch))
@@ -241,6 +243,15 @@ async function main() {
   console.log('────────────────────────────────────────────────────────');
 
   for (let it = 1; it <= ITERATIONS; it++) {
+    if (Date.now() - lastHeartbeat >= 15_000) {
+      const stats = queue.getStats();
+      const processing = stats.isProcessing ? '*' : '';
+      console.log(
+        `\n[Heartbeat] SelfPlay it:${it}/${ITERATIONS} | partidas:${totalMatches} | wins:${totalWins} | best:${bestScore.toFixed(3)} | fila:${stats.queueLength}${processing} | ${new Date().toLocaleTimeString()}`
+      );
+      lastHeartbeat = Date.now();
+    }
+
     // ── Avaliar e ordenar por score ──────────────────────────────
     const scored = population
       .map(deck => ({ deck, score: evaluateDeckQuick(deck, 'modern') }))
