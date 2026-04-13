@@ -1,8 +1,23 @@
 import { getDb } from "../db";
 import { embeddingsCache, EmbeddingsCache, cards, Card } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
-const MODEL_VERSION = "v1.0";
+// Deve coincidir com o modelVersion gerado pelo embeddingTrainer.ts
+const MODEL_VERSION = "v2.0-real";
+
+// Vocabulário fixo de 64 termos MTG relevantes — cada dimensão representa
+// a frequência normalizada desse termo no texto oracle da carta.
+const MTG_VOCAB: string[] = [
+  "destroy","exile","counter","draw","search","library","creature","instant",
+  "sorcery","land","flying","haste","trample","token","sacrifice","graveyard",
+  "discard","hexproof","vigilance","lifelink","deathtouch","flash","equip",
+  "enchant","whenever","beginning","planeswalker","artifact","target","each",
+  "player","damage","life","turn","mana","add","tapped","untap","attack",
+  "block","combat","control","permanent","battlefield","hand","enter","copy",
+  "cast","return","bounce","mill","reveal","shuffle","loyalty","power",
+  "toughness","double","strike","reach","indestructible","shroud","prowess",
+  "protection","basic",
+];
 
 /**
  * Calcula similaridade coseno entre dois vetores
@@ -25,41 +40,38 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /**
- * Gera embedding simples baseado em características da carta
- * Em produção, isso seria substituído por Word2Vec real
+ * Gera embedding semântico baseado no texto oracle da carta.
+ * Dimensão 64: frequência TF dos 62 termos MTG + CMC normalizado + valor de raridade.
+ * Cartas com oracle text similar (ex: dois wrath effects) terão alta similaridade coseno.
  */
-function generateSimpleEmbedding(card: Card): number[] {
-  const embedding: number[] = new Array(50).fill(0);
+function generateTextEmbedding(card: Card): number[] {
+  const DIM = 64;
+  const embedding: number[] = new Array(DIM).fill(0);
 
-  // Usar características da carta para gerar embedding
-  if (card.colors) {
-    const colors = card.colors.split("");
-    colors.forEach((color, idx) => {
-      embedding[idx] = color.charCodeAt(0) / 100;
-    });
+  const text = ((card.text ?? "") + " " + (card.type ?? "") + " " + (card.name ?? ""))
+    .toLowerCase()
+    .replace(/[{}()\[\].,;:'"!?]/g, " ");
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const total = tokens.length || 1;
+
+  // Dimensões 0-61: TF por termo do vocabulário MTG
+  for (let i = 0; i < MTG_VOCAB.length; i++) {
+    const term = MTG_VOCAB[i];
+    const freq = tokens.filter(t => t === term || t.startsWith(term)).length;
+    embedding[i] = freq / total;
   }
 
-  if (card.cmc !== null) {
-    embedding[5] = card.cmc / 10;
-  }
+  // Dimensão 62: CMC normalizado (0–10 → 0–1)
+  embedding[62] = Math.min((card.cmc ?? 0) / 10, 1.0);
 
-  if (card.type) {
-    const typeHash = card.type.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    for (let i = 6; i < 15; i++) {
-      embedding[i] = (typeHash % (i + 1)) / 100;
-    }
-  }
+  // Dimensão 63: valor de raridade
+  const rarityMap: Record<string, number> = { common: 0.1, uncommon: 0.3, rare: 0.6, mythic: 0.9 };
+  embedding[63] = rarityMap[card.rarity ?? ""] ?? 0.5;
 
-  if (card.rarity) {
-    const rarityValue = { common: 0.1, uncommon: 0.3, rare: 0.6, mythic: 0.9 };
-    embedding[15] = rarityValue[card.rarity as keyof typeof rarityValue] || 0.5;
-  }
-
-  // Adicionar ruído determinístico baseado no ID da carta para diversidade
-  if (card.id) {
-    for (let i = 16; i < 50; i++) {
-      embedding[i] = ((card.id * (i + 1)) % 100) / 100;
-    }
+  // L2-normalização
+  const norm = Math.sqrt(embedding.reduce((s, v) => s + v * v, 0));
+  if (norm > 0) {
+    for (let i = 0; i < DIM; i++) embedding[i] /= norm;
   }
 
   return embedding;
@@ -73,11 +85,11 @@ export async function getCardEmbedding(cardId: number): Promise<number[] | null>
   if (!db) return null;
 
   try {
-    // Buscar no cache
+    // Buscar no cache filtrando pela versão atual (evita retornar vetores v1.0 obsoletos)
     const cached = await db
       .select()
       .from(embeddingsCache)
-      .where(eq(embeddingsCache.cardId, cardId))
+      .where(and(eq(embeddingsCache.cardId, cardId), eq(embeddingsCache.modelVersion, MODEL_VERSION)))
       .limit(1);
 
     if (cached.length > 0) {
@@ -88,7 +100,7 @@ export async function getCardEmbedding(cardId: number): Promise<number[] | null>
       }
     }
 
-    // Gerar novo embedding
+    // Gerar novo embedding semântico baseado no texto oracle
     const card = await db
       .select()
       .from(cards)
@@ -97,7 +109,7 @@ export async function getCardEmbedding(cardId: number): Promise<number[] | null>
 
     if (card.length === 0) return null;
 
-    const embedding = generateSimpleEmbedding(card[0]);
+    const embedding = generateTextEmbedding(card[0]);
 
     // Cachear
     try {
@@ -179,9 +191,10 @@ export async function findSimilarCardsForDeck(
     const validEmbeddings = embeddings.filter((e) => e !== null) as number[][];
     if (validEmbeddings.length === 0) return [];
 
-    const avgEmbedding = new Array(50).fill(0);
+    const dim = validEmbeddings[0].length;
+    const avgEmbedding = new Array(dim).fill(0);
     for (const embedding of validEmbeddings) {
-      for (let i = 0; i < embedding.length; i++) {
+      for (let i = 0; i < dim; i++) {
         avgEmbedding[i] += embedding[i] / validEmbeddings.length;
       }
     }

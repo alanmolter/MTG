@@ -12,8 +12,8 @@
 import * as fs from "fs/promises";
 import * as crypto from "crypto";
 import { getDb } from "../db";
-import { competitiveDecks } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { competitiveDecks, competitiveDeckCards } from "../../drizzle/schema";
+import { eq, inArray } from "drizzle-orm";
 
 interface CompetitiveTrainMetadata {
   version: number;
@@ -72,13 +72,27 @@ export class CompetitiveLearningBridge {
         return { version: 0, hash: "", deckCount: 0 };
       }
 
-      // 2. Transformar para formato de treino
+      // 2. Buscar cartas de todos os decks em uma única query
+      const deckIds = competitiveDecksData.map((cd: any) => cd.id);
+      const allCardRows = await db
+        .select()
+        .from(competitiveDeckCards)
+        .where(inArray(competitiveDeckCards.deckId, deckIds));
+
+      // Agrupar cartas por deckId
+      const cardsByDeck = new Map<number, Array<{ name: string; count: number }>>();
+      for (const row of allCardRows) {
+        if (!cardsByDeck.has(row.deckId)) cardsByDeck.set(row.deckId, []);
+        cardsByDeck.get(row.deckId)!.push({ name: row.cardName, count: row.quantity });
+      }
+
+      // 3. Transformar para formato de treino com cartas reais
       const decks = competitiveDecksData.map((cd: any) => ({
         id: cd.id.toString(),
         name: cd.name,
         format: cd.format,
         source: cd.source,
-        cards: [] as Array<{ name: string; count: number }>,
+        cards: cardsByDeck.get(cd.id) ?? [],
       }));
 
       // 3. Calcular hash dos dados

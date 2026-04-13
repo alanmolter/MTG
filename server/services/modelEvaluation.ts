@@ -1,6 +1,6 @@
 import { extractCardFeatures, CardFeatures, simulateTurns, calculateDeckMetrics } from "./gameFeatureEngine";
 import { evaluateDeckWithBrain } from "./deckEvaluationBrain";
-import { META_DECKS } from "./metaDecks";
+import { getMetaDecksForArchetype } from "./metaDecks";
 import { MetaAnalytics } from "./metaAnalytics";
 
 /**
@@ -29,32 +29,54 @@ export class ModelEvaluator {
     let lifeB = 20;
     let turn = 1;
 
-    // Simulação com variância estocástica para evitar winrate trivial de 100%.
-    // Cada turno tem um fator de "mão" (0.5–1.5) que simula draws aleatórios.
-    // Sem isso, o deck A (gerado pelo modelo) sempre vence por ter mais cartas
-    // com impactScore alto, tornando o treinamento ineficaz.
+    // Detectar combos antes do loop (determina se existe win condition acelerada)
+    const comboA = this.detectCombo(featuresA);
+    const comboB = this.detectCombo(featuresB);
+
+    // Board state acumulado: criaturas permanecem em jogo entre turnos
+    let boardPowerA = 0;
+    let boardPowerB = 0;
+
     while (lifeA > 0 && lifeB > 0 && turn <= 20) {
-      // Fator de variabilidade por turno (simula draws)
       const handFactorA = 0.5 + Math.random();
       const handFactorB = 0.5 + Math.random();
 
-      // Turno A
-      const powerA = this.calculateTurnPower(featuresA, turn) * handFactorA;
+      // ── Turno A ──────────────────────────────────────────────────
+      // Combo win: se A tem combo pronto e B não tem counterspell suficiente
+      if (comboA.hasCombo && turn >= comboA.comboTurn) {
+        const countersB = this.calculateCounterspellCount(featuresB, turn);
+        if (countersB === 0) {
+          lifeB = 0;
+          break;
+        }
+      }
+
+      // Ameaças novas neste turno (ordenadas por CMC asc — sequência real de jogo)
+      const newThreatsA = this.calculateTurnPower(featuresA, turn) * handFactorA;
+      // Board acumula 85% das criaturas anteriores (remoções tiram ~15%)
+      boardPowerA = boardPowerA * 0.85 + newThreatsA;
       const interactB = this.calculateInteraction(featuresB, turn) * (0.7 + Math.random() * 0.6);
-      lifeB -= Math.max(0, powerA - interactB);
+      lifeB -= Math.max(0, boardPowerA - interactB);
 
       if (lifeB <= 0) break;
 
-      // Turno B
-      const powerB = this.calculateTurnPower(featuresB, turn) * handFactorB;
+      // ── Turno B ──────────────────────────────────────────────────
+      if (comboB.hasCombo && turn >= comboB.comboTurn) {
+        const countersA = this.calculateCounterspellCount(featuresA, turn);
+        if (countersA === 0) {
+          lifeA = 0;
+          break;
+        }
+      }
+
+      const newThreatsB = this.calculateTurnPower(featuresB, turn) * handFactorB;
+      boardPowerB = boardPowerB * 0.85 + newThreatsB;
       const interactA = this.calculateInteraction(featuresA, turn) * (0.7 + Math.random() * 0.6);
-      lifeA -= Math.max(0, powerB - interactA);
+      lifeA -= Math.max(0, boardPowerB - interactA);
 
       turn++;
     }
 
-    // Empate (ambos com vida > 0 após 20 turnos): vence quem tem mais vida
-    // Se igual, desempate aleatório 50/50
     if (lifeA > 0 && lifeB > 0) {
       if (lifeA === lifeB) {
         return { winner: Math.random() < 0.5 ? "A" : "B", turns: turn, finalLifeA: lifeA, finalLifeB: lifeB };
@@ -70,24 +92,47 @@ export class ModelEvaluator {
     };
   }
 
+  /**
+   * Detecta se um deck tem combo win condition e estima o turno de execução.
+   * Critério: engine recorrente (whenever/untap) + tutor OU (sacrifice + token).
+   */
+  private static detectCombo(features: CardFeatures[]): { hasCombo: boolean; comboTurn: number } {
+    const hasEngine = features.some(f => f.roles.includes("engine"));
+    const hasTutor  = features.some(f => f.roles.includes("tutor"));
+    const hasSacrifice = features.some(f => f.mechanicTags.includes("sacrifice"));
+    const hasToken     = features.some(f => f.mechanicTags.includes("token"));
+    const hasCombo = hasEngine && (hasTutor || (hasSacrifice && hasToken));
+
+    // Turno do combo ≈ CMC do enabler mais barato + 2 turnos de setup
+    const enablerCmc = features
+      .filter(f => f.roles.includes("engine") || f.roles.includes("tutor"))
+      .reduce((min, f) => Math.min(min, f.cmc), 10);
+
+    return { hasCombo, comboTurn: enablerCmc + 2 };
+  }
+
+  /**
+   * Conta counterspells disponíveis na mão simulada para intercepção de combo.
+   */
+  private static calculateCounterspellCount(features: CardFeatures[], turn: number): number {
+    return features.filter(f => f.cmc <= turn && f.roles.includes("counterspell")).length;
+  }
+
   private static calculateTurnPower(features: CardFeatures[], turn: number): number {
-    // Ameaças jogáveis no turno (CMC <= turno atual)
     const playable = features.filter(f => f.cmc <= turn && f.roles.includes("threat"));
     if (playable.length === 0) return 0;
 
-    // Simular mão de 7 cartas: em cada turno, o jogador tem acesso a ~7 + turno cartas
-    // do deck (mão inicial + draws). Limitar as ameaças ativas a esse número
-    // evita que decks Commander (100 cartas) dominem decks Standard (60 cartas)
-    // por puro volume de cartas jogáveis.
     const handSize = Math.min(playable.length, 6 + turn);
-    const sampled = playable.slice(0, handSize);
+    // Ordenar por CMC asc: jogadores reais jogam ameaças baratas primeiro
+    const sampled = [...playable].sort((a, b) => a.cmc - b.cmc).slice(0, handSize);
     const avgImpact = sampled.reduce((s, f) => s + f.impactScore, 0) / sampled.length;
-    return avgImpact * (turn * 0.4); // escala com o jogo
+    return avgImpact * (turn * 0.4);
   }
 
   private static calculateInteraction(features: CardFeatures[], turn: number): number {
-    // Remoções/Counterspells disponíveis — limitadas pela mão simulada
-    const interaction = features.filter(f => f.cmc <= turn && (f.roles.includes("removal") || f.roles.includes("counterspell")));
+    const interaction = features.filter(
+      f => f.cmc <= turn && (f.roles.includes("removal") || f.roles.includes("counterspell") || f.roles.includes("board_wipe"))
+    );
     const available = Math.min(interaction.length, 3 + Math.floor(turn / 2));
     return available * 0.3;
   }
@@ -96,7 +141,7 @@ export class ModelEvaluator {
    * Calcula o Winrate de um deck contra um conjunto de oponentes (Meta)
    */
   public static async evaluateWinrate(deck: any[], archetype: string, iterations: number = 20): Promise<number> {
-    const opponentsRaw = META_DECKS[archetype as keyof typeof META_DECKS] || META_DECKS.aggro;
+    const opponentsRaw = await getMetaDecksForArchetype(archetype);
     const opponents = await Promise.all(opponentsRaw.map(dl => MetaAnalytics.parseDecklist(dl)));
     
     let wins = 0;

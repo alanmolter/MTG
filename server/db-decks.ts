@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { decks, deckCards, Deck, DeckCard, Card, cards } from "../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 export async function createDeck(
   userId: number,
@@ -13,20 +13,14 @@ export async function createDeck(
   if (!db) return null;
 
   try {
-    await db.insert(decks).values({
+    const result = await db.insert(decks).values({
       userId,
       name,
       format,
       archetype,
       description,
       isPublic: 0,
-    });
-
-    const result = await db
-      .select()
-      .from(decks)
-      .where(and(eq(decks.userId, userId), eq(decks.name, name)))
-      .limit(1);
+    }).returning();
 
     return result[0] || null;
   } catch (error) {
@@ -54,12 +48,25 @@ export async function getUserDecks(userId: number): Promise<Deck[]> {
 export async function addCardToDeck(
   deckId: number,
   cardId: number,
-  quantity: number = 1
+  quantity: number = 1,
+  format?: string
 ): Promise<DeckCard | null> {
   const db = await getDb();
   if (!db) return null;
 
   try {
+    // Determine copy limit based on format
+    let copyLimit = 4;
+    if (format === "commander") {
+      const cardRow = await db
+        .select({ type: cards.type })
+        .from(cards)
+        .where(eq(cards.id, cardId))
+        .limit(1);
+      const isBasicLand = cardRow[0]?.type?.toLowerCase().includes("basic") ?? false;
+      if (!isBasicLand) copyLimit = 1;
+    }
+
     // Check if card already exists in deck
     const existing = await db
       .select()
@@ -69,7 +76,7 @@ export async function addCardToDeck(
 
     if (existing.length > 0) {
       // Update quantity
-      const newQuantity = Math.min(existing[0].quantity + quantity, 4); // Max 4 copies
+      const newQuantity = Math.min(existing[0].quantity + quantity, copyLimit);
       await db
         .update(deckCards)
         .set({ quantity: newQuantity })
@@ -82,7 +89,7 @@ export async function addCardToDeck(
     await db.insert(deckCards).values({
       deckId,
       cardId,
-      quantity: Math.min(quantity, 4),
+      quantity: Math.min(quantity, copyLimit),
     });
 
     const result = await db
@@ -118,26 +125,16 @@ export async function getDeckCards(deckId: number): Promise<(DeckCard & { card: 
   if (!db) return [];
 
   try {
-    const deckCardList = await db
+    const rows = await db
       .select()
       .from(deckCards)
+      .innerJoin(cards, eq(deckCards.cardId, cards.id))
       .where(eq(deckCards.deckId, deckId));
 
-    const result = await Promise.all(
-      deckCardList.map(async (dc) => {
-        const card = await db
-          .select()
-          .from(cards)
-          .where(eq(cards.id, dc.cardId))
-          .limit(1);
-        return {
-          ...dc,
-          card: card[0],
-        };
-      })
-    );
-
-    return result.filter((item) => item.card);
+    return rows.map((row) => ({
+      ...row.deck_cards,
+      card: row.cards,
+    }));
   } catch (error) {
     console.error("Error getting deck cards:", error);
     return [];

@@ -100,3 +100,56 @@ export const META_DECKS = {
     `
   ]
 };
+
+// ---------------------------------------------------------------------------
+// Loader dinâmico: tenta carregar decks reais do banco, cai no hardcoded
+// ---------------------------------------------------------------------------
+
+/**
+ * Retorna decks de referência para avaliação de winrate.
+ * Prioriza decks competitivos reais do banco; usa META_DECKS hardcoded como fallback.
+ */
+export async function getMetaDecksForArchetype(archetype: string): Promise<string[]> {
+  try {
+    const { getDb } = await import("../db");
+    const { competitiveDecks, competitiveDeckCards } = await import("../../drizzle/schema");
+    const { eq, inArray } = await import("drizzle-orm");
+
+    const db = await getDb();
+    if (!db) return META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro;
+
+    // Busca até 3 decks competitivos reais para o arquétipo
+    const dbDecks = await db
+      .select()
+      .from(competitiveDecks)
+      .where(eq(competitiveDecks.archetype, archetype))
+      .limit(3);
+
+    if (dbDecks.length === 0) {
+      return META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro;
+    }
+
+    const deckIds = dbDecks.map((d) => d.id);
+    const cardRows = await db
+      .select()
+      .from(competitiveDeckCards)
+      .where(inArray(competitiveDeckCards.deckId, deckIds));
+
+    // Agrupar por deckId e formatar como decklist string
+    const byDeck = new Map<number, string[]>();
+    for (const row of cardRows) {
+      if (!byDeck.has(row.deckId)) byDeck.set(row.deckId, []);
+      byDeck.get(row.deckId)!.push(`${row.quantity} ${row.cardName}`);
+    }
+
+    const decklists = deckIds
+      .map((id) => byDeck.get(id)?.join("\n") ?? "")
+      .filter((d) => d.length > 0);
+
+    return decklists.length > 0
+      ? decklists
+      : META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro;
+  } catch {
+    return META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro;
+  }
+}

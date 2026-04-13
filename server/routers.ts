@@ -1,6 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 
@@ -90,9 +91,12 @@ export const appRouter = router({
           quantity: z.number().default(1),
         })
       )
-      .mutation(async ({ input }) => {
-        const { addCardToDeck } = await import("./db-decks");
-        return await addCardToDeck(input.deckId, input.cardId, input.quantity);
+      .mutation(async ({ ctx, input }) => {
+        const { addCardToDeck, getDeckById } = await import("./db-decks");
+        const deck = await getDeckById(input.deckId);
+        if (!deck) throw new TRPCError({ code: "NOT_FOUND", message: "Deck não encontrado" });
+        if (deck.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        return await addCardToDeck(input.deckId, input.cardId, input.quantity, deck.format);
       }),
 
     removeCard: protectedProcedure
@@ -102,8 +106,11 @@ export const appRouter = router({
           cardId: z.number(),
         })
       )
-      .mutation(async ({ input }) => {
-        const { removeCardFromDeck } = await import("./db-decks");
+      .mutation(async ({ ctx, input }) => {
+        const { removeCardFromDeck, getDeckById } = await import("./db-decks");
+        const deck = await getDeckById(input.deckId);
+        if (!deck) throw new TRPCError({ code: "NOT_FOUND", message: "Deck não encontrado" });
+        if (deck.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
         return await removeCardFromDeck(input.deckId, input.cardId);
       }),
 
@@ -112,8 +119,11 @@ export const appRouter = router({
       return await getDeckCards(input);
     }),
 
-    delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
-      const { deleteDeck } = await import("./db-decks");
+    delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const { deleteDeck, getDeckById } = await import("./db-decks");
+      const deck = await getDeckById(input);
+      if (!deck) throw new TRPCError({ code: "NOT_FOUND", message: "Deck não encontrado" });
+      if (deck.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
       return await deleteDeck(input);
     }),
   }),

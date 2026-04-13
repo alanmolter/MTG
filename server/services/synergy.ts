@@ -28,7 +28,13 @@ export async function getCardSynergy(card1Id: number, card2Id: number): Promise<
       )
       .limit(1);
 
-    return result[0]?.coOccurrenceRate || 0;
+    if (!result[0]) return 0;
+
+    const coOccurrenceRate = result[0].coOccurrenceRate ?? 0;
+    const weight = result[0].weight ?? 0;
+    // Combina co-ocorrência histórica (70%) com peso aprendido (30%)
+    const clampedWeight = Math.min(Math.max(weight, 0), 100);
+    return Math.round(coOccurrenceRate * 0.7 + clampedWeight * 0.3);
   } catch (error) {
     console.error("Error getting card synergy:", error);
     return 0;

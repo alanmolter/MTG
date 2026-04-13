@@ -47,7 +47,8 @@ describe("Synergy Engine", () => {
 
       const result = await getCardSynergy(1, 2);
 
-      expect(result).toBe(85);
+      // blended: Math.round(85*0.7 + 75*0.3) = 82
+      expect(result).toBe(82);
       expect(mockDb.select).toHaveBeenCalled();
       expect(mockDb.where).toHaveBeenCalled();
     });
@@ -93,7 +94,8 @@ describe("Synergy Engine", () => {
 
       const result = await getCardSynergy(2, 1); // Reverse order
 
-      expect(result).toBe(85);
+      // blended: Math.round(85*0.7 + 75*0.3) = 82
+      expect(result).toBe(82);
     });
   });
 

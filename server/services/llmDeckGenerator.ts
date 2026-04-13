@@ -12,7 +12,7 @@
  * Node 22+ usa fetch nativo — sem dependências extras necessárias.
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { cards, competitiveDecks, metaStats } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { validateDeck } from "./deckGenerator";
@@ -308,27 +308,36 @@ export async function generateDeckWithLLM(
   console.log(`[LLMGenerator] Chamando Anthropic API (claude-opus-4-5)...`);
   const llmResult = await callAnthropicAPI(prompt);
 
-  // 4. Validar com o validador existente do projeto (Constraint Validator)
-  // Converter LLMDeckCard para o formato esperado por validateDeck
-  const cardsForValidation = llmResult.mainboard.map((c) => ({
-    id: 0,
-    scryfallId: "",
-    oracleId: null,
-    name: c.name,
-    type: null,
-    colors: null,
-    cmc: null,
-    rarity: null,
-    imageUrl: null,
-    power: null,
-    toughness: null,
-    text: null,
-    priceUsd: null,
-    isArena: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    quantity: c.quantity,
-  }));
+  // 4. Enriquecer cartas do LLM com dados reais do banco antes de validar
+  const db = await getDb();
+  const llmNames = llmResult.mainboard.map((c) => c.name);
+  const realCardsData = db
+    ? await db.select().from(cards).where(inArray(cards.name, llmNames)).catch(() => [])
+    : [];
+  const realCardMap = new Map(realCardsData.map((c) => [c.name.toLowerCase(), c]));
+
+  const cardsForValidation = llmResult.mainboard.map((c) => {
+    const real = realCardMap.get(c.name.toLowerCase());
+    return {
+      id: real?.id ?? 0,
+      scryfallId: real?.scryfallId ?? "",
+      oracleId: null,
+      name: c.name,
+      type: real?.type ?? null,
+      colors: real?.colors ?? null,
+      cmc: real?.cmc ?? null,
+      rarity: real?.rarity ?? null,
+      imageUrl: real?.imageUrl ?? null,
+      power: real?.power ?? null,
+      toughness: real?.toughness ?? null,
+      text: real?.text ?? null,
+      priceUsd: null,
+      isArena: real?.isArena ?? 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      quantity: c.quantity,
+    };
+  });
 
   const dbFormat = format.toLowerCase() as
     | "standard"

@@ -368,15 +368,15 @@ export function mutateDeck(deck: any[], pool: any[]): any[] {
 }
 
 export function optimizeDeckRL(
-  deck: any[], 
-  pool: any[], 
-  archetype: string, 
-  iterations: number = 100, 
+  deck: any[],
+  pool: any[],
+  archetype: string,
+  iterations: number = 100,
   evaluator?: (deck: any[], archetype: string) => { totalScore: number }
 ): { deck: any[], initialScore: number, finalScore: number, improvements: number } {
   let currentDeck = [...deck];
   const getScore = (d: any[]) => evaluator ? evaluator(d, archetype).totalScore : calculateDeckMetrics(d, archetype).totalScore;
-  
+
   let initialScore = getScore(currentDeck);
   let currentScore = initialScore;
   let improvements = 0;
@@ -391,4 +391,183 @@ export function optimizeDeckRL(
     }
   }
   return { deck: currentDeck, initialScore, finalScore: currentScore, improvements };
+}
+
+// ─── Win Condition Validator ───────────────────────────────────────────────────
+
+export interface WinConditionResult {
+  hasWinCondition: boolean;
+  types: string[];
+  confidence: number; // 0-100
+  details: string[];
+  warnings: string[];
+}
+
+interface WinCard {
+  name: string;
+  type?: string | null;
+  text?: string | null;
+  power?: string | null;
+}
+
+const ALT_WIN_PATTERNS: { pattern: RegExp; label: string }[] = [
+  { pattern: /you win the game/i, label: "alternate_win" },
+  { pattern: /that player loses the game/i, label: "alternate_win" },
+  { pattern: /opponents? lose/i, label: "alternate_win" },
+  { pattern: /poison counter/i, label: "poison_win" },
+  { pattern: /infect/i, label: "poison_win" },
+  { pattern: /mill/i, label: "mill_win" },
+  { pattern: /library.*empty|empty.*library/i, label: "mill_win" },
+  { pattern: /exile.*library/i, label: "mill_win" },
+];
+
+const COMBO_KEYWORDS = ["infinite", "whenever.*untap", "tap.*add.*mana.*tap.*add", "loop"];
+
+/**
+ * Named MTG combo pairs/trios. Each entry: at least 2 cards that together form
+ * an infinite loop or instant-win when assembled.
+ * Key = combo name, value = required card names (lowercase, partial match ok).
+ */
+const KNOWN_COMBOS: { name: string; label: string; pieces: string[] }[] = [
+  // Creature copy loops (infinite combat/damage)
+  { name: "Kiki-Jiki + Pestermite", label: "combo_engine", pieces: ["kiki-jiki", "pestermite"] },
+  { name: "Kiki-Jiki + Deceiver Exarch", label: "combo_engine", pieces: ["kiki-jiki", "deceiver exarch"] },
+  { name: "Kiki-Jiki + Restoration Angel", label: "combo_engine", pieces: ["kiki-jiki", "restoration angel"] },
+  { name: "Splinter Twin + Pestermite", label: "combo_engine", pieces: ["splinter twin", "pestermite"] },
+  { name: "Splinter Twin + Deceiver Exarch", label: "combo_engine", pieces: ["splinter twin", "deceiver exarch"] },
+  // Library win combos
+  { name: "Thassa's Oracle + Demonic Consultation", label: "combo_engine", pieces: ["thassa's oracle", "demonic consultation"] },
+  { name: "Thassa's Oracle + Tainted Pact", label: "combo_engine", pieces: ["thassa's oracle", "tainted pact"] },
+  { name: "Laboratory Maniac + Demonic Consultation", label: "combo_engine", pieces: ["laboratory maniac", "demonic consultation"] },
+  // Infinite damage/counters
+  { name: "Heliod + Walking Ballista", label: "combo_engine", pieces: ["heliod, sun-crowned", "walking ballista"] },
+  { name: "Mikaeus + Triskelion", label: "combo_engine", pieces: ["mikaeus, the unhallowed", "triskelion"] },
+  { name: "Mikaeus + Walking Ballista", label: "combo_engine", pieces: ["mikaeus, the unhallowed", "walking ballista"] },
+  // Infinite mana combos
+  { name: "Urza + Dramatic Reversal + Isochron Scepter", label: "combo_engine", pieces: ["dramatic reversal", "isochron scepter"] },
+  { name: "Selvala + Freed from the Real", label: "combo_engine", pieces: ["selvala", "freed from the real"] },
+  { name: "Basalt Monolith + Rings of Brighthearth", label: "combo_engine", pieces: ["basalt monolith", "rings of brighthearth"] },
+  // Infinite tokens/creatures
+  { name: "Nim Deathmantle + Ashnod's Altar + Creature", label: "combo_engine", pieces: ["nim deathmantle", "ashnod's altar"] },
+  { name: "Painter's Servant + Grindstone", label: "combo_engine", pieces: ["painter's servant", "grindstone"] },
+  // Alternate win with combo
+  { name: "Approach of the Second Sun", label: "alternate_win", pieces: ["approach of the second sun"] },
+  { name: "Thassa's Oracle empty library", label: "alternate_win", pieces: ["thassa's oracle"] },
+  // Poison / Infect combos
+  { name: "Infect + Pump", label: "poison_win", pieces: ["glistener elf"] },
+  { name: "Phyresis + Target", label: "poison_win", pieces: ["phyresis"] },
+  // Mill combos
+  { name: "Traumatize + Fraying Sanity", label: "mill_win", pieces: ["traumatize", "fraying sanity"] },
+  { name: "Maddening Cacophony + Bruvac", label: "mill_win", pieces: ["maddening cacophony", "bruvac"] },
+];
+
+/**
+ * Detecta win conditions em um deck baseado no texto das cartas.
+ * Identifica: dano direto, combos, win alternativas, mill e planeswalkers.
+ */
+export function detectWinConditions(cards: WinCard[]): WinConditionResult {
+  const types: Set<string> = new Set();
+  const details: string[] = [];
+  const warnings: string[] = [];
+
+  let tutorCount = 0;
+  let hasteCreatureCount = 0;
+  let evasionCreatureCount = 0;
+  let directDamageCount = 0;
+  let planeswalkerCount = 0;
+  let comboEngineCount = 0;
+
+  for (const card of cards) {
+    const text = (card.text || "").toLowerCase();
+    const type = (card.type || "").toLowerCase();
+    const name = (card.name || "").toLowerCase();
+
+    // Planeswalker win condition
+    if (type.includes("planeswalker")) {
+      planeswalkerCount++;
+      if (planeswalkerCount >= 2) types.add("planeswalker_pressure");
+    }
+
+    // Alternate win conditions (text patterns)
+    for (const { pattern, label } of ALT_WIN_PATTERNS) {
+      if (pattern.test(text) || pattern.test(name)) {
+        types.add(label);
+        details.push(`${card.name} — ${label.replace("_", " ")}`);
+      }
+    }
+
+    // Direct damage win (burn/aggro)
+    if (
+      text.includes("deals") && text.includes("damage") &&
+      (text.includes("target player") || text.includes("any target") || text.includes("each opponent"))
+    ) {
+      directDamageCount++;
+    }
+
+    // Creatures with evasion or haste (aggro clock)
+    if (type.includes("creature")) {
+      if (text.includes("haste")) hasteCreatureCount++;
+      if (
+        text.includes("flying") || text.includes("trample") ||
+        text.includes("unblockable") || text.includes("menace") ||
+        text.includes("can't be blocked")
+      ) evasionCreatureCount++;
+    }
+
+    // Tutors (combo enablers)
+    if (text.includes("search your library") && !text.includes("basic land")) {
+      tutorCount++;
+    }
+
+    // Combo engine indicators
+    if (
+      text.includes("whenever") && (text.includes("untap") || text.includes("add {")) ||
+      (text.includes("return") && text.includes("from your graveyard")) ||
+      COMBO_KEYWORDS.some(k => new RegExp(k).test(text))
+    ) {
+      comboEngineCount++;
+    }
+  }
+
+  // Classify aggro win condition
+  if (directDamageCount >= 4 || (hasteCreatureCount + evasionCreatureCount) >= 8) {
+    types.add("aggro_damage");
+    details.push(
+      `${hasteCreatureCount} haste + ${evasionCreatureCount} evasion creatures, ${directDamageCount} direct damage spells`
+    );
+  }
+
+  // Classify combo win condition (heuristic)
+  if (tutorCount >= 3 && comboEngineCount >= 2) {
+    types.add("combo_engine");
+    details.push(`${tutorCount} tutors + ${comboEngineCount} combo engine pieces`);
+  }
+
+  // Named combo detection — check if the deck contains known MTG combo pieces
+  const deckNames = cards.map(c => (c.name || "").toLowerCase());
+  for (const combo of KNOWN_COMBOS) {
+    const matchCount = combo.pieces.filter(piece =>
+      deckNames.some(name => name.includes(piece))
+    ).length;
+    if (matchCount >= Math.min(2, combo.pieces.length)) {
+      types.add(combo.label);
+      details.push(`Named combo: ${combo.name}`);
+    }
+  }
+
+  // Warnings for weak/missing win conditions
+  if (types.size === 0 && planeswalkerCount < 2) {
+    warnings.push("No clear win condition detected — add direct damage, evasion creatures, or explicit win cards");
+  }
+  if (tutorCount === 0 && types.has("combo_engine")) {
+    warnings.push("Combo detected but no tutors — combo pieces may be hard to assemble consistently");
+  }
+
+  const hasWinCondition = types.size > 0;
+
+  // Confidence: more evidence = higher confidence
+  const evidenceScore = types.size * 25 + details.length * 10 + (planeswalkerCount >= 2 ? 15 : 0);
+  const confidence = Math.min(100, evidenceScore);
+
+  return { hasWinCondition, types: Array.from(types), confidence, details, warnings };
 }
