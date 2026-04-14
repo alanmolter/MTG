@@ -399,6 +399,32 @@ export const appRouter = router({
         const { generateDeckWithLLM } = await import("./services/llmDeckGenerator");
         return await generateDeckWithLLM(input);
       }),
+
+    // -----------------------------------------------------------------------
+    // explainDeck — Gera explicação detalhada de um deck gerado
+    // Analisa sinergias, condições de vitória, sequência de jogo e
+    // cartas chave. Usa Claude (com API key) ou análise rule-based.
+    // -----------------------------------------------------------------------
+    explainDeck: publicProcedure
+      .input(
+        z.object({
+          cards: z.array(
+            z.object({
+              name: z.string(),
+              type: z.string().optional().nullable(),
+              text: z.string().optional().nullable(),
+              cmc: z.number().optional().nullable(),
+              quantity: z.number(),
+            })
+          ),
+          archetype: z.string(),
+          format: z.string(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { explainDeck } = await import("./services/deckExplainer");
+        return await explainDeck(input.cards, input.archetype, input.format);
+      }),
   }),
 
   sync: router({

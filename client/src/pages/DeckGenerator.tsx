@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Wand2, Download, Brain, BarChart3, Zap, Shield, Swords, TrendingUp } from "lucide-react";
+import { Loader2, Wand2, Download, Brain, BarChart3, Zap, Shield, Swords, TrendingUp, BookOpen, Sparkles, Trophy, ChevronRight, Link2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -80,6 +80,151 @@ function TagBadge({ tag, count }: { tag: string; count: number }) {
   );
 }
 
+// ─── Deck Explanation Component ───────────────────────────────────────────────
+
+const SYNERGY_TYPE_COLORS: Record<string, string> = {
+  combo:      "bg-red-900/30 border-red-500/30 text-red-300",
+  engine:     "bg-orange-900/30 border-orange-500/30 text-orange-300",
+  value:      "bg-blue-900/30 border-blue-500/30 text-blue-300",
+  protection: "bg-purple-900/30 border-purple-500/30 text-purple-300",
+  theme:      "bg-teal-900/30 border-teal-500/30 text-teal-300",
+};
+
+const SYNERGY_TYPE_LABELS: Record<string, string> = {
+  combo: "Combo", engine: "Motor", value: "Valor", protection: "Proteção", theme: "Tema",
+};
+
+function DeckExplanationPanel({ explanation, loading }: { explanation: any; loading: boolean }) {
+  if (loading) {
+    return (
+      <Card className="bg-slate-900/50 border-purple-500/30">
+        <CardContent className="py-10 flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+          <p className="text-gray-400 text-sm">Analisando sinergias e mecânicas do deck...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!explanation) return null;
+
+  return (
+    <Card className="bg-slate-900/50 border-purple-500/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-white flex items-center gap-2 text-base">
+          <BookOpen className="w-4 h-4 text-purple-400" />
+          Análise do Deck
+          {explanation.source === "llm" && (
+            <Badge className="bg-purple-900/50 text-purple-300 border-purple-500/30 text-[10px] ml-auto">
+              <Sparkles className="w-2.5 h-2.5 mr-1" /> AI
+            </Badge>
+          )}
+        </CardTitle>
+        <p className="text-purple-300 text-sm font-semibold">{explanation.deckStyle}</p>
+      </CardHeader>
+      <CardContent className="space-y-5">
+
+        {/* Visão Geral */}
+        <div>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
+            <Brain className="w-3 h-3" /> Estratégia
+          </p>
+          <p className="text-gray-200 text-sm leading-relaxed">{explanation.strategyOverview}</p>
+        </div>
+
+        {/* Win Conditions */}
+        {explanation.winConditions?.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
+              <Trophy className="w-3 h-3 text-yellow-400" /> Como Ganhar
+            </p>
+            <div className="space-y-1.5">
+              {explanation.winConditions.map((wc: string, i: number) => (
+                <div key={i} className="flex items-start gap-2 px-3 py-2 bg-yellow-900/10 border border-yellow-500/20 rounded-lg">
+                  <Trophy className="w-3 h-3 text-yellow-400 mt-0.5 shrink-0" />
+                  <p className="text-yellow-100 text-xs">{wc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sinergias Chave */}
+        {explanation.keySynergies?.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
+              <Link2 className="w-3 h-3 text-green-400" /> Sinergias Chave
+            </p>
+            <div className="space-y-2">
+              {explanation.keySynergies.map((syn: any, i: number) => {
+                const cls = SYNERGY_TYPE_COLORS[syn.type] ?? SYNERGY_TYPE_COLORS.theme;
+                return (
+                  <div key={i} className={`px-3 py-2.5 rounded-lg border ${cls}`}>
+                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                      <Badge className={`text-[9px] px-1.5 py-0 border ${cls}`}>
+                        {SYNERGY_TYPE_LABELS[syn.type] ?? syn.type}
+                      </Badge>
+                      {syn.cards?.map((name: string, j: number) => (
+                        <span key={j} className="flex items-center gap-0.5">
+                          {j > 0 && <ChevronRight className="w-2.5 h-2.5 opacity-50" />}
+                          <span className="text-[11px] font-semibold text-white">{name}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs opacity-80 leading-snug">{syn.description}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Sequência de Jogo */}
+        {explanation.playSequence && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
+              <Zap className="w-3 h-3 text-blue-400" /> Sequência de Jogo
+            </p>
+            <div className="space-y-2">
+              {[
+                { phase: "Início (T1-3)", text: explanation.playSequence.early, color: "border-green-500/30 bg-green-900/10 text-green-200" },
+                { phase: "Meio (T4-6)",   text: explanation.playSequence.mid,   color: "border-blue-500/30 bg-blue-900/10 text-blue-200" },
+                { phase: "Final (T7+)",   text: explanation.playSequence.late,  color: "border-purple-500/30 bg-purple-900/10 text-purple-200" },
+              ].map(({ phase, text, color }) => (
+                <div key={phase} className={`px-3 py-2 rounded-lg border ${color}`}>
+                  <p className="text-[10px] font-bold uppercase opacity-70 mb-0.5">{phase}</p>
+                  <p className="text-xs leading-snug">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Cartas Chave */}
+        {explanation.keyCards?.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
+              <Swords className="w-3 h-3 text-red-400" /> Cartas Essenciais
+            </p>
+            <div className="space-y-1.5">
+              {explanation.keyCards.map((kc: any, i: number) => (
+                <div key={i} className="flex items-start gap-2 px-3 py-2 bg-slate-800/50 rounded border border-slate-600/30">
+                  <span className="text-purple-300 font-bold text-xs w-4 shrink-0">{i + 1}.</span>
+                  <div className="min-w-0">
+                    <p className="text-white text-xs font-semibold truncate">{kc.name}</p>
+                    <p className="text-gray-400 text-[11px] leading-snug">{kc.role}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DeckGenerator() {
@@ -88,19 +233,39 @@ export default function DeckGenerator() {
   const [archetype, setArchetype] = useState("aggro");
   const [useRL, setUseRL] = useState(false);
   const [generatedDeck, setGeneratedDeck] = useState<any>(null);
+  const [deckExplanation, setDeckExplanation] = useState<any>(null);
+
+  const explainMutation = trpc.generator.explainDeck.useMutation({
+    onSuccess: (data) => setDeckExplanation(data),
+  });
 
   const generateMutation = trpc.generator.generate.useMutation({
     onSuccess: (data) => {
       setGeneratedDeck(data);
+      setDeckExplanation(null);
       const improvements = data.improvements ?? 0;
       toast.success(
         improvements > 0
-          ? `Deck generated! RL made ${improvements} improvements.`
-          : "Deck generated successfully!"
+          ? `Deck gerado! RL aplicou ${improvements} melhorias.`
+          : "Deck gerado com sucesso!"
       );
+      // Dispara análise do deck automaticamente
+      if (data.deck?.length) {
+        explainMutation.mutate({
+          cards: data.deck.map((c: any) => ({
+            name: c.name,
+            type: c.type ?? null,
+            text: c.text ?? null,
+            cmc: c.cmc ?? null,
+            quantity: c.quantity,
+          })),
+          archetype: archetype || "midrange",
+          format,
+        });
+      }
     },
     onError: () => {
-      toast.error("Failed to generate deck");
+      toast.error("Falha ao gerar o deck");
     },
   });
 
@@ -392,6 +557,12 @@ export default function DeckGenerator() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Deck Explanation */}
+                <DeckExplanationPanel
+                  explanation={deckExplanation}
+                  loading={explainMutation.isPending}
+                />
 
                 {/* Deck List */}
                 <Card className="bg-slate-900/50 border-purple-500/30">
