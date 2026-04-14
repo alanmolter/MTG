@@ -133,8 +133,12 @@ export async function generateInitialDeck(
   }
 
   // Preencher deck com cartas similares ponderadas por sinergia + peso aprendido
+  let emptyRounds = 0;
   while (currentSize < targetSize && deckCardIds.length < 100) {
     const similar = await findSimilarCardsForDeck(deckCardIds, 40);
+
+    // Pool esgotado — não há mais candidatas disponíveis
+    if (similar.length === 0) break;
 
     let addedThisRound = 0;
     for (const card of similar) {
@@ -154,7 +158,15 @@ export async function generateInitialDeck(
         addedThisRound++;
       }
     }
-    if (similar.length === 0 || addedThisRound === 0) break;
+
+    // Se nenhuma carta foi adicionada nesta rodada (chance randômica desfavorável),
+    // conta rodadas vazias consecutivas antes de desistir — evita decks subfilled
+    if (addedThisRound === 0) {
+      emptyRounds++;
+      if (emptyRounds >= 3) break; // 3 rodadas sem progresso = pool efetivamente esgotado
+    } else {
+      emptyRounds = 0; // reset ao adicionar qualquer carta
+    }
   }
 
   // Converter para formato esperado

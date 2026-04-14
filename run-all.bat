@@ -42,7 +42,7 @@ echo    Decks:     %DECKS%
 echo    Inicio:    %DATE% %TIME%
 echo ==============================================================
 echo    Run number  : %RUN_NUM%
-echo    Cor excluída: %FORBIDDEN_COLOR% (Commander step 8)
+echo    Cor excluida: %FORBIDDEN_COLOR% (Commander step 8)
 echo    Pool offset : %POOL_OFFSET% (Self-Play step 9)
 echo ==============================================================
 echo.
