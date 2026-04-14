@@ -308,5 +308,9 @@ export async function evaluateDeckWithBrain(
 
 export function evaluateDeckQuick(cards: any[], archetype: string): number {
   const metrics = calculateDeckMetrics(cards, archetype);
-  return normalizeScore(metrics.totalScore);
+  // Range ampliado [-50, 350]: mechanicSynergyScore pode chegar a 300+
+  // para decks com muitas cartas do mesmo tema (ex: 60 cartas haste × 5 = 300).
+  // Range estreito [-50, 180] saturava em 100 na iteração 10 do self-play,
+  // eliminando pressão de seleção e causando plateau prematuro.
+  return normalizeScore(metrics.totalScore, -50, 350);
 }

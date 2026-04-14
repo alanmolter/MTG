@@ -181,10 +181,12 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
     }
 
     // Salvar top sinergias no banco
+    // coOccurrenceRate = taxa (0-100), não contagem bruta
     const topSynergies = Array.from(coOccurrence.entries())
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5000); // Top 5000 pares
 
+    let synergyErrors = 0;
     for (const [key, count] of topSynergies) {
       const [name1, name2] = key.split("|||");
       const id1 = cardNameToId.get(name1.toLowerCase());
@@ -193,29 +195,43 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
       if (!id1 || !id2) continue;
 
       const [c1, c2] = id1 < id2 ? [id1, id2] : [id2, id1];
-      const weight = Math.min(100, Math.floor((count / allDecks.length) * 100));
+      // Normalizar ambos para 0-100 (taxa percentual de co-ocorrência nos decks)
+      const rate = Math.min(100, Math.round((count / allDecks.length) * 100));
+      const weight = rate; // peso = taxa de co-ocorrência inicial
 
       try {
-        await db
-          .insert(cardSynergies)
-          .values({
+        // Verificar se par já existe antes de inserir/atualizar
+        // (usa `and` e `eq` já importados no topo do arquivo)
+        const existing = await db
+          .select({ id: cardSynergies.card1Id })
+          .from(cardSynergies)
+          .where(and(eq(cardSynergies.card1Id, c1), eq(cardSynergies.card2Id, c2)))
+          .limit(1);
+
+        if (existing.length > 0) {
+          await db
+            .update(cardSynergies)
+            .set({ weight, coOccurrenceRate: rate })
+            .where(and(eq(cardSynergies.card1Id, c1), eq(cardSynergies.card2Id, c2)));
+        } else {
+          await db.insert(cardSynergies).values({
             card1Id: c1,
             card2Id: c2,
             weight,
-            coOccurrenceRate: count,
-          })
-          .onConflictDoUpdate({
-            target: [cardSynergies.card1Id, cardSynergies.card2Id],
-            set: { weight, coOccurrenceRate: count },
+            coOccurrenceRate: rate,
           });
-
+        }
         synergiesUpdated++;
-      } catch {
-        // Ignorar conflitos
+      } catch (err: unknown) {
+        synergyErrors++;
+        if (synergyErrors <= 3) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`[Trainer] Sinergia erro (${name1}+${name2}): ${msg}`);
+        }
       }
     }
 
-    console.log(`[Trainer] ${synergiesUpdated} sinergias atualizadas`);
+    console.log(`[Trainer] ${synergiesUpdated} sinergias atualizadas${synergyErrors > 0 ? ` (${synergyErrors} erros)` : ""}`);
 
     // ── 6. Atualizar job como concluído ──────────────────────────────────────
     await db

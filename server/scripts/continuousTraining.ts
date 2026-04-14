@@ -332,6 +332,7 @@ async function main() {
     if (it % 5 === 0) {
       const bestDeck = elite[0];
       if (bestDeck && bestDeck.length >= 4) {
+        let pairsUpdated = 0;
         try {
           const nonLands = bestDeck.filter(
             (c) => !c.type?.toLowerCase().includes('land') && c.id
@@ -347,9 +348,16 @@ async function main() {
               // Incremento suave: +2 pontos no weight e coOccurrenceRate, cap 100
               const newScore = Math.min(100, currentSyn + 2);
               await updateSynergy(c1.id, c2.id, newScore, newScore);
+              pairsUpdated++;
             }
           }
-        } catch { /* não-crítico — pair learning é best-effort */ }
+          if (pairsUpdated > 0 && it % 25 === 0) {
+            process.stdout.write(`\n  [PairLearning] it:${it} — ${pairsUpdated} pares sinergicos atualizados`);
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stdout.write(`\n  [PairLearning] it:${it} erro: ${msg}`);
+        }
       }
     }
 

@@ -123,7 +123,7 @@ if errorlevel 1 (
 :: --- PASSO 8: Commander Specialist ---
 echo.
 echo [8/12] Commander - DIVERSIDADE DE COR (excluindo %FORBIDDEN_COLOR%)...
-echo    Foca nas 4 cores restantes — garante que o modelo aprenda
+echo    Foca nas 4 cores restantes -- garante que o modelo aprenda
 echo    identidades de cor sub-representadas no step 7
 call npx tsx server/scripts/trainCommander.ts ^
   --iterations=300 ^
