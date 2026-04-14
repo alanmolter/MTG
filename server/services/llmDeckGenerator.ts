@@ -75,16 +75,28 @@ function buildDeckPrompt(params: {
   commander?: string;
   candidateCards: CardWithStats[];
   metaContext: string;
+  topSynergyPairs?: { card1: string; card2: string; score: number }[];
+  learnedWeights?: Record<string, number>;
 }): string {
   const deckSize = params.format === "Commander" ? 99 : 60;
 
-  const cardList = params.candidateCards
-    .slice(0, 150) // LLM não precisa de mais que 150 candidatas
+  // Ordenar candidatas por peso aprendido (desc) antes de passar ao LLM
+  // Garante que as cartas mais validadas pelo self-play apareçam primeiro
+  const sortedCandidates = [...params.candidateCards].sort((a, b) => {
+    const wa = params.learnedWeights?.[a.name] ?? 1.0;
+    const wb = params.learnedWeights?.[b.name] ?? 1.0;
+    return wb - wa;
+  });
+
+  const cardList = sortedCandidates
+    .slice(0, 150)
     .map((c) => {
       const wr = c.win_rate != null ? `WR:${c.win_rate}%` : "WR:?";
       const pr = c.play_rate != null ? `PR:${c.play_rate}%` : "PR:?";
+      const lw = params.learnedWeights?.[c.name];
+      const lwStr = lw != null ? ` | LW:${lw.toFixed(2)}` : "";
       const text = c.oracle_text ? `"${c.oracle_text.slice(0, 80)}"` : "";
-      return `${c.name} | CMC:${c.cmc ?? "?"} | ${c.type ?? "?"} | ${wr} | ${pr} | ${text}`;
+      return `${c.name} | CMC:${c.cmc ?? "?"} | ${c.type ?? "?"} | ${wr} | ${pr}${lwStr} | ${text}`;
     })
     .join("\n");
 
@@ -100,6 +112,12 @@ function buildDeckPrompt(params: {
       : `- Monte uma curva de mana coerente (4× de cada carta não-terreno)
 - Inclua entre 20-24 terrenos`;
 
+  // Bloco de sinergias conhecidas (do self-play + dados de torneio)
+  const synergyBlock = params.topSynergyPairs && params.topSynergyPairs.length > 0
+    ? `\nSINERGIAS APRENDIDAS (pares com alto co-ocorrência em decks vencedores — priorize-os):
+${params.topSynergyPairs.map((p) => `- ${p.card1} + ${p.card2} (score: ${p.score})`).join("\n")}\n`
+    : "";
+
   return `Você é um especialista em Magic: The Gathering competitivo.
 
 FORMATO: ${params.format}
@@ -107,8 +125,8 @@ ARQUÉTIPO: ${params.archetype}
 ${commanderBlock}
 CONTEXTO DO METAGAME (arquétipos dominantes):
 ${params.metaContext || "Meta não disponível — use julgamento próprio"}
-
-CARTAS DISPONÍVEIS (pré-filtradas do metagame atual, com estatísticas reais):
+${synergyBlock}
+CARTAS DISPONÍVEIS (pré-filtradas; LW=peso aprendido pelo modelo de self-play, WR=win_rate, PR=play_rate):
 ${cardList}
 
 TAREFA:
@@ -116,8 +134,9 @@ Monte um deck ${params.format} de ${deckSize} cartas otimizado para o arquétipo
 
 REGRAS OBRIGATÓRIAS:
 - Use APENAS cartas exatamente como listadas acima (nomes exatos)
+- Priorize cartas com LW alto (aprendizado do modelo) e sinergias listadas acima
 - Monte uma curva de mana coerente com o arquétipo
-- Priorize cartas com win_rate alto quando houver empate de sinergia
+- Prefira cartas que trabalham juntas mecanicamente (combo, valor, proteção)
 ${commanderRules}
 
 RESPONDA APENAS em JSON válido, sem texto adicional, markdown ou comentários:
@@ -296,13 +315,54 @@ export async function generateDeckWithLLM(
   // 2. Buscar contexto do metagame
   const metaContext = await fetchMetaContext(format);
 
-  // 3. Construir prompt e chamar o LLM
+  // 3a. Buscar pesos aprendidos para ordenar candidatas no prompt
+  const learnedWeights = await modelLearningService.getCardWeights();
+
+  // 3b. Buscar top sinergias entre as candidatas (fecha o loop ML→LLM)
+  // Usa os IDs das top-30 candidatas por learned weight para evitar N² explosion
+  let topSynergyPairs: { card1: string; card2: string; score: number }[] = [];
+  try {
+    const db = await getDb();
+    if (db) {
+      const { cardSynergies } = await import("../../drizzle/schema");
+      const { or, and: drizzleAnd, eq: drizzleEq, desc: drizzleDesc } = await import("drizzle-orm");
+      // Buscar as top sinergias do banco (sem filtrar por candidatas para ter dados reais)
+      const topPairs = await db
+        .select()
+        .from(cardSynergies)
+        .orderBy(drizzleDesc(cardSynergies.coOccurrenceRate))
+        .limit(20);
+
+      // Buscar nomes das cartas pelos IDs
+      const pairIds = Array.from(new Set(topPairs.flatMap((p) => [p.card1Id, p.card2Id])));
+      const { inArray: drizzleInArray } = await import("drizzle-orm");
+      const pairCards = await db.select({ id: cards.id, name: cards.name })
+        .from(cards)
+        .where(drizzleInArray(cards.id, pairIds));
+      const idToName = new Map(pairCards.map((c) => [c.id, c.name]));
+
+      // Filtrar pares onde ambas as cartas estão no pool de candidatas
+      const candidateNames = new Set(candidates.map((c) => c.name));
+      topSynergyPairs = topPairs
+        .map((p) => ({
+          card1: idToName.get(p.card1Id) ?? "",
+          card2: idToName.get(p.card2Id) ?? "",
+          score: Math.round((p.coOccurrenceRate ?? 0) * 0.7 + (p.weight ?? 0) * 0.3),
+        }))
+        .filter((p) => p.card1 && p.card2 && candidateNames.has(p.card1) && candidateNames.has(p.card2))
+        .slice(0, 8);
+    }
+  } catch { /* não-crítico */ }
+
+  // 4. Construir prompt e chamar o LLM
   const prompt = buildDeckPrompt({
     format,
     archetype,
     commander,
     candidateCards: candidates,
     metaContext,
+    topSynergyPairs,
+    learnedWeights,
   });
 
   console.log(`[LLMGenerator] Chamando Anthropic API (claude-opus-4-5)...`);

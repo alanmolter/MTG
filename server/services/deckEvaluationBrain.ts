@@ -217,6 +217,32 @@ export async function evaluateDeckWithBrain(
   const profile = ARCHETYPE_PROFILES[archetype] || ARCHETYPE_PROFILES.default;
   const benchmark = metaAnalyzer.getBenchmark(archetype);
 
+  // 0. DB Synergy Score — amostra até 10 pares reais da tabela cardSynergies
+  // Fecha o loop: a avaliação agora reflete sinergias aprendidas pelo self-play
+  let dbSynergyBonus = 0;
+  let avgPairSynergy = 0;
+  try {
+    const { getCardSynergy } = await import("./synergy");
+    const nonLandWithIds = cards
+      .filter((c: any) => c.id && !c.type?.toLowerCase().includes("land"))
+      .slice(0, 10); // máx 10 cartas = máx 45 pares
+    const uniqueIds = Array.from(new Set(nonLandWithIds.map((c: any) => Number(c.id))));
+    if (uniqueIds.length >= 2) {
+      let totalSyn = 0;
+      let pairCount = 0;
+      for (let i = 0; i < uniqueIds.length; i++) {
+        for (let j = i + 1; j < uniqueIds.length; j++) {
+          totalSyn += await getCardSynergy(uniqueIds[i], uniqueIds[j]);
+          pairCount++;
+        }
+      }
+      if (pairCount > 0) {
+        avgPairSynergy = totalSyn / pairCount; // 0–100
+        dbSynergyBonus = (avgPairSynergy / 100) * 25; // até +25 pts no score final
+      }
+    }
+  } catch { /* não-crítico */ }
+
   // 1. Meta-Learning Adjustment (Comparação estatística com decks pro)
   let benchmarkBonus = 0;
   if (benchmark) {
@@ -236,7 +262,7 @@ export async function evaluateDeckWithBrain(
   const { ModelEvaluator } = await import("./modelEvaluation");
   const winrate = await ModelEvaluator.evaluateWinrate(cards, archetype, 10);
 
-  const finalScore = metrics.totalScore + (benchmarkBonus * 1.5) + (winrate * 30);
+  const finalScore = metrics.totalScore + (benchmarkBonus * 1.5) + (winrate * 30) + dbSynergyBonus;
   const normalizedFinalScore = normalizeScore(finalScore, -50, 250);
 
   // 3. Análise Detalhada
@@ -261,6 +287,14 @@ export async function evaluateDeckWithBrain(
 
   if (benchmarkBonus > 15) strengths.push("Excelente alinhamento com arquétipos profissionais");
   if (winrate > 0.6) strengths.push(`Winrate simulado excepcional (${(winrate * 100).toFixed(0)}%)`);
+
+  // Feedback de sinergia real (DB)
+  if (avgPairSynergy > 40) {
+    strengths.push(`Sinergia entre cartas forte — média de ${avgPairSynergy.toFixed(0)}/100 por par`);
+  } else if (avgPairSynergy > 0 && avgPairSynergy <= 15) {
+    weaknesses.push("Baixa sinergia entre as cartas — considere pares com histórico de co-ocorrência");
+    suggestions.push("Adicione cartas que aparecem juntas em decks competitivos para aumentar a sinergia");
+  }
 
   return {
     ...metrics,

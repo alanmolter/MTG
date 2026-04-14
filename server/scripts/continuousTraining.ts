@@ -23,6 +23,7 @@ import { cardLearning, cards as cardsTable } from '../../drizzle/schema';
 import { getCardLearningQueue } from '../services/cardLearningQueue';
 import { ModelEvaluator } from '../services/modelEvaluation';
 import { evaluateDeckQuick } from '../services/deckEvaluationBrain';
+import { getCardSynergy, updateSynergy } from '../services/synergy';
 import { sql, asc, inArray } from 'drizzle-orm';
 import {
   printForgeSelfPlayStatus,
@@ -322,6 +323,34 @@ async function main() {
     }));
     if (updates.length > 0) {
       await queue.enqueueBatch(updates);
+    }
+
+    // ── Pair Synergy Learning (fecha o loop de aprendizado) ──────────────────
+    // A cada 5 iterações, amostra pares do deck vencedor e reforça
+    // o co-occurrence weight na tabela cardSynergies. Isso garante que o
+    // sistema aprenda não só quais cartas são boas, mas quais COMBINAÇÕES ganham.
+    if (it % 5 === 0) {
+      const bestDeck = elite[0];
+      if (bestDeck && bestDeck.length >= 4) {
+        try {
+          const nonLands = bestDeck.filter(
+            (c) => !c.type?.toLowerCase().includes('land') && c.id
+          );
+          // Amostrar 8 pares aleatórios (evita explosão N²)
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const i = Math.floor(Math.random() * nonLands.length);
+            const j = Math.floor(Math.random() * nonLands.length);
+            if (i !== j && nonLands[i] && nonLands[j]) {
+              const c1 = nonLands[i];
+              const c2 = nonLands[j];
+              const currentSyn = await getCardSynergy(c1.id, c2.id);
+              // Incremento suave: +2 pontos no weight e coOccurrenceRate, cap 100
+              const newScore = Math.min(100, currentSyn + 2);
+              await updateSynergy(c1.id, c2.id, newScore, newScore);
+            }
+          }
+        } catch { /* não-crítico — pair learning é best-effort */ }
+      }
     }
 
     // ── Evoluir próxima geração (mantém POPULATION_SIZE constante) ─────────

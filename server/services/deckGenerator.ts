@@ -99,45 +99,62 @@ export async function generateInitialDeck(
   const maxCopies = options.format === "commander" ? 1 : 4;
   const deck: Map<number, number> = new Map();
 
-  // Adicionar cartas iniciais (seed)
+  // Adicionar cartas iniciais (seed) — corrigido: respeita maxCopies corretamente
   for (const cardId of seedCards) {
-    const quantity = Math.min(deck.get(cardId) || 0, maxCopies) + 1;
-    deck.set(cardId, quantity);
+    const current = deck.get(cardId) || 0;
+    if (current < maxCopies) {
+      deck.set(cardId, current + 1);
+    }
   }
 
-  // Se não temos seed, gerar cartas aleatórias
+  // Se não temos seed, gerar cartas aleatórias iniciais
   if (seedCards.length === 0) {
-    // Simular seleção aleatória (em produção, usar dados de meta real)
     for (let i = 1; i <= Math.min(20, targetSize / 3); i++) {
       const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies);
       deck.set(i, quantity);
     }
   }
 
-  // Buscar pesos de aprendizado (Se existirem)
+  // Buscar pesos de aprendizado
   const learningWeights = await modelLearningService.getCardWeights();
 
-  // Buscar cartas similares para preencher o deck (Com Pesos de Aprendizado)
   const deckCardIds = Array.from(deck.keys());
   let currentSize = Array.from(deck.values()).reduce((a, b) => a + b, 0);
 
+  // Coletar vizinhos sinérgicos das cartas já no deck
+  // Permite que a seleção subsequente prefira cartas com histórico de co-ocorrência
+  const synergyNeighborIds = new Set<number>();
+  if (deckCardIds.length > 0) {
+    const { getSynergyNeighbors } = await import("./synergy");
+    for (const id of deckCardIds.slice(0, 5)) {
+      const neighbors = await getSynergyNeighbors(id, 10);
+      neighbors.forEach((n) => synergyNeighborIds.add(n.cardId));
+    }
+  }
+
+  // Preencher deck com cartas similares ponderadas por sinergia + peso aprendido
   while (currentSize < targetSize && deckCardIds.length < 100) {
     const similar = await findSimilarCardsForDeck(deckCardIds, 40);
 
+    let addedThisRound = 0;
     for (const card of similar) {
       if (currentSize >= targetSize) break;
-      
+
       const weight = learningWeights[card.name] || 1.0;
-      const chance = Math.random() * (weight * 2.0); // Aumenta a chance de cartas com peso maior
+      // Boost de sinergia: cartas que historicamente co-ocorrem com o deck atual
+      const synergyBoost = synergyNeighborIds.has(card.id) ? 2.5 : 1.0;
+      const chance = Math.random() * (weight * synergyBoost);
 
       if (!deck.has(card.id) && chance > 0.5) {
         const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies);
         deck.set(card.id, quantity);
         deckCardIds.push(card.id);
         currentSize += quantity;
+        synergyNeighborIds.delete(card.id); // já adicionada, remove para evitar re-check
+        addedThisRound++;
       }
     }
-    if (similar.length === 0) break;
+    if (similar.length === 0 || addedThisRound === 0) break;
   }
 
   // Converter para formato esperado
