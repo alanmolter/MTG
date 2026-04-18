@@ -1,4 +1,27 @@
-import { boolean, index, integer, pgEnum, pgTable, serial, text, timestamp, varchar, real } from "drizzle-orm/pg-core";
+import { boolean, bigserial, customType, index, integer, jsonb, numeric, pgEnum, pgTable, serial, text, timestamp, varchar, real, uniqueIndex } from "drizzle-orm/pg-core";
+
+/**
+ * Custom pgvector type for Drizzle.
+ *
+ * Usage: vector(384)("embedding").notNull()
+ *
+ * Stores as `vector(N)` in Postgres; driver reads back a string like "[0.1,0.2,...]"
+ * and we parse to number[]. Writes accept number[] and serialize to the same format.
+ */
+export const vector = (dim: number) =>
+  customType<{ data: number[]; driverData: string }>({
+    dataType() {
+      return `vector(${dim})`;
+    },
+    toDriver(value: number[]): string {
+      return `[${value.join(",")}]`;
+    },
+    fromDriver(value: string): number[] {
+      // pgvector returns "[0.1,0.2,...]"
+      if (typeof value !== "string") return [];
+      return JSON.parse(value);
+    },
+  });
 
 /**
  * Core user table backing auth flow.
@@ -258,3 +281,143 @@ export const rlDecisions = pgTable(
 
 export type RlDecision = typeof rlDecisions.$inferSelect;
 export type InsertRlDecision = typeof rlDecisions.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ENDGAME ARCHITECTURE TABLES  (migration 0005)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** S3 — 384-dim MiniLM embeddings of Oracle text, used by semantic cache + RAG. */
+export const cardOracleEmbeddings = pgTable("card_oracle_embeddings", {
+  cardId: integer("card_id")
+    .primaryKey()
+    .references(() => cards.id, { onDelete: "cascade" }),
+  embedding: vector(384)("embedding").notNull(),
+  modelVersion: varchar("model_version", { length: 64 }).notNull().default("all-MiniLM-L6-v2"),
+  textHash: varchar("text_hash", { length: 64 }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type CardOracleEmbedding = typeof cardOracleEmbeddings.$inferSelect;
+export type InsertCardOracleEmbedding = typeof cardOracleEmbeddings.$inferInsert;
+
+/** Pillar 4 — Semantic cache for LLM responses. L0 (exact hash) + L1 (vector similarity). */
+export const semanticCache = pgTable("semantic_cache", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  queryHash: varchar("query_hash", { length: 64 }).notNull().unique(),
+  queryEmbedding: vector(384)("query_embedding").notNull(),
+  promptPreview: text("prompt_preview").notNull(),
+  responseJson: jsonb("response_json").notNull(),
+  modelUsed: varchar("model_used", { length: 64 }).notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  costUsd: numeric("cost_usd", { precision: 10, scale: 6 }).notNull().default("0"),
+  hitCount: integer("hit_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  lastHitAt: timestamp("last_hit_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+});
+
+export type SemanticCacheEntry = typeof semanticCache.$inferSelect;
+export type InsertSemanticCacheEntry = typeof semanticCache.$inferInsert;
+
+/** Pillar 4 — Hourly bucket ledger for rate limiting + budget breaker. */
+export const apiBudgetLedger = pgTable("api_budget_ledger", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull().unique(),
+  callCount: integer("call_count").notNull().default(0),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  costUsd: numeric("cost_usd", { precision: 10, scale: 6 }).notNull().default("0"),
+  tripCount: integer("trip_count").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type ApiBudgetLedger = typeof apiBudgetLedger.$inferSelect;
+export type InsertApiBudgetLedger = typeof apiBudgetLedger.$inferInsert;
+
+/** Pillar 8 — Contextual weights: replaces scalar card_learning.weight with
+ *  a 32-dim vector sensitive to (commander, archetype). */
+export const cardContextualWeight = pgTable(
+  "card_contextual_weight",
+  {
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    commanderId: integer("commander_id").references(() => cards.id, { onDelete: "cascade" }),
+    archetype: varchar("archetype", { length: 32 }).notNull(),
+    weightVec: vector(32)("weight_vec").notNull(),
+    scalarSynergy: real("scalar_synergy").notNull().default(0),
+    winCount: integer("win_count").notNull().default(0),
+    lossCount: integer("loss_count").notNull().default(0),
+    matchCount: integer("match_count").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    scalarIdx: index("idx_card_ctx_weight_scalar").on(table.archetype, table.scalarSynergy),
+    commanderIdx: index("idx_card_ctx_weight_commander").on(table.commanderId, table.archetype),
+  })
+);
+
+export type CardContextualWeight = typeof cardContextualWeight.$inferSelect;
+export type InsertCardContextualWeight = typeof cardContextualWeight.$inferInsert;
+
+/** Pillar 7 — Toxic actions registry: deck/card combos that trigger Forge loops. */
+export const toxicActions = pgTable("toxic_actions", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  actionHash: varchar("action_hash", { length: 64 }).notNull().unique(),
+  deckSnap: jsonb("deck_snap").notNull(),
+  triggerReason: varchar("trigger_reason", { length: 64 }).notNull(),
+  triggerCount: integer("trigger_count").notNull().default(1),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type ToxicAction = typeof toxicActions.$inferSelect;
+export type InsertToxicAction = typeof toxicActions.$inferInsert;
+
+/** Pillar 5 — MCTS tree persistence across runs. */
+export const mctsNodes = pgTable(
+  "mcts_nodes",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    deckContext: varchar("deck_context", { length: 64 }).notNull(),
+    parentId: integer("parent_id"),
+    cardId: integer("card_id").references(() => cards.id),
+    visits: integer("visits").notNull().default(0),
+    totalValue: real("total_value").notNull().default(0),
+    meanValue: real("mean_value").notNull().default(0),
+    priorWeight: real("prior_weight").notNull().default(1.0),
+    depth: integer("depth").notNull().default(0),
+    expanded: boolean("expanded").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    contextIdx: index("idx_mcts_context").on(table.deckContext),
+    ucbIdx: index("idx_mcts_ucb").on(table.deckContext, table.meanValue, table.visits),
+  })
+);
+
+export type MctsNode = typeof mctsNodes.$inferSelect;
+export type InsertMctsNode = typeof mctsNodes.$inferInsert;
+
+/** Pillar 1 — PBT league state exposed to Node API for serving champion agents. */
+export const leagueState = pgTable(
+  "league_state",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    agentId: varchar("agent_id", { length: 64 }).notNull(),
+    generation: integer("generation").notNull().default(0),
+    isChampion: boolean("is_champion").notNull().default(false),
+    archetypeBias: varchar("archetype_bias", { length: 32 }),
+    hyperparams: jsonb("hyperparams"),
+    episodeRewardMean: real("episode_reward_mean"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    agentIdx: index("idx_league_state_agent").on(table.agentId, table.generation),
+  })
+);
+
+export type LeagueState = typeof leagueState.$inferSelect;
+export type InsertLeagueState = typeof leagueState.$inferInsert;

@@ -1,0 +1,46 @@
+# ────────────────────────────────────────────────────────────────────────────
+#  ml_engine — Python dependencies
+#
+#  Target: Python 3.11+
+#  CUDA:   12.x (RTX 2070S — install torch with +cu121 if GPU needed)
+#
+#  Install:
+#    python -m venv .venv
+#    .venv\Scripts\activate
+#    pip install -r ml_engine/requirements.txt
+#
+#  For GPU PyTorch on Windows + CUDA 12.1, instead of plain torch:
+#    pip install torch==2.4.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+# ────────────────────────────────────────────────────────────────────────────
+
+# Pillar 3 — Sentence Transformers (384-dim MiniLM)
+sentence-transformers>=2.7,<3.0
+transformers>=4.40,<5.0
+
+# Pillar 2 — Graph Neural Net
+torch>=2.2,<2.6
+torch-geometric>=2.5,<3.0
+# NOTE: torch-scatter/torch-sparse are optional — install separately if you need
+# heavy sparse operations. For basic GATConv + HeteroConv they are not required.
+
+# Pillar 1 / 7 — Ray RLlib + PBT
+ray[rllib,tune]>=2.10,<3.0
+gymnasium>=0.29,<1.1
+
+# Pillar 4 — Postgres / pgvector bulk writer
+psycopg2-binary>=2.9,<3.0
+pgvector>=0.2.5,<0.4
+
+# Pillar 5 — FastAPI bridge (Node ↔ Python via HTTP :8765)
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27,<1.0
+pydantic>=2.5,<3.0
+
+# Tests
+pytest>=7.4,<9.0
+pytest-asyncio>=0.23,<1.0
+
+# Utility
+numpy>=1.26,<3.0
+python-dotenv>=1.0,<2.0
+httpx>=0.27,<1.0

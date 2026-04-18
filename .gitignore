@@ -113,3 +113,20 @@ temp/
 client/public/__manus__/version.json
 node_modules
 node_modules
+
+# Python (ml_engine)
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+venv-*/
+.venv/
+
+# Ray results
+ray_results/
+
+# Claude Code workspace
+.claude/

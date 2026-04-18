@@ -16,7 +16,19 @@
     "teach": "cross-env NODE_ENV=development tsx server/scripts/fullBrainTraining.ts",
     "check:learn": "cross-env NODE_ENV=development tsx server/scripts/checkCommanderWeights.ts",
     "calibrate:llm": "cross-env NODE_ENV=development tsx server/scripts/llmWeeklyCalibrator.ts",
-    "signal:tournament": "cross-env NODE_ENV=development tsx server/scripts/applyTournamentSignal.ts"
+    "signal:tournament": "cross-env NODE_ENV=development tsx server/scripts/applyTournamentSignal.ts",
+    "db:health": "cross-env NODE_ENV=development tsx server/scripts/checkDbHealth.ts",
+    "db:repair": "cross-env NODE_ENV=development tsx server/scripts/repairSynergies.ts",
+    "db:heal": "cross-env NODE_ENV=development tsx server/scripts/autoHealDb.ts",
+    "db:migrate": "cross-env NODE_ENV=development tsx server/scripts/applyMigration.ts",
+    "rag:smoke": "cross-env NODE_ENV=development tsx server/scripts/smokeRag.ts",
+    "rag:stats": "cross-env NODE_ENV=development tsx -e \"import('./server/services/ragCache').then(m=>m.getCacheStats()).then(s=>console.table([s]))\"",
+    "embed:cards": "python -m ml_engine.rag.pgvector_writer",
+    "embed:cards:smoke": "python -m ml_engine.rag.pgvector_writer --limit 100",
+    "ml:server": "python -m ml_engine.rag.server",
+    "ml:test": "cd ml_engine && python -m pytest forge_worker/tests -v",
+    "train:ray": "python -m ml_engine.ray_cluster.orchestrator",
+    "stack:up": "powershell -ExecutionPolicy Bypass -File run-stack.ps1"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

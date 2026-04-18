@@ -85,37 +85,55 @@ async function applyMigration() {
   const db = drizzle(client);
 
   try {
-    const migrationPath = path.join(process.cwd(), "drizzle", "0004_mtg_ai_updates.sql");
-    if (!fs.existsSync(migrationPath)) {
-      console.error("[Migration] Arquivo 0004_mtg_ai_updates.sql nao encontrado.");
+    // Migrações aplicadas em ordem; qualquer NEW file drizzle/000N_*.sql é auto-descoberto
+    const drizzleDir = path.join(process.cwd(), "drizzle");
+    const migrationFiles = fs
+      .readdirSync(drizzleDir)
+      .filter((f) => /^00(0[4-9]|[1-9][0-9])_.*\.sql$/.test(f))  // 0004+
+      .sort();
+
+    if (migrationFiles.length === 0) {
+      console.error("[Migration] Nenhum arquivo 000N_*.sql encontrado a partir de 0004.");
       return;
     }
 
-    const migrationSQL = fs.readFileSync(migrationPath, "utf-8");
-    const statements = splitStatements(migrationSQL);
+    let totalApplied = 0;
+    let totalSkipped = 0;
 
-    let applied = 0;
-    let skipped = 0;
+    for (const file of migrationFiles) {
+      const migrationPath = path.join(drizzleDir, file);
+      const migrationSQL = fs.readFileSync(migrationPath, "utf-8");
+      const statements = splitStatements(migrationSQL);
 
-    for (const statement of statements) {
-      try {
-        await db.execute(sql.raw(statement));
-        applied++;
-      } catch (err: any) {
-        if (isExpectedError(err)) {
-          skipped++; // silencioso — objeto ja existe
-        } else {
-          const shortMsg = err?.message?.split("\n")[0] ?? "erro desconhecido";
-          console.warn(`[Migration] Aviso inesperado: ${shortMsg}`);
-          skipped++;
+      let applied = 0;
+      let skipped = 0;
+
+      for (const statement of statements) {
+        try {
+          await db.execute(sql.raw(statement));
+          applied++;
+        } catch (err: any) {
+          if (isExpectedError(err)) {
+            skipped++; // silencioso — objeto ja existe
+          } else {
+            const shortMsg = err?.message?.split("\n")[0] ?? "erro desconhecido";
+            console.warn(`[Migration][${file}] Aviso inesperado: ${shortMsg}`);
+            skipped++;
+          }
         }
       }
+
+      if (applied > 0) {
+        console.log(`[Migration] ${file}: ${applied} alteracoes aplicadas (${skipped} no-op).`);
+      }
+      totalApplied += applied;
+      totalSkipped += skipped;
     }
 
-    if (applied > 0) {
-      console.log(`[Migration] Schema atualizado: ${applied} alteracoes aplicadas.`);
+    if (totalApplied > 0) {
+      console.log(`[Migration] Schema atualizado: ${totalApplied} alteracoes aplicadas no total.`);
     } else {
-      console.log(`[Migration] Schema ja esta atualizado (${skipped} objetos ja existiam).`);
+      console.log(`[Migration] Schema ja esta atualizado (${totalSkipped} objetos ja existiam).`);
     }
   } catch (err: any) {
     console.error("[Migration] Erro fatal:", err?.message);

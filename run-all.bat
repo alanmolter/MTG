@@ -80,6 +80,37 @@ if errorlevel 1 (
     set /a ERRORS=ERRORS+1
 )
 
+:: --- PASSO 3b: Pre-flight DB health check + auto-heal ---
+echo.
+echo [3b] Verificando integridade do banco (card_synergies, card_learning)...
+call npx tsx server/scripts/checkDbHealth.ts
+if errorlevel 2 (
+    echo.
+    echo [AUTO-HEAL] Corrupcao detectada. Tentando reparo automatico...
+    echo            Escada: REINDEX -^> VACUUM FULL -^> DROP+REBUILD
+    call npx tsx server/scripts/autoHealDb.ts
+    if errorlevel 2 (
+        echo.
+        echo [ERRO CRITICO] Reparo automatico falhou.
+        echo    Corrupcao persistente no disco. Acoes recomendadas:
+        echo      1. Verificar saude do disco/SSD
+        echo      2. Restaurar backup do PostgreSQL
+        echo      3. Rodar manualmente: npm run db:repair -- --rebuild
+        pause
+        exit /b 2
+    )
+    if errorlevel 1 (
+        echo [ERRO] Auto-heal retornou erro de conexao
+        pause
+        exit /b 1
+    )
+    echo [AUTO-HEAL] Reparo concluido com sucesso. Prosseguindo com o pipeline.
+)
+if errorlevel 1 (
+    echo [AVISO] Health check retornou erro de conexao
+    set /a ERRORS=ERRORS+1
+)
+
 :: --- PASSO 4: Sync Scryfall (bulk oracle) ---
 echo.
 echo [4/12] Sincronizando cartas do Scryfall (bulk oracle)...
