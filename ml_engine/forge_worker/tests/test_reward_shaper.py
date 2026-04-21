@@ -19,6 +19,11 @@ def _snap(
     power_you=0,
     power_opp=0,
     mana_value_played=0,
+    mana_available_you=0,
+    untapped_lands_you=0,
+    instants_in_hand_you=0,
+    archetype="",
+    turn_ended=False,
     is_terminal=False,
     illegal_action=False,
 ):
@@ -31,6 +36,11 @@ def _snap(
         power_you=power_you,
         power_opp=power_opp,
         mana_value_played=mana_value_played,
+        mana_available_you=mana_available_you,
+        untapped_lands_you=untapped_lands_you,
+        instants_in_hand_you=instants_in_hand_you,
+        archetype=archetype,
+        turn_ended=turn_ended,
         is_terminal=is_terminal,
         illegal_action=illegal_action,
     )
@@ -83,11 +93,101 @@ class TestRewardShaper:
         assert r > 0.05
 
     def test_tempo_signal_from_mana_played(self):
+        """Legacy tempo knob still works when explicitly enabled (back-compat)."""
         shaper = RewardShaper(ShapingConfig(beta_tempo=0.01, step_cap=1.0))
         prev = _snap()
         curr = _snap(mana_value_played=4)
         r = shaper.shape(prev, curr)
         assert r >= 0.04
+
+    # ── Phase 1: mana efficiency ────────────────────────────────────────
+    def test_mana_efficiency_full_use(self):
+        """Spending 4 of 4 available mana → near-full zeta bonus."""
+        shaper = RewardShaper(ShapingConfig(zeta_efficiency=0.03, step_cap=1.0))
+        prev = _snap()
+        curr = _snap(mana_value_played=4, mana_available_you=4)
+        r = shaper.shape(prev, curr)
+        assert r == pytest.approx(0.03, abs=1e-6)
+
+    def test_mana_efficiency_partial_use(self):
+        """Spending 1 of 4 available mana → ~25% of the bonus."""
+        shaper = RewardShaper(ShapingConfig(zeta_efficiency=0.04, step_cap=1.0))
+        prev = _snap()
+        curr = _snap(mana_value_played=1, mana_available_you=4)
+        r = shaper.shape(prev, curr)
+        assert r == pytest.approx(0.01, abs=1e-6)
+
+    def test_mana_efficiency_no_info_is_zero(self):
+        """When mana_available_you is 0, the efficiency bonus is silent."""
+        shaper = RewardShaper(ShapingConfig(zeta_efficiency=0.03, step_cap=1.0))
+        prev = _snap()
+        curr = _snap(mana_value_played=3, mana_available_you=0)
+        r = shaper.shape(prev, curr)
+        # Only progress bonus (0, since power_you=0) + life delta (0) remain.
+        assert abs(r) < 1e-6
+
+    def test_mana_efficiency_over_cast_is_capped(self):
+        """Rituals that cast CMC > available shouldn't exceed full bonus."""
+        shaper = RewardShaper(ShapingConfig(zeta_efficiency=0.03, step_cap=1.0))
+        prev = _snap()
+        curr = _snap(mana_value_played=10, mana_available_you=4)
+        r = shaper.shape(prev, curr)
+        # Efficiency clamps at 1.0 → bonus == zeta_efficiency
+        assert r == pytest.approx(0.03, abs=1e-6)
+
+    # ── Phase 1: archetype modifier (control-open-mana) ─────────────────
+    def test_control_gets_bonus_for_passing_with_mana_and_instants(self):
+        cfg = ShapingConfig(control_mana_open_bonus=0.015, step_cap=1.0)
+        shaper = RewardShaper(cfg)
+        prev = _snap()
+        curr = _snap(
+            archetype="control",
+            turn_ended=True,
+            untapped_lands_you=3,
+            instants_in_hand_you=2,
+        )
+        r = shaper.shape(prev, curr)
+        assert r == pytest.approx(0.015, abs=1e-6)
+
+    def test_control_bonus_requires_end_of_turn(self):
+        cfg = ShapingConfig(control_mana_open_bonus=0.015, step_cap=1.0)
+        shaper = RewardShaper(cfg)
+        prev = _snap()
+        # Same state but mid-turn → no bonus
+        curr = _snap(
+            archetype="control",
+            turn_ended=False,
+            untapped_lands_you=3,
+            instants_in_hand_you=2,
+        )
+        r = shaper.shape(prev, curr)
+        assert abs(r) < 1e-6
+
+    def test_control_bonus_requires_instants_in_hand(self):
+        cfg = ShapingConfig(control_mana_open_bonus=0.015, step_cap=1.0)
+        shaper = RewardShaper(cfg)
+        prev = _snap()
+        curr = _snap(
+            archetype="control",
+            turn_ended=True,
+            untapped_lands_you=5,
+            instants_in_hand_you=0,  # nothing to cast — no bonus
+        )
+        r = shaper.shape(prev, curr)
+        assert abs(r) < 1e-6
+
+    def test_aggro_does_not_get_control_bonus(self):
+        cfg = ShapingConfig(control_mana_open_bonus=0.015, step_cap=1.0)
+        shaper = RewardShaper(cfg)
+        prev = _snap()
+        curr = _snap(
+            archetype="aggro",
+            turn_ended=True,
+            untapped_lands_you=3,
+            instants_in_hand_you=2,
+        )
+        r = shaper.shape(prev, curr)
+        assert abs(r) < 1e-6
 
     def test_step_cap_limits_shaped_reward(self):
         shaper = RewardShaper(ShapingConfig(
@@ -133,3 +233,26 @@ class TestRewardShaper:
         s = default_shaper()
         assert isinstance(s, RewardShaper)
         assert s.config.outcome_weight == 1.0
+        # Phase 1 defaults must be wired
+        assert s.config.zeta_efficiency > 0
+        assert s.config.control_mana_open_bonus > 0
+
+    def test_backward_compat_snapshot_without_phase1_fields(self):
+        """Older callers that don't set the new fields must still work."""
+        shaper = RewardShaper()
+        # Only the legacy kwargs — new fields take their defaults
+        prev = GameStateSnapshot(
+            turn=1, life_you=20, life_opp=20,
+            hand_you=7, hand_opp=7,
+            power_you=0, power_opp=0,
+            mana_value_played=0,
+        )
+        curr = GameStateSnapshot(
+            turn=2, life_you=20, life_opp=18,
+            hand_you=7, hand_opp=7,
+            power_you=2, power_opp=0,
+            mana_value_played=2,
+        )
+        r = shaper.shape(prev, curr)
+        # life delta + tiny progress bonus — should be positive, well below cap
+        assert 0 < r < 0.1

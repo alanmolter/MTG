@@ -151,7 +151,7 @@ mtg-deck-mvp/
 │   └── rlbridge/              # ← Módulo próprio: ponte RL → Forge
 ├── drizzle/
 │   ├── schema.ts              # ← Schema Postgres (21 tabelas)
-│   └── migrations/            # SQL migrations (0000-0005)
+│   └── migrations/            # SQL migrations (0000-0006)
 ├── scripts/
 │   └── run-python.mjs         # ← Shim cross-plat para npm → venv Python
 ├── run-stack.ps1              # Launcher do stack (ml_engine + node + Forge)
@@ -170,7 +170,7 @@ mtg-deck-mvp/
 | `cards` | Catálogo de ~60k cartas (seed via Scryfall API) | `npm run seed:scryfall` |
 | `decks` + `deck_cards` | Decks gerados/importados | Frontend, scrapers |
 | `competitive_decks` | Metadecks de torneio (MTGGoldfish, MTGTop8) | scrapers |
-| `card_learning` | **Peso aprendido** de cada carta em `[0.1, 50.0]` | **todos os cérebros** via `CardLearningQueue` |
+| `card_learning` | **Peso aprendido** de cada carta em `[0.1, 50.0]`. Colunas: `weight` (global) + `weight_aggro`/`weight_control`/`weight_midrange`/`weight_combo`/`weight_ramp` (Phase 2) | **todos os cérebros** via `CardLearningQueue` |
 | `card_synergies` | Sinergia pareada (card_a × card_b → score) | self-play, LLM calibrator |
 | `card_oracle_embeddings` | Vetor 384-d do texto oracle (pgvector) | `ml_engine/rag/pgvector_writer.py` |
 | `rl_decisions` | Log de cada decisão do agente RL (s, a, r, s') | `MtgForgeEnv` |
@@ -294,8 +294,10 @@ Java → Python:  {"type": "state", "card_feats": [...], "player_feats": [...],
 
 - Observation space: `Dict` com `card_feats`, `player_feats`, 4 tipos de
   arestas, e `action_mask` (MultiBinary(512))
-- Action space: `Discrete(512)` — IDs de ações abstratas mapeadas para chamadas
-  Forge pelo rlbridge
+- Action space: `Discrete(512)` **por default**. Opt-in (`config
+  ["use_autoregressive_actions"]=True`) troca para `MultiDiscrete([4, 128,
+  128])` = `(type, source, target)` — env empacota em int flat antes de
+  enviar ao Forge (protocolo Java inalterado). Detalhes em §11.10.
 - Robustez: crash do Forge → `env.reset()` respawna; turn cap (50) + step
   timeout (10s) impedem hangs
 
@@ -306,15 +308,23 @@ Java → Python:  {"type": "state", "card_feats": [...], "player_feats": [...],
 ```
 r_total = r_outcome                     # {-1, 0, +1} no fim
         + α * Δlife_advantage            # você - oponente
-        + β * Δtempo                     # mana value jogado
+        + ζ * mana_efficiency            # used / available  (Phase 1)
         + γ * Δcard_advantage            # diferença de hand size
         + δ * Δboard_control              # power total em jogo
         + ε * progress_bonus              # virar-se para lethal
+        + archetype_modifier              # control: +bonus p/ mana aberta
         [bounded em ±0.1 por turno]
 ```
 
 Teorema de Ng-Harada-Russell 1999: se o shaping é **potential-based** e
 bounded, a política ótima é invariante. Logo: treino mais rápido, mesma solução.
+
+**Phase 1 (abril/2026)**: o termo de tempo bruto (`beta * mana_value_played`)
+foi substituído por **mana efficiency** (`zeta * used/available`) para deixar
+de premiar "soltar carta cara" e passar a premiar "gastar bem o mana
+disponível". Também entrou um modificador por arquétipo: control ganha
+micro-bonus ao passar turno com ≥2 lands destapadas + ≥1 instant na mão.
+Detalhes em §11.8.
 
 ### 7.4 LoopGuard (pilar 7)
 
@@ -607,6 +617,107 @@ Histórico do trabalho mais recente — alinhar com os commits:
 - **Fix**: `run-stack.ps1` com bloco de auto-detecção que prefere
   `.venv\Scripts\python.exe` antes de cair em `python` do PATH.
 
+### 11.8 Phase 1 — Reward Shaping: Mana Efficiency + Archetype bonus
+
+- **Problema**: o termo de tempo (`beta_tempo * mana_value_played`) premiava
+  *gastar mana bruto*. Agente aprendia a soltar qualquer carta cara mesmo
+  quando ficava com 3 terrenos virados e sem resposta.
+- **Fix**: `ml_engine/forge_worker/reward_shaper.py`
+  - `ShapingConfig.zeta_efficiency=0.03` — premia `mana_used / mana_available`
+    (∈ [0,1]). Gastar 4 de 4 disponíveis → bonus cheio; flood de 1 de 4 →
+    25% do bonus.
+  - `ShapingConfig.control_mana_open_bonus=0.015` — micro-reforço quando
+    `archetype="control"` + `turn_ended=True` + `untapped_lands>=2` +
+    `instants_in_hand>=1`. Ensina o conceito de *passar com mana aberta*
+    sem hard-code.
+  - `GameStateSnapshot` ganhou campos `mana_available_you`,
+    `untapped_lands_you`, `instants_in_hand_you`, `archetype`, `turn_ended`
+    (defaults=0/""/False para back-compat).
+  - `beta_tempo` **depreciado** (default 0.0; mantido só para testes legados).
+- **Integração**: `env.py` `_state_to_snapshot` extrai os novos campos do
+  JSON do bridge (com fallbacks: `mana_pool_total` → `lands_untapped`,
+  `phase ∈ {END, END_OF_TURN, CLEANUP}` → `turn_ended=True`). Env aceita
+  `config["archetype"]` e propaga automaticamente para o shaper.
+- **Testes**: 22/22 passam, incluindo 10 novos cobrindo efficiency
+  (full/partial/over-cast/no-info), control bonus (on/off, requer
+  end-of-turn, requer instants), aggro não herda bonus, e back-compat com
+  snapshots sem os novos campos.
+
+### 11.9 Phase 2 — Contextual Distillation: pesos por arquétipo
+
+- **Problema**: `card_learning.weight` é **escalar global**. [Counterspell]
+  recebia o mesmo peso em control e aggro — em aggro o peso descia
+  (ruim no arquétipo) e "puxava" a reputação da carta no sistema inteiro.
+- **Fix**:
+  1. Migration `drizzle/0006_archetype_weights.sql`: adiciona 5 colunas
+     reais idempotentes a `card_learning`: `weight_aggro`, `weight_control`,
+     `weight_midrange`, `weight_combo`, `weight_ramp` (todas default 1.0).
+     Backfill: se todas estão em 1.0 e `weight` não, copia o global para
+     os 5 buckets (warm-start). 5 índices novos para queries por archetype.
+  2. `drizzle/schema.ts`: campos TS + constante exportada
+     `CARD_LEARNING_ARCHETYPES` (tipo literal union).
+  3. `server/services/cardLearningQueue.ts`: `CardLearningUpdate.archetype?`
+     opcional. `updateCardWeight` agora agrupa deltas em **buckets**:
+     - `_global` sempre recebe TODOS os deltas → atualiza `weight` (compat)
+     - cada archetype recebe apenas os deltas daquele archetype, com
+       decay próprio `(1 - w/MAX)²` baseado no peso daquela coluna
+     - upsert com SET dinâmico (só colunas que mudaram)
+     - helper exportado `normalizeArchetype(raw)` valida em runtime
+  4. `server/services/rlToCardLearningBridge.ts`:
+     `feedbackFromDeckOptimization(deck, score, deckId, archetype?)` e
+     `syncRLRewardsToCardLearning()` extrai archetype do metadata.
+  5. `server/services/modelLearning.ts`:
+     `getCardWeights(archetype?)` lê coluna específica com cache próprio
+     (TTL 60s, bucket por arquétipo). `updateWeights(updates, source,
+     defaultArchetype?)` propaga. `invalidateCache()` limpa ambos.
+- **Validação**: probe end-to-end em DB real mostra:
+  ```
+  enqueue(delta=0.3, archetype=control)
+  enqueue(delta=0.1, archetype=aggro)
+  enqueue(delta=0.2, sem archetype)
+  → weight=1.578 (recebeu 0.3+0.1+0.2)
+  → weight_control=1.289 (só os 0.3)
+  → weight_aggro=1.096 (só os 0.1)
+  → weight_combo/ramp/midrange=1.0 (inalterados)
+  ```
+  Todos os 251 testes vitest + 35 pytest continuam verdes.
+
+### 11.10 Phase 3 — Autoregressive Actions (opt-in)
+
+- **Problema**: `Discrete(512)` trata toda ação como átomo independente.
+  O agente precisa aprender do zero que "jogar Lightning Bolt no rosto"
+  e "jogar Lightning Bolt no goblin" compartilham a mesma carta-fonte.
+  Explosão combinatória de ações similares mata exploração.
+- **Fix** (opt-in, backward-compat total):
+  1. `env.py`: flag de config `use_autoregressive_actions` (default
+     `False`). Quando `True`, `action_space = MultiDiscrete([4, 128, 128])`
+     — triple `(action_type, source, target)`.
+  2. Método privado `_encode_action(a)` empacota o triple em int
+     flat (`type * S*T + source * T + target`) mod `num_actions` antes de
+     enviar ao Forge. **O protocolo JSON do rlbridge Java não muda** —
+     segue recebendo `{"cmd": "step", "action": <int>}`.
+  3. `game_state_gnn.py`: wrapper RLlib agora checa shape da
+     `action_mask` antes de aplicá-la. Em AR mode os logits têm 260 dims
+     (4+128+128) e a mask Forge tem 512 — shapes diferentes → mask
+     ignorada (ações inválidas caem no `penalty_illegal_action` do
+     shaper).
+- **Como ligar**:
+  ```python
+  env_config = {
+      "use_autoregressive_actions": True,
+      "ar_num_types": 4,     # {pass, cast, attack, block}
+      "ar_num_sources": 128, # até 128 cartas visíveis
+      "ar_num_targets": 128,
+  }
+  ```
+  RLlib decompõe o `MultiDiscrete` em 3 distribuições categóricas
+  independentes automaticamente. Para autoregressividade *real*
+  (target condicionado em type+source) seria preciso um
+  `ActionDistribution` custom — ficou para um futuro pilar se o ganho
+  empírico compensar.
+- **Validação**: smoke test `env + shaper + GNN(260)` forward-pass OK;
+  Discrete(512) continua o default e não é afetado.
+
 ---
 
 ## 12. Comandos de Referência Rápida
@@ -720,5 +831,6 @@ Get-Content logs\node_api.log -Tail 50 -Wait   # logs Node
 
 ---
 
-*Última atualização: abril/2026 — após habilitação de GPU (CUDA 12.6) no
-pipeline de treino e validação ponta-a-ponta.*
+*Última atualização: abril/2026 — Phase 1 (Mana Efficiency reward),
+Phase 2 (pesos por arquétipo em `card_learning`) e Phase 3 (MultiDiscrete
+autoregressive actions opt-in). 35 pytest + 251 vitest + tsc exit 0.*

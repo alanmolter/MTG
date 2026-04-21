@@ -1,9 +1,10 @@
 import { getDb } from "../db";
 import { cardLearning, cards, Card } from "../../drizzle/schema";
+import type { CardLearningArchetype } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import { ModelEvaluator } from "./modelEvaluation";
 import { evaluateDeckWithBrain } from "./deckEvaluationBrain";
-import { getCardLearningQueue } from "./cardLearningQueue";
+import { getCardLearningQueue, normalizeArchetype } from "./cardLearningQueue";
 
 /**
  * Model Learning Service (Nível AlphaZero)
@@ -37,10 +38,13 @@ export const WEIGHT_MAX = 50.0;
 /** TTL do cache de pesos em memória (ms) */
 const WEIGHT_CACHE_TTL_MS = 60_000; // 60 segundos
 
-/** Cache em memória dos pesos de aprendizado */
+/** Cache em memória dos pesos de aprendizado (global). */
 let _weightCache: Record<string, number> | null = null;
 let _weightCacheTimestamp = 0;
 let _weightCacheLogged = false; // garante log único por sessão de processo
+
+/** Cache em memória dos pesos por archetype (Phase 2). TTL compartilhado. */
+const _archetypeWeightCache: Record<string, { map: Record<string, number>; ts: number }> = {};
 
 /** Fonte de aprendizado — usada para rastrear qual processo atualizou o peso */
 export type LearningSource = "user_generation" | "self_play" | "commander_train" | "rl_policy" | "forge_reality";
@@ -57,10 +61,32 @@ export class modelLearningService {
    *
    * Para forçar recarga imediata (ex: após updateWeights), use invalidateCache().
    */
-  public static async getCardWeights(): Promise<Record<string, number>> {
+  public static async getCardWeights(archetype?: CardLearningArchetype | string): Promise<Record<string, number>> {
     const now = Date.now();
 
-    // Retorna cache se ainda válido
+    // Phase 2 — se archetype for passado, lemos (e cacheamos) a coluna
+    // weight_<archetype> ao invés da global. Cai de volta para global
+    // quando o archetype é desconhecido.
+    const normalizedArch = normalizeArchetype(archetype);
+    if (normalizedArch) {
+      const cached = _archetypeWeightCache[normalizedArch];
+      if (cached && (now - cached.ts) < WEIGHT_CACHE_TTL_MS) {
+        return cached.map;
+      }
+      const database = await getDb();
+      if (!database) return {};
+      const colKey = `weight${normalizedArch.charAt(0).toUpperCase()}${normalizedArch.slice(1)}` as
+        "weightAggro" | "weightControl" | "weightMidrange" | "weightCombo" | "weightRamp";
+      const rows = await database
+        .select({ name: cardLearning.cardName, w: cardLearning[colKey] })
+        .from(cardLearning);
+      const map: Record<string, number> = {};
+      rows.forEach((r: any) => { map[r.name] = r.w; });
+      _archetypeWeightCache[normalizedArch] = { map, ts: now };
+      return map;
+    }
+
+    // Retorna cache global se ainda válido
     if (_weightCache !== null && (now - _weightCacheTimestamp) < WEIGHT_CACHE_TTL_MS) {
       return _weightCache;
     }
@@ -108,6 +134,10 @@ export class modelLearningService {
   public static invalidateCache(): void {
     _weightCache = null;
     _weightCacheTimestamp = 0;
+    // Phase 2 — invalida também os caches por archetype
+    for (const k of Object.keys(_archetypeWeightCache)) {
+      delete _archetypeWeightCache[k];
+    }
     // Não reseta _weightCacheLogged — o log de status já foi emitido
   }
 
@@ -122,18 +152,22 @@ export class modelLearningService {
    * @param source   Identificador da fonte de aprendizado (para rastreabilidade)
    */
   public static async updateWeights(
-    updates: Record<string, { weightDelta: number; scoreDelta?: number; win?: boolean }>,
-    source: LearningSource = "self_play"
+    updates: Record<string, { weightDelta: number; scoreDelta?: number; win?: boolean; archetype?: CardLearningArchetype | string }>,
+    source: LearningSource = "self_play",
+    defaultArchetype?: CardLearningArchetype | string
   ): Promise<void> {
     const queue = getCardLearningQueue();
+    const fallbackArch = normalizeArchetype(defaultArchetype);
 
     for (const [name, data] of Object.entries(updates)) {
+      const archetype = normalizeArchetype(data.archetype) ?? fallbackArch;
       // Enfileira cada atualização — o worker processa sequencialmente
       queue.enqueue({
         cardName: name,
         weightDelta: data.weightDelta,
         scoreDelta: data.scoreDelta,
         win: data.win,
+        archetype,
         source,
       });
     }

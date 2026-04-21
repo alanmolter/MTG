@@ -246,7 +246,16 @@ export const cardLearning = pgTable(
   {
     id: serial("id").primaryKey(),
     cardName: varchar("card_name", { length: 255 }).notNull().unique(),
+    /** Global scalar weight — fallback + legacy consumers. */
     weight: real("weight").notNull().default(1.0),
+    /** Phase 2 — per-archetype scalar weights (migration 0006). Learners
+     *  write to the specific archetype column; readers can filter by
+     *  archetype or fall back to `weight` for a global view. */
+    weightAggro: real("weight_aggro").notNull().default(1.0),
+    weightControl: real("weight_control").notNull().default(1.0),
+    weightMidrange: real("weight_midrange").notNull().default(1.0),
+    weightCombo: real("weight_combo").notNull().default(1.0),
+    weightRamp: real("weight_ramp").notNull().default(1.0),
     winCount: integer("win_count").notNull().default(0),
     lossCount: integer("loss_count").notNull().default(0),
     avgScore: real("avg_score").notNull().default(0.0),
@@ -254,8 +263,23 @@ export const cardLearning = pgTable(
   },
   (table) => ({
     weightIdx: index("learning_weight_idx").on(table.weight),
+    weightAggroIdx: index("learning_weight_aggro_idx").on(table.weightAggro),
+    weightControlIdx: index("learning_weight_control_idx").on(table.weightControl),
+    weightMidrangeIdx: index("learning_weight_midrange_idx").on(table.weightMidrange),
+    weightComboIdx: index("learning_weight_combo_idx").on(table.weightCombo),
+    weightRampIdx: index("learning_weight_ramp_idx").on(table.weightRamp),
   })
 );
+
+/** Valid archetypes for Phase 2 contextual weights. */
+export const CARD_LEARNING_ARCHETYPES = [
+  "aggro",
+  "control",
+  "midrange",
+  "combo",
+  "ramp",
+] as const;
+export type CardLearningArchetype = (typeof CARD_LEARNING_ARCHETYPES)[number];
 
 export type CardLearning = typeof cardLearning.$inferSelect;
 export type InsertCardLearning = typeof cardLearning.$inferInsert;

@@ -59,6 +59,14 @@ DEFAULT_MAX_CARDS = 128        # cap on card nodes in obs
 DEFAULT_TURN_LIMIT = 50        # hard stop after N turns (draw)
 DEFAULT_STEP_TIMEOUT = 10.0    # seconds — if Forge doesn't respond, we abort
 
+# Phase 3 — autoregressive MultiDiscrete action mode. Disabled by default; opt
+# in via config["use_autoregressive_actions"] = True. The head emits a triple
+# (action_type, source, target); the env packs it into a flat int before
+# forwarding to the Java Forge bridge so the legacy protocol stays intact.
+AR_NUM_TYPES = 4
+AR_NUM_SOURCES = 128
+AR_NUM_TARGETS = 128
+
 
 class MtgForgeEnv(gym.Env):
     """Gymnasium env. One instance = one worker = one Forge subprocess."""
@@ -94,6 +102,20 @@ class MtgForgeEnv(gym.Env):
         self.step_timeout: float = float(config.get("step_timeout", DEFAULT_STEP_TIMEOUT))
         self.agent_deck: Optional[str] = config.get("agent_deck")
         self.opponent_deck: Optional[str] = config.get("opponent_deck")
+        # Archetype of the agent's deck — forwarded to the reward shaper so
+        # archetype-specific shaping (e.g. control-mana-open bonus) fires.
+        # Accepts "aggro" | "control" | "midrange" | "combo" | "ramp" | "".
+        self.archetype: str = str(config.get("archetype", "") or "").strip().lower()
+
+        # Phase 3: autoregressive action space (opt-in, default OFF). When
+        # True, the agent emits MultiDiscrete([type, source, target]); we
+        # pack it into a single int before sending to Forge.
+        self.use_autoregressive_actions: bool = bool(
+            config.get("use_autoregressive_actions", False)
+        )
+        self.ar_num_types: int = int(config.get("ar_num_types", AR_NUM_TYPES))
+        self.ar_num_sources: int = int(config.get("ar_num_sources", AR_NUM_SOURCES))
+        self.ar_num_targets: int = int(config.get("ar_num_targets", AR_NUM_TARGETS))
 
         # Sub-components
         self.shaper = RewardShaper()
@@ -104,7 +126,12 @@ class MtgForgeEnv(gym.Env):
         self._last_snapshot: Optional[GameStateSnapshot] = None
 
         # Spaces
-        self.action_space = spaces.Discrete(self.num_actions)
+        if self.use_autoregressive_actions:
+            self.action_space = spaces.MultiDiscrete(
+                [self.ar_num_types, self.ar_num_sources, self.ar_num_targets]
+            )
+        else:
+            self.action_space = spaces.Discrete(self.num_actions)
         self.observation_space = spaces.Dict({
             "card_feats": spaces.Box(
                 low=-1e3, high=1e3, shape=(self.max_cards, 395), dtype=np.float32
@@ -142,13 +169,14 @@ class MtgForgeEnv(gym.Env):
         info = {"state": first_state}
         return obs, info
 
-    def step(self, action: int):
+    def step(self, action):
         if self._proc is None or self._proc.poll() is not None:
             # Subprocess died — force reset next call
             return self._dummy_obs(), 0.0, True, False, {"error": "forge_subprocess_dead"}
 
-        self.loop_guard.record_action({"type": "action", "action_id": int(action)})
-        self._send_command({"cmd": "step", "action": int(action)})
+        flat_action = self._encode_action(action)
+        self.loop_guard.record_action({"type": "action", "action_id": flat_action})
+        self._send_command({"cmd": "step", "action": flat_action})
         try:
             state = self._read_state()
         except subprocess.TimeoutExpired:
@@ -285,6 +313,26 @@ class MtgForgeEnv(gym.Env):
     def _state_to_snapshot(
         self, state: Dict[str, Any], illegal: bool = False, terminal: bool = False
     ) -> GameStateSnapshot:
+        # Phase 1 additions: pull the fields the new reward shaper needs.
+        # Forge's bridge already exposes mana_pool_total + card-zone info;
+        # anything missing falls back to 0 so old runs stay compatible.
+        you = state.get("you", {}) if isinstance(state.get("you"), dict) else {}
+        mana_available = int(
+            state.get("mana_available_you",
+                      you.get("mana_pool_total",
+                              you.get("lands_untapped", 0)))
+        )
+        untapped_lands = int(
+            state.get("untapped_lands_you", you.get("lands_untapped", 0))
+        )
+        instants_in_hand = int(
+            state.get("instants_in_hand_you", you.get("instants_in_hand", 0))
+        )
+        # turn_ended: bridge may signal it explicitly, else derive from phase.
+        turn_ended = bool(
+            state.get("turn_ended",
+                      str(state.get("phase", "")).upper() in ("END", "END_OF_TURN", "CLEANUP"))
+        )
         return GameStateSnapshot(
             turn=int(state.get("turn", 0)),
             life_you=int(state.get("life_you", 20)),
@@ -294,9 +342,40 @@ class MtgForgeEnv(gym.Env):
             power_you=int(state.get("power_you", 0)),
             power_opp=int(state.get("power_opp", 0)),
             mana_value_played=int(state.get("mana_value_played", 0)),
+            mana_available_you=mana_available,
+            untapped_lands_you=untapped_lands,
+            instants_in_hand_you=instants_in_hand,
+            archetype=self.archetype,
+            turn_ended=turn_ended,
             is_terminal=terminal,
             illegal_action=illegal,
         )
+
+    # ── Phase 3 helper: pack MultiDiscrete action to flat int for Forge ─────
+    def _encode_action(self, action) -> int:
+        """Accepts either a scalar int (Discrete) or a length-3 array/tuple
+        (MultiDiscrete autoregressive). Returns the flat int the Forge bridge
+        expects.
+
+        Packing: flat = type * (sources * targets) + source * targets + target
+        clamped to [0, num_actions-1] so legacy Forge never sees overflow.
+        """
+        if self.use_autoregressive_actions:
+            # numpy arrays, lists, tuples all yield the same via indexing
+            try:
+                a_type = int(action[0])
+                a_src = int(action[1])
+                a_tgt = int(action[2])
+            except (TypeError, IndexError):
+                # Defensive: a legacy caller sent a scalar even in AR mode
+                return int(action) % self.num_actions
+            flat = (
+                a_type * (self.ar_num_sources * self.ar_num_targets)
+                + a_src * self.ar_num_targets
+                + a_tgt
+            )
+            return int(flat) % self.num_actions
+        return int(action)
 
     def _encode_observation(self, state: Dict[str, Any]) -> Dict[str, np.ndarray]:
         """Pack Forge's JSON state into the Box/Dict observation we promised."""

@@ -319,14 +319,19 @@ def register_with_rllib():
                 data = _batched_dict_to_hetero(obs, GameStateGNN.EDGE_RELATIONS)
             out = self.gnn(data)
             logits = out["logits"]
-            # Apply action mask if present in obs (MultiBinary → [B, num_actions])
+            # Apply action mask only when shapes line up. In Phase 3 the env may
+            # use MultiDiscrete([4, 128, 128]) → logits has 260 columns while
+            # the Forge-native mask is still 512 wide; skip masking in that
+            # case (invalid actions get the illegal-action penalty instead).
             if isinstance(obs, dict) and "action_mask" in obs:
-                mask = obs["action_mask"].to(dtype=torch.bool)
-                # Guard: if every action is masked for some row, leave logits untouched
-                # for that row to avoid -inf softmax → nan.
-                all_masked = ~mask.any(dim=-1, keepdim=True)
-                effective_mask = mask | all_masked
-                logits = logits.masked_fill(~effective_mask, float("-1e9"))
+                mask = obs["action_mask"]
+                if mask.shape[-1] == logits.shape[-1]:
+                    mask = mask.to(dtype=torch.bool)
+                    # Guard: if every action is masked for some row, leave logits untouched
+                    # for that row to avoid -inf softmax → nan.
+                    all_masked = ~mask.any(dim=-1, keepdim=True)
+                    effective_mask = mask | all_masked
+                    logits = logits.masked_fill(~effective_mask, float("-1e9"))
             self._value_out = out["value"].squeeze(-1)
             return logits, state
 

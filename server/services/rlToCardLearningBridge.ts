@@ -15,14 +15,18 @@
 
 import { getDb } from "../db";
 import { rlDecisions } from "../../drizzle/schema";
+import type { CardLearningArchetype } from "../../drizzle/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
-import { getCardLearningQueue } from "./cardLearningQueue";
+import { getCardLearningQueue, normalizeArchetype } from "./cardLearningQueue";
 
 export interface RLDecision {
   deckId?: number;
   cardName: string;
   policyProbability: number;
   reward?: number;
+  /** Phase 2 — archetype do deck (opcional). Propagado até o card_learning
+   *  para escrever na coluna weight_<archetype>. */
+  archetype?: CardLearningArchetype;
 }
 
 export class RLToCardLearningBridge {
@@ -96,10 +100,15 @@ export class RLToCardLearningBridge {
         // Delta = reward × 0.1 (escala reduzida para evitar overfitting)
         const delta = decision.reward * 0.1;
 
+        // archetype pode vir embutido no metadata da decisão RL; sempre que
+        // válido, propagamos para o card_learning bucket correto.
+        const archetype = normalizeArchetype((decision as any).archetype);
+
         queue.enqueue({
           cardName: decision.cardName,
           delta,
           source: "rl_feedback",
+          archetype,
           metadata: {
             rlDecisionId: decision.id,
             policyProbability: decision.policyProbability,
@@ -160,13 +169,15 @@ export class RLToCardLearningBridge {
   async feedbackFromDeckOptimization(
     deck: { name: string }[],
     score: number,
-    deckId?: number
+    deckId?: number,
+    archetype?: CardLearningArchetype | string
   ): Promise<void> {
     // Normaliza score para reward em [-1, 1]
     // Score 50 = reward 0 (neutro), 100 = reward +1, 0 = reward -1
     const reward = (score - 50) / 50;
 
     const queue = getCardLearningQueue();
+    const normalizedArchetype = normalizeArchetype(archetype);
 
     for (const card of deck) {
       // Delta = reward × 0.05 (mais conservador que self-play)
@@ -175,12 +186,14 @@ export class RLToCardLearningBridge {
         cardName: card.name,
         delta,
         source: "rl_feedback",
-        metadata: { deckScore: score, deckId },
+        archetype: normalizedArchetype,
+        metadata: { deckScore: score, deckId, archetype: normalizedArchetype },
       });
     }
 
+    const archInfo = normalizedArchetype ? ` [${normalizedArchetype}]` : "";
     console.log(
-      `[RLBridge] Queued RL feedback for ${deck.length} cards ` +
+      `[RLBridge] Queued RL feedback for ${deck.length} cards${archInfo} ` +
       `(score: ${score.toFixed(1)}, reward: ${reward.toFixed(3)})`
     );
   }
