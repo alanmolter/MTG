@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { getRawClient, closeDb } from "../db";
 
 /**
@@ -17,6 +18,24 @@ const args = new Set(process.argv.slice(2));
 const DO_REINDEX = args.has("--reindex");
 const DO_VACUUM = args.has("--vacuum");
 const DO_REBUILD = args.has("--rebuild");
+
+/**
+ * Desempacota erros compostos do postgres.js (AggregateError com errors[]).
+ * Sem isto, vemos só `.message=""` e ficamos cegos para a causa raiz.
+ */
+function unwrapMsg(e: any): string {
+  if (!e) return "<null>";
+  const parts: string[] = [];
+  if (e.message) parts.push(String(e.message));
+  if (e.code) parts.push(`code=${e.code}`);
+  if (Array.isArray(e.errors)) {
+    for (const s of e.errors) {
+      parts.push(`[sub: ${unwrapMsg(s)}]`);
+    }
+  }
+  if (e.cause) parts.push(`[cause: ${unwrapMsg(e.cause)}]`);
+  return parts.join(" ");
+}
 
 function banner(title: string) {
   const line = "═".repeat(60);
@@ -57,7 +76,7 @@ async function run() {
   if (probe.ok) {
     console.log(`  OK. ${probe.rows} linhas na tabela.`);
   } else {
-    console.log(`  FALHOU: ${probe.error?.message}`);
+    console.log(`  FALHOU: ${unwrapMsg(probe.error)}`);
   }
 
   // 2) Full scan
@@ -102,9 +121,9 @@ async function run() {
       console.log("  ✅ REINDEX concluído.");
       const re = await fullScan(sql);
       if (re.ok) console.log("  ✅ Full scan agora passa. Tabela reparada.");
-      else console.log(`  ⚠ Ainda corrompida após REINDEX: ${re.error?.message}`);
+      else console.log(`  ⚠ Ainda corrompida após REINDEX: ${unwrapMsg(re.error)}`);
     } catch (e: any) {
-      console.error(`  ❌ REINDEX falhou: ${e?.message}`);
+      console.error(`  ❌ REINDEX falhou: ${unwrapMsg(e)}`);
     }
   }
 
@@ -116,9 +135,9 @@ async function run() {
       console.log("  ✅ VACUUM FULL concluído.");
       const re = await fullScan(sql);
       if (re.ok) console.log("  ✅ Full scan agora passa. Tabela reparada.");
-      else console.log(`  ⚠ Ainda corrompida após VACUUM: ${re.error?.message}`);
+      else console.log(`  ⚠ Ainda corrompida após VACUUM: ${unwrapMsg(re.error)}`);
     } catch (e: any) {
-      console.error(`  ❌ VACUUM FULL falhou: ${e?.message}`);
+      console.error(`  ❌ VACUUM FULL falhou: ${unwrapMsg(e)}`);
       console.error(`     (esperado se o bloco corrompido for ilegível — use --rebuild)`);
     }
   }
@@ -147,9 +166,9 @@ async function run() {
       console.log("  ✔ Índices criados.");
       const re = await fullScan(sql);
       if (re.ok) console.log("  ✅ Tabela recriada e saudável.");
-      else console.log(`  ❌ Inesperado: scan ainda falha: ${re.error?.message}`);
+      else console.log(`  ❌ Inesperado: scan ainda falha: ${unwrapMsg(re.error)}`);
     } catch (e: any) {
-      console.error(`  ❌ REBUILD falhou: ${e?.message}`);
+      console.error(`  ❌ REBUILD falhou: ${unwrapMsg(e)}`);
     }
   }
 
@@ -158,7 +177,7 @@ async function run() {
 }
 
 run().catch(async (e) => {
-  console.error("[repairSynergies] Erro fatal:", e?.message || e);
+  console.error("[repairSynergies] Erro fatal:", unwrapMsg(e));
   try { await closeDb(); } catch {}
   process.exit(1);
 });

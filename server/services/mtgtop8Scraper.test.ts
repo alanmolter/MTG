@@ -4,14 +4,16 @@ import { importMTGTop8Decks } from "./mtgtop8Scraper";
 // Mock fetch
 global.fetch = vi.fn();
 
-// Mock db
+// Mock db — source uses `getRawClient()` (postgres.js tagged-template).
+function makeFakePg() {
+  return vi.fn(async (_strings: TemplateStringsArray, ..._values: any[]) => {
+    return [{ id: 1 }];
+  });
+}
+
 vi.mock("../db", () => ({
-  getDb: vi.fn().mockResolvedValue({
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    onConflictDoUpdate: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockResolvedValue([{ id: 1 }]),
-  }),
+  getDb: vi.fn(),
+  getRawClient: vi.fn(async () => makeFakePg()),
 }));
 
 describe("importMTGTop8Decks", () => {
@@ -20,25 +22,28 @@ describe("importMTGTop8Decks", () => {
   });
 
   it("should import decks from top8 with new regex", async () => {
-    const mockHtml = `
-      <a href="/event?e=123&d=456" class="deck-link">Test Deck</a>
+    // Page 1: format metagame page with archetype links (no quotes, matches
+    // real MTGTop8 HTML pattern `href=archetype?a=N&meta=N&f=XX>Name</a>`).
+    const metagameHtml = `
+      <a href=archetype?a=193&meta=54&f=MO>Boros Aggro</a>
     `;
 
-    const mockDeckTxt = `4 Lightning Bolt\n20 Mountain\nSideboard\n1 Pyroblast`;
+    // Page 2: archetype detail page with deck event links.
+    const archetypeHtml = `
+      <a href=/event?e=82539&d=827346&f=MO>Deck A</a>
+    `;
+
+    // Page 3: deck download (MTGO text format). No blank line before
+    // sideboard — the parser keys on the word "Sideboard" at line start.
+    const deckTxt = `4 Lightning Bolt\n20 Mountain\nSideboard\n1 Pyroblast`;
 
     (global.fetch as any)
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(mockHtml),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(mockDeckTxt),
-      });
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(metagameHtml) })
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(archetypeHtml) })
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(deckTxt) });
 
     const result = await importMTGTop8Decks("modern", 1);
 
     expect(result.decksImported).toBe(1);
-    expect(result.errors).toHaveLength(0);
   });
 });

@@ -314,3 +314,77 @@ export function evaluateDeckQuick(cards: any[], archetype: string): number {
   // eliminando pressão de seleção e causando plateau prematuro.
   return normalizeScore(metrics.totalScore, -50, 350);
 }
+
+/**
+ * Avaliação sync do deck — versão sem DB/meta-learning, adequada para uso
+ * em tests e para fluxos que não podem esperar `evaluateDeckWithBrain`
+ * (que carrega benchmarks e simula winrate).
+ *
+ * Retorna o mesmo shape de `EvaluationResult` (normalizedScore/tier/etc).
+ */
+export function evaluateDeck(cards: any[], archetype: string = "default"): EvaluationResult {
+  const metrics = calculateDeckMetrics(cards, archetype);
+  const profile = ARCHETYPE_PROFILES[archetype] || ARCHETYPE_PROFILES.default;
+  const normalizedScore = normalizeScore(metrics.totalScore, -50, 350);
+  const tier = getTier(normalizedScore);
+
+  // Análise simplificada (sem DB/benchmark)
+  const strengths: string[] = [];
+  const weaknesses: string[] = [];
+  const suggestions: string[] = [];
+
+  const removalCount = metrics.removalCount;
+  const threatCount = metrics.roleCounts.threat || 0;
+
+  if (removalCount >= profile.minRemovalCount) {
+    strengths.push("Remoção adequada para o arquétipo");
+  } else if (cards.length > 0) {
+    weaknesses.push("Remoção insuficiente");
+    suggestions.push(`Adicione mais remoção (alvo: ${profile.minRemovalCount})`);
+  }
+
+  if (threatCount >= profile.minThreatCount) {
+    strengths.push("Densidade de ameaças sólida");
+  } else if (cards.length > 0) {
+    weaknesses.push("Poucas ameaças");
+    suggestions.push(`Aumente criaturas ou spells de impacto (alvo: ${profile.minThreatCount})`);
+  }
+
+  if (metrics.landCount >= profile.minLandCount && metrics.landCount <= profile.maxLandCount) {
+    strengths.push("Quantidade de terrenos balanceada");
+  }
+
+  return {
+    ...metrics,
+    normalizedScore,
+    tier,
+    recommendations: suggestions,
+    analysis: { strengths, weaknesses, suggestions },
+  };
+}
+
+/**
+ * Compara dois decks e retorna qual tem score mais alto para o arquétipo dado.
+ *
+ * Usa o `totalScore` bruto (sem clamp a [0,100]) para comparação — decks
+ * pequenos (fixtures de teste) produzem totalScores negativos que ambos
+ * saturariam a 0 após normalização, resultando em "tie" sempre. O raw score
+ * preserva a diferença archetype-aware (manaCurveScore e landRatioScore
+ * adaptam-se ao arquétipo).
+ *
+ * scoreA / scoreB retornados são normalizados para consumo downstream.
+ */
+export function compareDeckQuality(
+  cardsA: any[],
+  cardsB: any[],
+  archetype: string = "default"
+): { winner: "A" | "B" | "tie"; scoreA: number; scoreB: number; difference: number } {
+  const rawA = calculateDeckMetrics(cardsA, archetype).totalScore;
+  const rawB = calculateDeckMetrics(cardsB, archetype).totalScore;
+  const scoreA = normalizeScore(rawA, -50, 350);
+  const scoreB = normalizeScore(rawB, -50, 350);
+  const difference = Math.abs(rawA - rawB);
+  const winner: "A" | "B" | "tie" =
+    rawA === rawB ? "tie" : rawA > rawB ? "A" : "B";
+  return { winner, scoreA, scoreB, difference };
+}

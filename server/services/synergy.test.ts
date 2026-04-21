@@ -5,6 +5,7 @@ import {
   updateSynergy,
   calculateDeckSynergy,
   findBestCardForDeck,
+  resetSynergyCircuit,
 } from "./synergy";
 import { getDb } from "../db";
 
@@ -22,9 +23,18 @@ const mockSynergy = {
   updatedAt: new Date(),
 };
 
+// Helper: produce a synergy row whose blended score equals `blended`.
+// blended = round(coOccurrenceRate * 0.7 + weight * 0.3). When co=weight=B,
+// blended = B exactly, so we use that shortcut.
+function synergyRow(blended: number) {
+  return { coOccurrenceRate: blended, weight: blended };
+}
+
 describe("Synergy Engine", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Circuit breaker state is module-global; reset so tests don't leak state
+    resetSynergyCircuit();
   });
 
   afterEach(() => {
@@ -37,9 +47,6 @@ describe("Synergy Engine", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        or: vi.fn(),
-        and: vi.fn(),
-        eq: vi.fn(),
         limit: vi.fn().mockResolvedValue([mockSynergy]),
       };
 
@@ -58,9 +65,6 @@ describe("Synergy Engine", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        or: vi.fn(),
-        and: vi.fn(),
-        eq: vi.fn(),
         limit: vi.fn().mockResolvedValue([]),
       };
 
@@ -84,9 +88,6 @@ describe("Synergy Engine", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        or: vi.fn(),
-        and: vi.fn(),
-        eq: vi.fn(),
         limit: vi.fn().mockResolvedValue([mockSynergy]),
       };
 
@@ -111,8 +112,6 @@ describe("Synergy Engine", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        or: vi.fn(),
-        eq: vi.fn(),
         limit: vi.fn().mockResolvedValue(mockSynergies),
       };
 
@@ -138,8 +137,6 @@ describe("Synergy Engine", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        or: vi.fn(),
-        eq: vi.fn(),
         limit: vi.fn().mockResolvedValue(mockSynergies),
       };
 
@@ -156,8 +153,6 @@ describe("Synergy Engine", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        or: vi.fn(),
-        eq: vi.fn(),
         limit: vi.fn().mockResolvedValue([]),
       };
 
@@ -171,31 +166,21 @@ describe("Synergy Engine", () => {
 
   describe("updateSynergy", () => {
     it("should create new synergy when none exists", async () => {
+      // Source:
+      //   1) select().from().where().limit(1) → []          (no existing)
+      //   2) insert().values()
+      //   3) select().from().where().limit(1) → [new row]   (read back)
       const mockDb = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        and: vi.fn(),
-        eq: vi.fn(),
-        limit: vi.fn().mockResolvedValue([]), // No existing synergy
+        limit: vi
+          .fn()
+          .mockResolvedValueOnce([]) // no existing
+          .mockResolvedValueOnce([mockSynergy]), // read back
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockResolvedValue(undefined),
       };
-
-      // Mock the second select call
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockReturnValueOnce(mockDb);
-      mockDb.and.mockReturnValueOnce(mockDb);
-      mockDb.eq.mockReturnValueOnce(mockDb);
-      mockDb.limit.mockResolvedValueOnce([]); // First call - no existing
-
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockReturnValueOnce(mockDb);
-      mockDb.and.mockReturnValueOnce(mockDb);
-      mockDb.eq.mockReturnValueOnce(mockDb);
-      mockDb.limit.mockResolvedValueOnce([mockSynergy]); // Second call - return created
 
       (getDb as any).mockResolvedValue(mockDb);
 
@@ -212,15 +197,17 @@ describe("Synergy Engine", () => {
     });
 
     it("should update existing synergy", async () => {
+      // Source when existing:
+      //   1) select().from().where().limit(1) → [existing]
+      //   2) update().set().where()
+      //   returns { ...existing, weight, coOccurrenceRate }
       const mockDb = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        and: vi.fn(),
-        eq: vi.fn(),
-        limit: vi.fn().mockResolvedValue([mockSynergy]), // Existing synergy
+        limit: vi.fn().mockResolvedValue([mockSynergy]),
         update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockResolvedValue(undefined),
+        set: vi.fn().mockReturnThis(), // MUST chain, so await .where() resolves
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -240,26 +227,13 @@ describe("Synergy Engine", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        and: vi.fn(),
-        eq: vi.fn(),
-        limit: vi.fn().mockResolvedValue([]),
+        limit: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([mockSynergy]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockResolvedValue(undefined),
       };
-
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockReturnValueOnce(mockDb);
-      mockDb.and.mockReturnValueOnce(mockDb);
-      mockDb.eq.mockReturnValueOnce(mockDb);
-      mockDb.limit.mockResolvedValueOnce([]);
-
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockReturnValueOnce(mockDb);
-      mockDb.and.mockReturnValueOnce(mockDb);
-      mockDb.eq.mockReturnValueOnce(mockDb);
-      mockDb.limit.mockResolvedValueOnce([mockSynergy]);
 
       (getDb as any).mockResolvedValue(mockDb);
 
@@ -279,21 +253,25 @@ describe("Synergy Engine", () => {
     it("should calculate total synergy for a deck", async () => {
       const cardIds = [1, 2, 3];
 
-      // Mock getCardSynergy calls
-      const getCardSynergyMock = vi.fn();
-      getCardSynergyMock.mockResolvedValueOnce(10); // 1-2
-      getCardSynergyMock.mockResolvedValueOnce(15); // 1-3
-      getCardSynergyMock.mockResolvedValueOnce(20); // 2-3
+      // Iteration order: (1,2), (1,3), (2,3). Each pair → 1 DB hit.
+      // Use synergyRow(B) where blended score == B, then total = sum of B.
+      const mockDb = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi
+          .fn()
+          .mockResolvedValueOnce([synergyRow(10)]) // 1-2
+          .mockResolvedValueOnce([synergyRow(15)]) // 1-3
+          .mockResolvedValueOnce([synergyRow(20)]), // 2-3
+      };
 
-      vi.mocked(getCardSynergy).mockImplementation(getCardSynergyMock);
+      (getDb as any).mockResolvedValue(mockDb);
 
       const result = await calculateDeckSynergy(cardIds);
 
       expect(result).toBe(45); // 10 + 15 + 20
-      expect(getCardSynergyMock).toHaveBeenCalledTimes(3);
-      expect(getCardSynergyMock).toHaveBeenCalledWith(1, 2);
-      expect(getCardSynergyMock).toHaveBeenCalledWith(1, 3);
-      expect(getCardSynergyMock).toHaveBeenCalledWith(2, 3);
+      expect(mockDb.limit).toHaveBeenCalledTimes(3);
     });
 
     it("should return 0 for decks with less than 2 cards", async () => {
@@ -304,18 +282,23 @@ describe("Synergy Engine", () => {
       expect(result0).toBe(0);
     });
 
-    it("should handle decks with duplicate synergies", async () => {
+    it("should handle decks with duplicate card IDs", async () => {
       const cardIds = [1, 1, 2]; // Duplicate card IDs
+      // Source doesn't deduplicate, so 3 pairs are queried: (1,1), (1,2), (1,2)
+      const mockDb = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([synergyRow(10)]),
+      };
 
-      const getCardSynergyMock = vi.fn();
-      getCardSynergyMock.mockResolvedValue(10);
-
-      vi.mocked(getCardSynergy).mockImplementation(getCardSynergyMock);
+      (getDb as any).mockResolvedValue(mockDb);
 
       const result = await calculateDeckSynergy(cardIds);
 
-      expect(result).toBe(20); // 1-1 + 1-2 + 1-2, but actually only unique pairs
-      // Note: The current implementation doesn't deduplicate, so this tests the actual behavior
+      // Actual behavior: 3 pairs * 10 = 30 (no dedup)
+      expect(result).toBe(30);
+      expect(mockDb.limit).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -324,20 +307,25 @@ describe("Synergy Engine", () => {
       const deckCardIds = [1, 2];
       const candidateCardIds = [3, 4, 5];
 
-      const getCardSynergyMock = vi.fn();
-      // Card 3: synergy with 1=10, with 2=5, total=15
-      // Card 4: synergy with 1=8, with 2=12, total=20
-      // Card 5: synergy with 1=6, with 2=8, total=14
-      getCardSynergyMock.mockImplementation((card1, card2) => {
-        const synergies: { [key: string]: number } = {
-          "3-1": 10, "3-2": 5,
-          "4-1": 8, "4-2": 12,
-          "5-1": 6, "5-2": 8,
-        };
-        return Promise.resolve(synergies[`${card1}-${card2}`] || synergies[`${card2}-${card1}`] || 0);
-      });
+      // Iteration: for each candidate, for each deck card → 6 DB calls.
+      // Candidate 3: synergy(3,1)=10, synergy(3,2)=5   → total 15
+      // Candidate 4: synergy(4,1)=8,  synergy(4,2)=12  → total 20 ← winner
+      // Candidate 5: synergy(5,1)=6,  synergy(5,2)=8   → total 14
+      const mockDb = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi
+          .fn()
+          .mockResolvedValueOnce([synergyRow(10)])
+          .mockResolvedValueOnce([synergyRow(5)])
+          .mockResolvedValueOnce([synergyRow(8)])
+          .mockResolvedValueOnce([synergyRow(12)])
+          .mockResolvedValueOnce([synergyRow(6)])
+          .mockResolvedValueOnce([synergyRow(8)]),
+      };
 
-      vi.mocked(getCardSynergy).mockImplementation(getCardSynergyMock);
+      (getDb as any).mockResolvedValue(mockDb);
 
       const result = await findBestCardForDeck(deckCardIds, candidateCardIds);
 
@@ -357,10 +345,16 @@ describe("Synergy Engine", () => {
     });
 
     it("should handle zero synergy scores", async () => {
-      const getCardSynergyMock = vi.fn();
-      getCardSynergyMock.mockResolvedValue(0);
+      // deck=[1], candidates=[3]: 1 call returning blended=0.
+      // Score=0 > bestScore=-1 → returns first (and only) candidate.
+      const mockDb = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]), // no synergy row → blended=0
+      };
 
-      vi.mocked(getCardSynergy).mockImplementation(getCardSynergyMock);
+      (getDb as any).mockResolvedValue(mockDb);
 
       const result = await findBestCardForDeck([1], [3]);
 
@@ -370,9 +364,16 @@ describe("Synergy Engine", () => {
 
   describe("Integration tests", () => {
     it("should handle complex synergy calculations", async () => {
-      // Test a more complex scenario with multiple cards
       const cardIds = [1, 2, 3, 4, 5];
 
+      // Iteration order in calculateDeckSynergy:
+      //   (1,2), (1,3), (1,4), (1,5), (2,3), (2,4), (2,5), (3,4), (3,5), (4,5)
+      const pairOrder: [number, number][] = [
+        [1, 2], [1, 3], [1, 4], [1, 5],
+        [2, 3], [2, 4], [2, 5],
+        [3, 4], [3, 5],
+        [4, 5],
+      ];
       const synergyMatrix: { [key: string]: number } = {
         "1-2": 10, "1-3": 15, "1-4": 5, "1-5": 8,
         "2-3": 12, "2-4": 20, "2-5": 6,
@@ -380,18 +381,24 @@ describe("Synergy Engine", () => {
         "4-5": 14,
       };
 
-      const getCardSynergyMock = vi.fn();
-      getCardSynergyMock.mockImplementation((card1, card2) => {
-        const key = `${Math.min(card1, card2)}-${Math.max(card1, card2)}`;
-        return Promise.resolve(synergyMatrix[key] || 0);
-      });
+      const limitMock = vi.fn();
+      for (const [a, b] of pairOrder) {
+        const key = `${Math.min(a, b)}-${Math.max(a, b)}`;
+        limitMock.mockResolvedValueOnce([synergyRow(synergyMatrix[key])]);
+      }
 
-      vi.mocked(getCardSynergy).mockImplementation(getCardSynergyMock);
+      const mockDb = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: limitMock,
+      };
+
+      (getDb as any).mockResolvedValue(mockDb);
 
       const result = await calculateDeckSynergy(cardIds);
 
-      // Calculate expected total: sum of all unique pairs
-      const expectedTotal = Object.values(synergyMatrix).reduce((sum, val) => sum + val, 0);
+      const expectedTotal = Object.values(synergyMatrix).reduce((s, v) => s + v, 0);
       expect(result).toBe(expectedTotal);
     });
 

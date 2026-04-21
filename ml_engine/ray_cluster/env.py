@@ -72,10 +72,21 @@ class MtgForgeEnv(gym.Env):
         super().__init__()
         config = config or {}
 
-        # Resolve paths & params
+        # Resolve paths & params. We launch the bridge as:
+        #   java -cp <forge_jar>;<bridge_jar> forge.rlbridge.ForgeRLBridge
+        # — NOT `java -jar forge.jar --rlbridge` (no such flag upstream).
+        default_forge_jar = "forge/forge-gui-desktop/target/forge-gui-desktop-2.0.12-SNAPSHOT-jar-with-dependencies.jar"
+        default_bridge_jar = "forge/rlbridge/target/rlbridge.jar"
         self.forge_jar: Path = Path(
-            config.get("forge_jar") or os.getenv("FORGE_JAR", "forge/forge-gui-desktop.jar")
+            config.get("forge_jar") or os.getenv("FORGE_JAR", default_forge_jar)
         )
+        self.bridge_jar: Path = Path(
+            config.get("bridge_jar") or os.getenv("FORGE_BRIDGE_JAR", default_bridge_jar)
+        )
+        # Optional override — bridge auto-detects by default (walks up from CWD
+        # looking for res/languages/en-US.properties under a forge-gui sibling).
+        self.assets_dir: Optional[str] = config.get("forge_assets_dir") or os.getenv("FORGE_ASSETS_DIR")
+        self.forge_stderr_enabled: bool = bool(config.get("forge_stderr") or os.getenv("FORGE_STDERR"))
         self.java_bin: str = config.get("java_bin") or os.getenv("JAVA_BIN", "java")
         self.num_actions: int = int(config.get("num_actions", DEFAULT_NUM_ACTIONS))
         self.max_cards: int = int(config.get("max_cards", DEFAULT_MAX_CARDS))
@@ -99,7 +110,7 @@ class MtgForgeEnv(gym.Env):
                 low=-1e3, high=1e3, shape=(self.max_cards, 395), dtype=np.float32
             ),
             "player_feats": spaces.Box(
-                low=-1e3, high=1e3, shape=(2, 14), dtype=np.float32
+                low=-1e3, high=1e3, shape=(2, 15), dtype=np.float32
             ),
             "controlled_by_edges": spaces.Box(
                 low=0, high=max(self.max_cards, 2) - 1, shape=(2, 2 * self.max_cards), dtype=np.int64
@@ -122,7 +133,9 @@ class MtgForgeEnv(gym.Env):
         super().reset(seed=seed)
         self._ensure_subprocess()
         self._send_command({"cmd": "new_game", "agent_deck": self.agent_deck, "opponent_deck": self.opponent_deck, "seed": seed})
-        first_state = self._read_state()
+        # Forge's cold-start (card DB load) takes ~5s. Give new_game a generous
+        # one-time budget so the first reset survives the warm-up.
+        first_state = self._read_state(timeout_override=max(self.step_timeout, 60.0))
         self.loop_guard.reset()
         self._last_snapshot = self._state_to_snapshot(first_state)
         obs = self._encode_observation(first_state)
@@ -182,14 +195,39 @@ class MtgForgeEnv(gym.Env):
             raise FileNotFoundError(
                 f"Forge jar not found at {self.forge_jar}. Set FORGE_JAR env or config['forge_jar']."
             )
-        cmd = [self.java_bin, "-Xmx2G", "-jar", str(self.forge_jar), "--rlbridge"]
+        if not self.bridge_jar.exists():
+            raise FileNotFoundError(
+                f"ForgeRLBridge jar not found at {self.bridge_jar}. "
+                f"Build it via: cd forge/rlbridge && mvn package (or the Maven-less build in forge/rlbridge/README). "
+                f"Override with FORGE_BRIDGE_JAR env or config['bridge_jar']."
+            )
+
+        classpath = str(self.forge_jar) + os.pathsep + str(self.bridge_jar)
+        cmd = [self.java_bin, "-Xmx2G"]
+        if self.assets_dir:
+            cmd.append(f"-DFORGE_ASSETS_DIR={self.assets_dir}")
+        cmd += ["-cp", classpath, "forge.rlbridge.ForgeRLBridge"]
+
+        # CWD matters for the bridge's auto-detect: it walks up from CWD
+        # looking for res/languages/en-US.properties. Default to the repo root
+        # (parent of ml_engine) so "forge/forge-gui/res/languages/..." resolves.
+        cwd = os.getenv("FORGE_CWD")
+        if not cwd:
+            # Walk up from this file: ml_engine/ray_cluster/env.py → repo root
+            cwd = str(Path(__file__).resolve().parents[2])
+
+        # By default suppress stderr (very chatty from Forge's init). Opt-in
+        # with FORGE_STDERR=1 or config['forge_stderr']=True for debugging.
+        stderr_sink = None if self.forge_stderr_enabled else subprocess.DEVNULL
+
         self._proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=stderr_sink,
             text=True,
             bufsize=1,  # line-buffered
+            cwd=cwd,
         )
 
     def _kill_subprocess(self):
@@ -222,12 +260,13 @@ class MtgForgeEnv(gym.Env):
         self._proc.stdin.write(line)
         self._proc.stdin.flush()
 
-    def _read_state(self) -> Dict[str, Any]:
+    def _read_state(self, timeout_override: Optional[float] = None) -> Dict[str, Any]:
         assert self._proc and self._proc.stdout
+        timeout = timeout_override if timeout_override is not None else self.step_timeout
         start = time.time()
         while True:
-            if time.time() - start > self.step_timeout:
-                raise subprocess.TimeoutExpired(cmd="forge_step", timeout=self.step_timeout)
+            if time.time() - start > timeout:
+                raise subprocess.TimeoutExpired(cmd="forge_step", timeout=timeout)
             line = self._proc.stdout.readline()
             if not line:
                 time.sleep(0.01)
@@ -279,10 +318,10 @@ class MtgForgeEnv(gym.Env):
             if emb and len(emb) == 384:
                 card_feats[i, 11:395] = emb
 
-        player_feats = np.zeros((2, 14), dtype=np.float32)
+        player_feats = np.zeros((2, 15), dtype=np.float32)
         for pi, key in enumerate(("you", "opp")):
             p = state.get(key, {})
-            player_feats[pi, :14] = [
+            player_feats[pi, :15] = [
                 p.get("life", 20), p.get("max_life_seen", 20),
                 p.get("mana_pool_total", 0),
                 *[p.get(f"mana_{c}", 0) for c in ("w", "u", "b", "r", "g")],
@@ -327,7 +366,7 @@ class MtgForgeEnv(gym.Env):
         """Zero observation for edge cases (subprocess dead, etc.)."""
         return {
             "card_feats": np.zeros((self.max_cards, 395), dtype=np.float32),
-            "player_feats": np.zeros((2, 14), dtype=np.float32),
+            "player_feats": np.zeros((2, 15), dtype=np.float32),
             "controlled_by_edges": np.zeros((2, 2 * self.max_cards), dtype=np.int64),
             "in_zone_edges": np.zeros((2, 2 * self.max_cards), dtype=np.int64),
             "synergy_edges": np.zeros((2, 4 * self.max_cards), dtype=np.int64),

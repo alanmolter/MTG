@@ -254,7 +254,11 @@ export async function findBestCardForDeck(
   deckCardIds: number[],
   candidateCardIds: number[]
 ): Promise<number | null> {
-  let bestCard = null;
+  // Guard: no basis to pick a "best" card if there's no reference deck
+  // and no candidates to compare (either side empty → null).
+  if (deckCardIds.length === 0 || candidateCardIds.length === 0) return null;
+
+  let bestCard: number | null = null;
   let bestScore = -1;
 
   for (const candidateId of candidateCardIds) {

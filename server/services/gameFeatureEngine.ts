@@ -184,6 +184,17 @@ export function extractCardFeatures(card: {
   const tagKeywords = ["token", "sacrifice", "counter", "lifegain", "graveyard", "discard", "scry", "flying", "haste", "trample"];
   for (const tag of tagKeywords) if (text.includes(tag)) mechanicTags.push(tag);
 
+  // Functional role → mechanic-tag bridge. The scoring layer operates on
+  // mechanicTags, so roles like card_draw/ramp/counterspell/removal need
+  // to surface there too or a deck full of removal spells scores 0.
+  if (roles.includes("card_draw") && !mechanicTags.includes("draw")) mechanicTags.push("draw");
+  if (roles.includes("ramp") && !mechanicTags.includes("ramp")) mechanicTags.push("ramp");
+  if (roles.includes("counterspell") && !mechanicTags.includes("counterspell")) mechanicTags.push("counterspell");
+  if ((roles.includes("removal") || roles.includes("targeted_removal") || roles.includes("board_wipe"))
+      && !mechanicTags.includes("removal")) {
+    mechanicTags.push("removal");
+  }
+
   const isCreature = type.includes("creature");
   const isLand = type.includes("land");
   const isInstant = type.includes("instant");
@@ -277,10 +288,21 @@ export function landRatioScore(features: CardFeatures[], archetype: string = "de
 export function mechanicSynergyScore(features: CardFeatures[]): { score: number; tagCounts: Record<string, number> } {
   const tagCounts: Record<string, number> = {};
   for (const f of features) for (const tag of f.mechanicTags) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-  
+
+  // Super-linear stacking: a deck with 12× the same tag is dramatically more
+  // synergistic than 4 groups of 3, so we use count^1.5 once the group
+  // crosses the critical-mass threshold of 3.
   let score = 0;
-  for (const count of Object.values(tagCounts)) if (count >= 3) score += count * 2;
-  
+  for (const count of Object.values(tagCounts)) {
+    if (count >= 3) score += Math.pow(count, 1.5);
+  }
+
+  // Removal-density bonus: having enough interaction is a separate
+  // correctness property from generic mechanical stacking.
+  if (tagCounts.removal && tagCounts.removal >= 4) {
+    score += tagCounts.removal * 3;
+  }
+
   return { score, tagCounts };
 }
 
@@ -352,6 +374,54 @@ export function calculateDeckMetrics(cards: any[], archetype: string = "default"
  */
 export const evaluateDeck = calculateDeckMetrics;
 export const extractFeatures = extractCardFeatures;
+
+/**
+ * Calibra as constantes do motor (IDEAL_LAND_COUNTS, IDEAL_CURVES) a partir
+ * de decks reais. Uso típico: importar competitive_decks/MTGGoldfish e
+ * calcular o "normal" real em vez de chutar.
+ *
+ * Entrada: lista de decks, onde cada deck é uma lista de cartas com
+ * { cmc, type, quantity }. "type" é case-insensitive e qualquer string
+ * que contenha "land" conta como terreno.
+ *
+ * Saída: médias por deck. Array vazio → fallback 24 lands / sem curva.
+ */
+export function calibrateFromRealDecks(
+  decks: Array<Array<{ cmc: number; type: string; quantity: number }>>
+): { avgLands: number; avgCurve: Record<number, number> } {
+  if (decks.length === 0) {
+    return { avgLands: 24, avgCurve: {} };
+  }
+
+  let totalLands = 0;
+  const curveSum: Record<number, number> = {};
+
+  for (const deck of decks) {
+    let landsThisDeck = 0;
+    const deckCurve: Record<number, number> = {};
+    for (const card of deck) {
+      if (typeof card.type === "string" && card.type.toLowerCase().includes("land")) {
+        landsThisDeck += card.quantity;
+      } else {
+        deckCurve[card.cmc] = (deckCurve[card.cmc] || 0) + card.quantity;
+      }
+    }
+    totalLands += landsThisDeck;
+    for (const [cmcStr, count] of Object.entries(deckCurve)) {
+      const cmc = parseInt(cmcStr, 10);
+      curveSum[cmc] = (curveSum[cmc] || 0) + count;
+    }
+  }
+
+  const avgLands = totalLands / decks.length;
+  const avgCurve: Record<number, number> = {};
+  for (const [cmcStr, sum] of Object.entries(curveSum)) {
+    const cmc = parseInt(cmcStr, 10);
+    avgCurve[cmc] = sum / decks.length;
+  }
+
+  return { avgLands, avgCurve };
+}
 
 // ─── RL Utilities ─────────────────────────────────────────────────────────────
 

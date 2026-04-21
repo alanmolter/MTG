@@ -62,7 +62,7 @@ except ImportError as e:  # pragma: no cover
 @dataclass
 class GNNConfig:
     card_feat_dim: int = 395        # 11 scalar + 384 embedding
-    player_feat_dim: int = 14
+    player_feat_dim: int = 15       # must match MtgForgeEnv.observation_space player_feats width
     hidden_dim: int = 128
     num_layers: int = 3
     num_heads: int = 4
@@ -227,6 +227,71 @@ def build_hetero_data(
 # ── RLlib registration ─────────────────────────────────────────────────────
 
 
+def _batched_dict_to_hetero(obs, edge_relations):
+    """Convert a RLlib-batched Dict observation into a single batched HeteroData.
+
+    RLlib feeds the model an `obs` dict whose tensors carry a leading batch axis:
+        obs["card_feats"]             [B, N_card, card_dim]
+        obs["player_feats"]           [B, N_player, player_dim]
+        obs["controlled_by_edges"]    [B, 2, E]
+        obs["in_zone_edges"]          [B, 2, E]
+        obs["synergy_edges"]          [B, 2, E]
+        obs["attacks_edges"]          [B, 2, E]
+
+    We flatten along the batch axis so the GNN sees a single big disconnected
+    graph and emit `.batch` index vectors so global_mean_pool can un-batch.
+
+    Edge indices must be offset by the per-graph node count (so graph k's edges
+    point into [k*N_card, (k+1)*N_card) for card-card edges, and similar offsets
+    for card→player edges on the player side).
+    """
+    # torch is imported at module top; safe to use here
+    card_feats = obs["card_feats"]             # [B, N, card_dim]
+    player_feats = obs["player_feats"]         # [B, P, player_dim]
+    B, N_card, _ = card_feats.shape
+    P = player_feats.shape[1]
+    device = card_feats.device
+
+    data = HeteroData()
+    data["card"].x = card_feats.reshape(B * N_card, -1).float()
+    data["player"].x = player_feats.reshape(B * P, -1).float()
+    data["card"].batch = torch.arange(B, device=device).repeat_interleave(N_card)
+    data["player"].batch = torch.arange(B, device=device).repeat_interleave(P)
+
+    edge_key_map = {
+        ("card", "controlled_by", "player"): ("controlled_by_edges", "cp"),
+        ("card", "in_zone",       "player"): ("in_zone_edges",       "cp"),
+        ("card", "synergizes_with","card"):  ("synergy_edges",       "cc"),
+        ("card", "attacks",       "card"):   ("attacks_edges",       "cc"),
+    }
+    for rel in edge_relations:
+        obs_key, kind = edge_key_map[rel]
+        if obs_key not in obs:
+            continue
+        raw = obs[obs_key]  # [B, 2, E]
+        if raw.ndim != 3 or raw.shape[1] != 2:
+            continue
+        E = raw.shape[2]
+        # Offset per-graph. For card→player, src gets card offset (k*N_card),
+        # dst gets player offset (k*P). For card→card, both get card offsets.
+        src_off = torch.arange(B, device=device).view(B, 1) * N_card                 # [B, 1]
+        if kind == "cp":
+            dst_off = torch.arange(B, device=device).view(B, 1) * P                  # [B, 1]
+        else:
+            dst_off = torch.arange(B, device=device).view(B, 1) * N_card
+        src = (raw[:, 0, :].long() + src_off).reshape(-1)                             # [B*E]
+        dst = (raw[:, 1, :].long() + dst_off).reshape(-1)                             # [B*E]
+        # Drop padded zero-edges: an all-zero (0,0) pair across every graph is
+        # noise from pad_edges(). Keep edges where at least one endpoint is >0.
+        nonzero_mask = (raw[:, 0, :] > 0) | (raw[:, 1, :] > 0)                        # [B, E]
+        keep = nonzero_mask.reshape(-1)
+        if keep.any():
+            data[rel].edge_index = torch.stack([src[keep], dst[keep]], dim=0)
+        else:
+            data[rel].edge_index = torch.zeros(2, 0, dtype=torch.long, device=device)
+    return data
+
+
 def register_with_rllib():
     """Expose the model to Ray under the name 'game_state_gnn'."""
     try:
@@ -245,11 +310,25 @@ def register_with_rllib():
             self._value_out = None
 
         def forward(self, input_dict, state, seq_lens):
-            # obs is assumed to be a pre-built HeteroData-like dict
-            data = input_dict["obs"]
+            obs = input_dict["obs"]
+            # RLlib may hand us either a plain dict of tensors (Dict space) or a
+            # pre-built HeteroData. Handle both.
+            if isinstance(obs, HeteroData):
+                data = obs
+            else:
+                data = _batched_dict_to_hetero(obs, GameStateGNN.EDGE_RELATIONS)
             out = self.gnn(data)
+            logits = out["logits"]
+            # Apply action mask if present in obs (MultiBinary → [B, num_actions])
+            if isinstance(obs, dict) and "action_mask" in obs:
+                mask = obs["action_mask"].to(dtype=torch.bool)
+                # Guard: if every action is masked for some row, leave logits untouched
+                # for that row to avoid -inf softmax → nan.
+                all_masked = ~mask.any(dim=-1, keepdim=True)
+                effective_mask = mask | all_masked
+                logits = logits.masked_fill(~effective_mask, float("-1e9"))
             self._value_out = out["value"].squeeze(-1)
-            return out["logits"], state
+            return logits, state
 
         def value_function(self):
             return self._value_out

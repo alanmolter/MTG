@@ -61,15 +61,11 @@ describe("Deck CRUD Operations", () => {
 
   describe("createDeck", () => {
     it("should create a new deck successfully", async () => {
+      // Source: db.insert(decks).values({...}).returning()
       const mockDb = {
         insert: vi.fn().mockReturnThis(),
-        values: vi.fn().mockResolvedValue(undefined),
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        and: vi.fn(),
-        eq: vi.fn(),
-        limit: vi.fn().mockResolvedValue([mockDeck]),
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([mockDeck]),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -86,6 +82,7 @@ describe("Deck CRUD Operations", () => {
         description: "A test deck",
         isPublic: 0,
       });
+      expect(mockDb.returning).toHaveBeenCalled();
     });
 
     it("should handle database errors", async () => {
@@ -162,13 +159,19 @@ describe("Deck CRUD Operations", () => {
 
   describe("addCardToDeck", () => {
     it("should add a new card to deck", async () => {
+      // Source path when no existing card:
+      //   1) select().from().where().limit(1)  →  []         (no existing)
+      //   2) insert().values()                               (insert)
+      //   3) select().from().from().where().limit(1)  → [new]  (read back)
+      const inserted = { id: 1, deckId: 1, cardId: 1, quantity: 2 };
       const mockDb = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        and: vi.fn(),
-        eq: vi.fn(),
-        limit: vi.fn().mockResolvedValue([]), // No existing card
+        limit: vi
+          .fn()
+          .mockResolvedValueOnce([]) // existing check: no row
+          .mockResolvedValueOnce([inserted]), // read back after insert
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockResolvedValue(undefined),
       };
@@ -177,20 +180,28 @@ describe("Deck CRUD Operations", () => {
 
       const result = await addCardToDeck(1, 1, 2);
 
-      expect(result).toEqual({ deckId: 1, cardId: 1, quantity: 2, id: expect.any(Number) });
+      expect(result).toEqual(inserted);
+      expect(mockDb.insert).toHaveBeenCalled();
+      expect(mockDb.values).toHaveBeenCalledWith({
+        deckId: 1,
+        cardId: 1,
+        quantity: 2,
+      });
     });
 
     it("should update quantity if card already exists", async () => {
+      // Source path when existing:
+      //   1) select().from().where().limit(1) → [existing]
+      //   2) update().set().where()           → (ignored)
+      //   returns { ...existing, quantity: newQuantity }
       const existingDeckCard = { ...mockDeckCard, quantity: 2 };
       const mockDb = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        and: vi.fn(),
-        eq: vi.fn(),
+        where: vi.fn().mockReturnThis(), // returnThis so await update().set().where() resolves
         limit: vi.fn().mockResolvedValue([existingDeckCard]),
         update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockResolvedValue(undefined),
+        set: vi.fn().mockReturnThis(),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -208,18 +219,16 @@ describe("Deck CRUD Operations", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        and: vi.fn(),
-        eq: vi.fn(),
         limit: vi.fn().mockResolvedValue([existingDeckCard]),
         update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockResolvedValue(undefined),
+        set: vi.fn().mockReturnThis(),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
 
       const result = await addCardToDeck(1, 1, 3);
 
-      expect(result).toEqual({ ...existingDeckCard, quantity: 4 }); // 3 + 3 = 6, but capped at 4
+      expect(result).toEqual({ ...existingDeckCard, quantity: 4 }); // 3 + 3 = 6, capped at 4
     });
   });
 
@@ -228,8 +237,6 @@ describe("Deck CRUD Operations", () => {
       const mockDb = {
         delete: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(undefined),
-        and: vi.fn(),
-        eq: vi.fn(),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -251,12 +258,14 @@ describe("Deck CRUD Operations", () => {
 
   describe("getDeckCards", () => {
     it("should return deck cards with card details", async () => {
-      const mockDeckCards = [mockDeckCard];
+      // Source: db.select().from(deckCards).innerJoin(cards, ...).where(eq(...))
+      // Returns rows with shape { deck_cards: {...}, cards: {...} }
+      const joinedRows = [{ deck_cards: mockDeckCard, cards: mockCard }];
       const mockDb = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValueOnce(mockDeckCards).mockResolvedValueOnce([mockCard]),
-        eq: vi.fn(),
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(joinedRows),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -270,13 +279,12 @@ describe("Deck CRUD Operations", () => {
       });
     });
 
-    it("should filter out cards without details", async () => {
-      const mockDeckCards = [mockDeckCard];
+    it("should return empty array when no joined rows", async () => {
       const mockDb = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValueOnce(mockDeckCards).mockResolvedValueOnce([]),
-        eq: vi.fn(),
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -298,7 +306,6 @@ describe("Deck CRUD Operations", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(mockDeckCards),
-        eq: vi.fn(),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -313,7 +320,6 @@ describe("Deck CRUD Operations", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([]),
-        eq: vi.fn(),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -326,14 +332,16 @@ describe("Deck CRUD Operations", () => {
 
   describe("updateDeck", () => {
     it("should update deck metadata", async () => {
+      // Source:
+      //   1) update().set().where()             → (ignored)
+      //   2) select().from().where().limit(1)   → [mockDeck]
       const mockDb = {
         update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockResolvedValue(undefined),
+        set: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([mockDeck]),
-        eq: vi.fn(),
       };
 
       (getDb as any).mockResolvedValue(mockDb);
@@ -352,7 +360,6 @@ describe("Deck CRUD Operations", () => {
       const mockDb = {
         delete: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(undefined),
-        eq: vi.fn(),
       };
 
       (getDb as any).mockResolvedValue(mockDb);

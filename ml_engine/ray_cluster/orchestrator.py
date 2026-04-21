@@ -43,15 +43,45 @@ except ImportError as e:  # pragma: no cover
     raise ImportError(f"ray + tune required: install via requirements.txt ({e})")
 
 
+def _gpu_per_trial() -> float:
+    """Return the GPU fraction each PBT trial requests from Ray.
+
+    Priority:
+      1. Explicit override via env: MTG_GPU_PER_TRIAL (e.g. "0.5", "1", "0").
+      2. If torch reports CUDA available -> default 0.25 so 4 concurrent PBT
+         trials can share a single consumer GPU (e.g. RTX 2070S 8GB). The
+         learner kernel is tiny (~GNN 100K params), so fractional sharing is
+         safe. Env runners (Forge rollouts) stay on CPU.
+      3. Otherwise 0 (pure CPU fallback).
+
+    We intentionally do NOT key on CUDA_VISIBLE_DEVICES: on Windows the env
+    var is often unset even when a working CUDA install exists, which was
+    silently forcing the whole pipeline to CPU despite an idle RTX.
+    """
+    env_override = os.getenv("MTG_GPU_PER_TRIAL")
+    if env_override is not None:
+        try:
+            return max(0.0, min(1.0, float(env_override)))
+        except ValueError:
+            pass
+    try:
+        import torch  # noqa: WPS433 - lazy import keeps CPU-only envs cheap
+        if torch.cuda.is_available():
+            return 0.25
+    except ImportError:
+        pass
+    return 0.0
+
+
 # ── Hyperparameter search space ─────────────────────────────────────────────
 
 
 PBT_MUTATIONS: Dict[str, Any] = {
+    # Note: IMPALA uses V-trace (not GAE) so `lambda_` is not a valid knob here.
     "lr": tune.loguniform(1e-5, 1e-3),
     "entropy_coeff": tune.uniform(0.0, 0.02),
     "vf_loss_coeff": tune.uniform(0.5, 1.5),
     "grad_clip": tune.uniform(0.5, 40.0),
-    "lambda_": tune.uniform(0.9, 1.0),
 }
 
 
@@ -62,7 +92,6 @@ def _resample_hparams(_config):
         "entropy_coeff": random.uniform(0.0, 0.02),
         "vf_loss_coeff": random.uniform(0.5, 1.5),
         "grad_clip": random.uniform(0.5, 40.0),
-        "lambda_": random.uniform(0.9, 1.0),
     }
 
 
@@ -74,36 +103,62 @@ def build_impala_config(
     train_batch_size: int,
     opponent_pool_path: str,
 ) -> Dict[str, Any]:
-    """Compose an IMPALA config with our custom env + GNN model + PBT-friendly hparams."""
-    return {
-        "env": "mtg_forge_env",
-        "env_config": {
-            "opponent_pool_path": opponent_pool_path,
-            "turn_limit": 50,
-            "step_timeout": 10.0,
-        },
-        "framework": "torch",
-        "num_workers": num_workers,
-        "num_gpus": 1 if os.getenv("CUDA_VISIBLE_DEVICES") else 0,
-        "rollout_fragment_length": 50,
-        "train_batch_size": train_batch_size,
-        "learner_queue_size": 16,
-        "learner_queue_timeout": 300,
-        "model": {
-            "custom_model": "game_state_gnn",
-            "custom_model_config": {},
-        },
-        # PBT-mutated hparams (start values; PBT will override)
-        "lr": 3e-4,
-        "entropy_coeff": 0.01,
-        "vf_loss_coeff": 1.0,
-        "grad_clip": 40.0,
-        "lambda_": 0.95,
-        # IMPALA-specific
-        "vtrace": True,
-        "vtrace_clip_rho_threshold": 1.0,
-        "vtrace_clip_pg_rho_threshold": 1.0,
-    }
+    """Compose an IMPALA config with our custom env + GNN model + PBT-friendly hparams.
+
+    Ray 2.x / new API stack note
+    ----------------------------
+    Ray 2.11+ defaults IMPALA to the new RLModule/Learner API, which is
+    incompatible with the legacy `custom_model` knob. Our GNN is registered
+    as a ModelV2 via `ModelCatalog.register_custom_model(...)`, so we stay
+    on the legacy API by disabling both flags. This is documented in the
+    Ray migration guide as the compatible shim.
+    """
+    from ray.rllib.algorithms.impala import IMPALAConfig
+
+    cfg = (
+        IMPALAConfig()
+        .api_stack(
+            enable_rl_module_and_learner=False,
+            enable_env_runner_and_connector_v2=False,
+        )
+        .environment(
+            env="mtg_forge_env",
+            env_config={
+                "opponent_pool_path": opponent_pool_path,
+                "turn_limit": 50,
+                "step_timeout": 10.0,
+            },
+            disable_env_checking=True,
+        )
+        .framework("torch")
+        .env_runners(
+            num_env_runners=num_workers,
+            rollout_fragment_length=50,
+        )
+        .resources(
+            num_gpus=_gpu_per_trial(),
+        )
+        .training(
+            train_batch_size=train_batch_size,
+            lr=3e-4,
+            entropy_coeff=0.01,
+            vf_loss_coeff=1.0,
+            grad_clip=40.0,
+            model={
+                "custom_model": "game_state_gnn",
+                "custom_model_config": {},
+            },
+            vtrace=True,
+            vtrace_clip_rho_threshold=1.0,
+            vtrace_clip_pg_rho_threshold=1.0,
+            learner_queue_size=16,
+            learner_queue_timeout=300,
+        )
+        .debugging(
+            log_level="WARN",
+        )
+    )
+    return cfg.to_dict()
 
 
 # ── League scheduling ───────────────────────────────────────────────────────
@@ -173,9 +228,12 @@ def run(
     Path(storage_path).mkdir(parents=True, exist_ok=True)
     opponent_pool_path = os.path.join(storage_path, "league_state.json")
 
+    # Ray 2.11+ exposes episode rewards under `env_runners/episode_reward_mean`
+    # (nested metric name), not the legacy top-level `episode_reward_mean`.
+    metric_key = "env_runners/episode_reward_mean"
     pbt = PopulationBasedTraining(
         time_attr="training_iteration",
-        metric="episode_reward_mean",
+        metric=metric_key,
         mode="max",
         perturbation_interval=perturbation_interval,
         resample_probability=0.25,
@@ -202,9 +260,10 @@ def run(
         max_failures=2,
     )
 
-    best = analysis.get_best_trial("episode_reward_mean", mode="max")
+    best = analysis.get_best_trial(metric_key, mode="max")
     if best:
-        print(f"[orchestrator] best trial: {best.trial_id} reward={best.last_result.get('episode_reward_mean'):.3f}")
+        reward = best.last_result.get(metric_key) or 0.0
+        print(f"[orchestrator] best trial: {best.trial_id} reward={reward:.3f}")
         print(f"[orchestrator] checkpoint: {best.checkpoint}")
     else:
         print("[orchestrator] no trials finished successfully", file=sys.stderr)

@@ -146,17 +146,17 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
 }
 
 /**
- * Calcula a distância euclidiana entre dois vetores
+ * Calcula a distância euclidiana entre dois vetores.
+ *
+ * Retorna `Infinity` para vetores de dimensionalidade diferente — a distância
+ * euclidiana não está matematicamente definida nesse caso, e retornar um
+ * número "truncado" (computado só sobre a parte comum) mascara bugs upstream
+ * (ex: vetor truncado por erro, mismatch de embedding dim). Preferimos falhar
+ * alto com Infinity e deixar o caller decidir.
  */
 export function euclideanDistance(a: number[], b: number[]): number {
   if (a.length !== b.length) {
-    const minLen = Math.min(a.length, b.length);
-    let sum = 0;
-    for (let i = 0; i < minLen; i++) {
-      const diff = a[i] - b[i];
-      sum += diff * diff;
-    }
-    return Math.sqrt(sum);
+    return Infinity;
   }
 
   let sum = 0;

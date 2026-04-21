@@ -62,6 +62,19 @@ const mockCards = [
   },
 ];
 
+// Factory: produce a chained-query mock compatible with the Drizzle call pattern
+//   db.select().from(...)[.where(...)].limit(N)
+// The mock returns the rows you supply when `.limit()` is awaited.
+function makeDbMock(rows: typeof mockCards) {
+  const chain: any = {
+    select: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue(rows),
+  };
+  return chain;
+}
+
 describe("searchCards", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -72,12 +85,7 @@ describe("searchCards", () => {
   });
 
   it("should return all cards when no filters are provided", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+    const mockDb = makeDbMock(mockCards);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({});
@@ -85,121 +93,92 @@ describe("searchCards", () => {
     expect(result).toEqual(mockCards);
     expect(mockDb.select).toHaveBeenCalled();
     expect(mockDb.from).toHaveBeenCalled();
-    expect(mockDb.limit).toHaveBeenCalledWith(100);
+    // searchCards uses limit(2000) as a memory guard (not 100)
+    expect(mockDb.limit).toHaveBeenCalledWith(2000);
+    // No filters => .where should NOT be called
+    expect(mockDb.where).not.toHaveBeenCalled();
   });
 
-  it("should filter cards by name", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+  it("should call .where() when filtering by name", async () => {
+    const mockDb = makeDbMock([mockCards[0]]);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({ name: "bolt" });
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("Lightning Bolt");
+    expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 
-  it("should filter cards by type", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+  it("should call .where() when filtering by type", async () => {
+    const mockDb = makeDbMock([mockCards[0], mockCards[1]]);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({ type: "instant" });
 
     expect(result).toHaveLength(2);
-    expect(result.map(c => c.name)).toEqual(["Lightning Bolt", "Counterspell"]);
+    expect(result.map((c) => c.name)).toEqual(["Lightning Bolt", "Counterspell"]);
+    expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 
-  it("should filter cards by colors", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+  it("should call .where() when filtering by colors", async () => {
+    const mockDb = makeDbMock([mockCards[0]]);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({ colors: "R" });
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("Lightning Bolt");
+    expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 
-  it("should filter cards by multiple colors", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+  it("should call .where() when filtering by multiple colors", async () => {
+    const mockDb = makeDbMock([mockCards[1], mockCards[3]]);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({ colors: "WU" });
 
     expect(result).toHaveLength(2);
-    expect(result.map(c => c.name).sort()).toEqual(["Counterspell", "Serra Angel"]);
+    expect(result.map((c) => c.name).sort()).toEqual(["Counterspell", "Serra Angel"]);
+    expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 
-  it("should filter cards by CMC", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+  it("should call .where() when filtering by CMC", async () => {
+    const mockDb = makeDbMock([mockCards[0]]);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({ cmc: 1 });
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("Lightning Bolt");
+    expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 
-  it("should filter cards by rarity", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+  it("should call .where() when filtering by rarity", async () => {
+    const mockDb = makeDbMock([mockCards[2]]);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({ rarity: "rare" });
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("Black Lotus");
+    expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 
-  it("should combine multiple filters", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+  it("should call .where() once when combining multiple filters", async () => {
+    const mockDb = makeDbMock([mockCards[1]]);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({ type: "instant", colors: "U" });
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("Counterspell");
+    // All conditions are combined into a single and(...) call
+    expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 
-  it("should return empty array when no cards match filters", async () => {
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(mockCards),
-    };
-
+  it("should return empty array when database returns no matches", async () => {
+    const mockDb = makeDbMock([]);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({ name: "nonexistent" });
@@ -215,24 +194,19 @@ describe("searchCards", () => {
     expect(result).toEqual([]);
   });
 
-  it("should limit results to 100 cards", async () => {
+  it("should use limit(2000) as memory guard", async () => {
     const manyCards = Array.from({ length: 150 }, (_, i) => ({
       ...mockCards[0],
       id: i + 1,
       name: `Card ${i + 1}`,
     }));
 
-    const mockDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue(manyCards),
-    };
-
+    const mockDb = makeDbMock(manyCards);
     (getDb as any).mockResolvedValue(mockDb);
 
     const result = await searchCards({});
 
-    expect(result).toHaveLength(150); // The limit is applied before filtering
-    expect(mockDb.limit).toHaveBeenCalledWith(100);
+    expect(result).toHaveLength(150);
+    expect(mockDb.limit).toHaveBeenCalledWith(2000);
   });
 });

@@ -1,31 +1,34 @@
 # ────────────────────────────────────────────────────────────────────────────
 #  ml_engine — Python dependencies
 #
-#  Target: Python 3.11+
+#  Target: Python 3.11 or 3.12 (3.13+ not yet supported by torch-geometric /
+#          ray on Windows — wheels missing).
 #  CUDA:   12.x (RTX 2070S — install torch with +cu121 if GPU needed)
 #
-#  Install:
-#    python -m venv .venv
-#    .venv\Scripts\activate
-#    pip install -r ml_engine/requirements.txt
+#  Install (fresh venv with the right Python):
+#    py -3.12 -m venv .venv
+#    .\.venv\Scripts\python.exe -m pip install -r ml_engine\requirements.txt
 #
-#  For GPU PyTorch on Windows + CUDA 12.1, instead of plain torch:
-#    pip install torch==2.4.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+#  For GPU PyTorch on Windows + CUDA 12.1, install torch FIRST with:
+#    .\.venv\Scripts\python.exe -m pip install torch==2.4.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+#  then run the requirements file (pip won't reinstall the existing torch).
 # ────────────────────────────────────────────────────────────────────────────
 
 # Pillar 3 — Sentence Transformers (384-dim MiniLM)
-sentence-transformers>=2.7,<3.0
-transformers>=4.40,<5.0
+sentence-transformers>=2.7,<6.0
+transformers>=4.40,<6.0
 
 # Pillar 2 — Graph Neural Net
-torch>=2.2,<2.6
+# NOTE: torch pin intentionally loose — let pip pick the latest wheel that
+# exists for the active Python. torch-geometric has 3.12 wheels but not always
+# 3.13/3.14. If install fails, switch your venv to Python 3.12.
+torch>=2.2
 torch-geometric>=2.5,<3.0
-# NOTE: torch-scatter/torch-sparse are optional — install separately if you need
-# heavy sparse operations. For basic GATConv + HeteroConv they are not required.
+# torch-scatter/torch-sparse are optional — only needed for heavy sparse ops.
 
 # Pillar 1 / 7 — Ray RLlib + PBT
 ray[rllib,tune]>=2.10,<3.0
-gymnasium>=0.29,<1.1
+gymnasium>=0.29,<1.2
 
 # Pillar 4 — Postgres / pgvector bulk writer
 psycopg2-binary>=2.9,<3.0

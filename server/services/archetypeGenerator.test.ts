@@ -298,10 +298,13 @@ describe("generateDeckByArchetype", () => {
     expect(result.template).toEqual(ARCHETYPES.control);
   });
 
-  it("deve retornar poolSize correto", () => {
+  it("deve retornar poolSize correto (pool de estratégia, lands excluídos)", () => {
+    // buildPool(80) → 20 lands + 40 creatures + 20 spells = 80 cards.
+    // poolSize na source é filteredPool.length (spells+creatures; lands vão
+    // para manaPool separado), então esperamos 60.
     const pool = buildPool(80);
     const result = generateDeckByArchetype(pool, { archetype: "midrange", format: "standard" });
-    expect(result.poolSize).toBe(80);
+    expect(result.poolSize).toBe(60); // 80 total - 20 lands = 60 strategic cards
   });
 
   it("deve filtrar por cor quando especificado", () => {

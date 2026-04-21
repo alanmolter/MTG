@@ -66,8 +66,11 @@ describe("Clustering Service (Real ML-KMeans)", () => {
 
   describe("kMeansReal avec ml-kmeans", () => {
     it("should cluster simple 2D data correctly using ml-kmeans++", () => {
+      // NOTE: all-zero vectors get filtered by the source's validity mask
+      // (defensive guard against malformed embeddings). Use non-zero values
+      // so all 4 decks flow through to clustering.
       const vectors: DeckVector[] = [
-        { deckId: 1, vector: [0, 0], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
+        { deckId: 1, vector: [0.5, 0.5], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
         { deckId: 2, vector: [1, 1], colors: "W", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
         { deckId: 3, vector: [10, 10], colors: "R", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },
         { deckId: 4, vector: [11, 11], colors: "R", format: "standard", cardCount: 60, creatureRatio: 0.35, instantSorceryRatio: 0.15, avgCmc: 2.8 },

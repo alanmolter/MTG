@@ -1,8 +1,9 @@
 """
 Pillar 4 — Bulk pgvector writer for `card_oracle_embeddings`.
 
-Reads `cards` table, concatenates (name + " " + type_line + " " + oracle_text)
-for each row, embeds in batches of 64, UPSERTs into card_oracle_embeddings.
+Reads `cards` table, concatenates (name + " " + type + " " + text) for each
+row (this project's schema uses `type`/`text`, not Scryfall's `type_line`/
+`oracle_text`), embeds in batches of 64, UPSERTs into card_oracle_embeddings.
 
 Idempotent: uses ON CONFLICT DO UPDATE so re-running rebuilds stale rows.
 Incremental: `--since` flag skips cards already embedded in the last N days.
@@ -16,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 import time
@@ -33,12 +35,17 @@ except ImportError as e:  # pragma: no cover
 from .embedder import EMBEDDING_DIM, embed_batch
 
 BATCH_SIZE = 64
+# NOTE: the schema's `text_hash` column is NOT NULL (see drizzle/0005_endgame_pgvector.sql).
+# We compute SHA-256 of the concatenated (name + type + text) source the embedding was
+# generated from. On re-runs this lets consumers skip re-embedding cards whose source text
+# hasn't changed. The hash is the STRING, not the vector.
 UPSERT_SQL = """
-INSERT INTO card_oracle_embeddings (card_id, embedding, model_version, updated_at)
+INSERT INTO card_oracle_embeddings (card_id, embedding, model_version, text_hash, updated_at)
 VALUES %s
 ON CONFLICT (card_id) DO UPDATE SET
   embedding      = EXCLUDED.embedding,
   model_version  = EXCLUDED.model_version,
+  text_hash      = EXCLUDED.text_hash,
   updated_at     = NOW()
 """
 
@@ -46,6 +53,11 @@ ON CONFLICT (card_id) DO UPDATE SET
 def _vector_literal(vec: np.ndarray) -> str:
     """Format a numpy vector as a pgvector literal: '[0.1,0.2,...]'."""
     return "[" + ",".join(f"{float(x):.6f}" for x in vec) + "]"
+
+
+def _text_hash(body: str) -> str:
+    """SHA-256 of the source text the vector was generated from (64 hex chars)."""
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
 def _load_cards_batch(
@@ -63,12 +75,14 @@ def _load_cards_batch(
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     # LIMIT/OFFSET pagination (simple, fine for a few hundred thousand rows).
+    # NOTE: this project's `cards` schema uses `type` + `text` (short names),
+    # NOT Scryfall's `type_line` + `oracle_text`. See drizzle/schema.ts.
     sql = f"""
         SELECT
           id,
           COALESCE(name, '') || ' ' ||
-          COALESCE(type_line, '') || ' ' ||
-          COALESCE(oracle_text, '') AS body
+          COALESCE(type, '') || ' ' ||
+          COALESCE(text, '') AS body
         FROM cards
         {where_sql}
         ORDER BY id
@@ -84,18 +98,25 @@ def _load_cards_batch(
 
 def _insert_batch(
     cur,
-    batch: Sequence[Tuple[int, np.ndarray]],
+    batch: Sequence[Tuple[int, np.ndarray, str]],
     model_version: str,
 ) -> None:
-    """Push a batch of (card_id, vector) to card_oracle_embeddings."""
+    """Push a batch of (card_id, vector, source_text) to card_oracle_embeddings.
+
+    We hash the source text here (not upstream) so callers don't have to
+    remember to pass pre-hashed values.
+    """
     if not batch:
         return
-    rows = [(cid, _vector_literal(vec), model_version) for cid, vec in batch]
+    rows = [
+        (cid, _vector_literal(vec), model_version, _text_hash(body))
+        for cid, vec, body in batch
+    ]
     execute_values(
         cur,
         UPSERT_SQL,
         rows,
-        template="(%s, %s::vector, %s, NOW())",
+        template="(%s, %s::vector, %s, %s, NOW())",
         page_size=100,
     )
 
@@ -139,7 +160,9 @@ def backfill_card_embeddings(
                         raise RuntimeError(
                             f"[pgvector_writer] embedder returned dim {vecs.shape[1]}, expected {EMBEDDING_DIM}"
                         )
-                    batch = list(zip(sub_ids, vecs))
+                    # Pass source text through so _insert_batch can hash it
+                    # for the NOT NULL text_hash column.
+                    batch = list(zip(sub_ids, vecs, sub_texts))
                     _insert_batch(cur, batch, model_version)
                     total += len(batch)
 
