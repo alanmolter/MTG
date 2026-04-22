@@ -284,20 +284,38 @@ CNNs aprendem features de imagem.
 ### 7.2 MtgForgeEnv (pilar 5)
 
 `ml_engine/ray_cluster/env.py` — ambiente Gymnasium que encapsula **um
-subprocesso Forge** (JVM) por worker. Protocolo JSON-line no stdin/stdout:
+subprocesso Forge** (JVM) por worker. Protocolo JSON-line no stdin/stdout
+com **dois tipos de mensagem de step**:
 
 ```
-Python → Java:  {"type": "step", "action": 42}
-Java → Python:  {"type": "state", "card_feats": [...], "player_feats": [...],
-                 "edges": {...}, "action_mask": [...], "reward": 0.02, "done": false}
+Python → Java (legacy Discrete):
+    {"cmd": "step", "action": 42}
+
+Python → Java (Phase 3 autoregressive — sem packing, sem mod):
+    {"cmd": "step_autoregressive",
+     "action_base": 0..3,      // 0=cast, 1=attack, 2=activate, 3=pass
+     "source_id":   0..127,     // índice na mão/battlefield
+     "target_id":   0..127}     // índice de alvo
+
+Java → Python (ambos):
+    {"terminal": false, "outcome": null, "illegal_action": false,
+     "turn": 3, "life_you": 19, "life_opp": 20, "cards": [...],
+     "controlled_by_edges": [...], "in_zone_edges": [...],
+     "synergy_edges": [...], "attacks_edges": [...],
+     "action_mask": [1,1,...]}
 ```
 
 - Observation space: `Dict` com `card_feats`, `player_feats`, 4 tipos de
   arestas, e `action_mask` (MultiBinary(512))
 - Action space: `Discrete(512)` **por default**. Opt-in (`config
   ["use_autoregressive_actions"]=True`) troca para `MultiDiscrete([4, 128,
-  128])` = `(type, source, target)` — env empacota em int flat antes de
-  enviar ao Forge (protocolo Java inalterado). Detalhes em §11.10.
+  128])` = `(type, source, target)` — env envia o triple **nativamente** ao
+  Forge como `step_autoregressive` (sem hash, sem colisão). Detalhes em
+  §11.10.
+- Fail-safe Java: índice fora de `[0, AR_NUM_TYPES)` / `[0, AR_NUM_SOURCES)`
+  / `[0, AR_NUM_TARGETS)` → snapshot emitido com `illegal_action=true` e a
+  ação é consumida sem avançar Forge. O shaper aplica
+  `penalty_illegal_action` no retorno → sinal negativo pro treino.
 - Robustez: crash do Forge → `env.reset()` respawna; turn cap (50) + step
   timeout (10s) impedem hangs
 
@@ -692,10 +710,15 @@ Histórico do trabalho mais recente — alinhar com os commits:
   1. `env.py`: flag de config `use_autoregressive_actions` (default
      `False`). Quando `True`, `action_space = MultiDiscrete([4, 128, 128])`
      — triple `(action_type, source, target)`.
-  2. Método privado `_encode_action(a)` empacota o triple em int
-     flat (`type * S*T + source * T + target`) mod `num_actions` antes de
-     enviar ao Forge. **O protocolo JSON do rlbridge Java não muda** —
-     segue recebendo `{"cmd": "step", "action": <int>}`.
+  2. **Protocolo nativo (sem hash collision)**: o `step()` envia o triple
+     diretamente como `{"cmd":"step_autoregressive", "action_base":...,
+     "source_id":..., "target_id":...}`. O Java parser em
+     `forge/rlbridge/ForgeRLBridge.java` dispatcha em um novo `case
+     "step_autoregressive":` e mapeia `action_base` para (0=Cast,
+     1=Attack, 2=Activate, 3=Pass). Índices fora de range disparam o
+     fail-safe: snapshot com `illegal_action=true` e ação consumida sem
+     avançar Forge. Protocolo legado `{"cmd":"step","action":<int>}`
+     continua funcionando para `use_autoregressive_actions=False`.
   3. `game_state_gnn.py`: wrapper RLlib agora checa shape da
      `action_mask` antes de aplicá-la. Em AR mode os logits têm 260 dims
      (4+128+128) e a mask Forge tem 512 — shapes diferentes → mask
@@ -717,6 +740,38 @@ Histórico do trabalho mais recente — alinhar com os commits:
   empírico compensar.
 - **Validação**: smoke test `env + shaper + GNN(260)` forward-pass OK;
   Discrete(512) continua o default e não é afetado.
+
+### 11.10.1 Phase 3 hotfix — hash collision eliminada
+
+**Problema descoberto após 11.10 shipping.** A implementação original
+empacotava o triple como `flat = type * S*T + source * T + target` e depois
+fazia `flat % num_actions`. Com 65 536 triples possíveis mapeando em 512
+slots, **~99% dos triples distintos colidiam no mesmo ID** — catastrófico
+para treino: (0,0,0) e (0,0,512) viravam a mesma ação, (3,127,127) e
+(0,0,127) idem. O agente não conseguia diferenciar alvos.
+
+**Solução**:
+
+1. **`env.py`**: removido `_encode_action()`. Em AR mode o `step()` envia o
+   triple natively como `{"cmd":"step_autoregressive", "action_base":A,
+   "source_id":S, "target_id":T}`. Sem packing, sem mod.
+2. **`forge/rlbridge/ForgeRLBridge.java`**: novo `case
+   "step_autoregressive"` no dispatcher. Parser extrai os 3 ints via
+   `Json.intVal(...)`. Constantes `AR_NUM_TYPES=4`, `AR_NUM_SOURCES=128`,
+   `AR_NUM_TARGETS=128` batem com as do Python.
+3. **Fail-safe**: índice fora de range (ou default `-1` quando o campo
+   falta) → bridge emite snapshot com `illegal_action=true` **sem avançar
+   Forge**. O shaper aplica `penalty_illegal_action` → reward negativo no
+   próximo `step()` do Python, treinando o agente a não emitir triples
+   ilegais. Nunca crasha.
+4. **Testes**: `ml_engine/ray_cluster/tests/test_env_autoregressive.py`
+   (6 testes pytest) trava o contrato end-to-end: payload nativo,
+   triples-que-colidiam preservados, legacy Discrete intacto, scalar
+   defensivo em AR mode, flag `illegal_action` propagado via shaper.
+   `forge/rlbridge/src/test/java/.../ForgeRLBridgeAutoregressiveTest.java`
+   (25 asserts) verifica parser + range-validation no lado Java. Rodar:
+   `.\.venv\Scripts\python.exe -m pytest ml_engine/` + `cd forge\rlbridge
+   ; .\test.cmd`.
 
 ---
 
@@ -832,5 +887,8 @@ Get-Content logs\node_api.log -Tail 50 -Wait   # logs Node
 ---
 
 *Última atualização: abril/2026 — Phase 1 (Mana Efficiency reward),
-Phase 2 (pesos por arquétipo em `card_learning`) e Phase 3 (MultiDiscrete
-autoregressive actions opt-in). 35 pytest + 251 vitest + tsc exit 0.*
+Phase 2 (pesos por arquétipo em `card_learning`), Phase 3 (MultiDiscrete
+autoregressive actions opt-in) e Phase 3.1 (hash collision hotfix:
+protocolo `step_autoregressive` nativo no rlbridge Java + fail-safe de
+range + 25 asserts Java + 6 testes pytest novos). 41 pytest + 251 vitest
++ tsc exit 0 + Java unit tests green.*

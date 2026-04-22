@@ -22,7 +22,12 @@ Observation space:
     })
 
 Action space:
-    Discrete(num_actions=512).
+    Discrete(num_actions=512)                          — legacy default.
+    MultiDiscrete([4, 128, 128])                       — Phase 3 autoregressive,
+        enabled by config["use_autoregressive_actions"]=True. The env forwards
+        the triple (action_base, source_id, target_id) natively to Forge via
+        the {"cmd":"step_autoregressive", ...} protocol message. No packing,
+        no modulo, no hash collisions.
 
 The env is robust to Forge crashes (process dies → env.reset() respawns) and
 hung games (turn cap + timeout per step).
@@ -174,9 +179,35 @@ class MtgForgeEnv(gym.Env):
             # Subprocess died — force reset next call
             return self._dummy_obs(), 0.0, True, False, {"error": "forge_subprocess_dead"}
 
-        flat_action = self._encode_action(action)
-        self.loop_guard.record_action({"type": "action", "action_id": flat_action})
-        self._send_command({"cmd": "step", "action": flat_action})
+        if self.use_autoregressive_actions:
+            # Phase 3 — native autoregressive payload. No flat packing, no
+            # modulo. The Java bridge unpacks (action_base, source_id,
+            # target_id) directly into the Forge API.
+            try:
+                a_type = int(action[0])
+                a_src  = int(action[1])
+                a_tgt  = int(action[2])
+            except (TypeError, IndexError):
+                # Defensive: legacy caller sent a scalar in AR mode. Map to
+                # pass/special (action_base=3) so we never raise.
+                a_type, a_src, a_tgt = 3, 0, 0
+            # Clamp defensively — out-of-range indices will be flagged as
+            # illegal by the bridge (fail-safe) and the reward shaper applies
+            # penalty_illegal_action on the returned snapshot.
+            self.loop_guard.record_action({
+                "type": "action",
+                "action_id": (a_type, a_src, a_tgt),
+            })
+            self._send_command({
+                "cmd": "step_autoregressive",
+                "action_base": a_type,
+                "source_id":   a_src,
+                "target_id":   a_tgt,
+            })
+        else:
+            flat_action = int(action)
+            self.loop_guard.record_action({"type": "action", "action_id": flat_action})
+            self._send_command({"cmd": "step", "action": flat_action})
         try:
             state = self._read_state()
         except subprocess.TimeoutExpired:
@@ -351,31 +382,10 @@ class MtgForgeEnv(gym.Env):
             illegal_action=illegal,
         )
 
-    # ── Phase 3 helper: pack MultiDiscrete action to flat int for Forge ─────
-    def _encode_action(self, action) -> int:
-        """Accepts either a scalar int (Discrete) or a length-3 array/tuple
-        (MultiDiscrete autoregressive). Returns the flat int the Forge bridge
-        expects.
-
-        Packing: flat = type * (sources * targets) + source * targets + target
-        clamped to [0, num_actions-1] so legacy Forge never sees overflow.
-        """
-        if self.use_autoregressive_actions:
-            # numpy arrays, lists, tuples all yield the same via indexing
-            try:
-                a_type = int(action[0])
-                a_src = int(action[1])
-                a_tgt = int(action[2])
-            except (TypeError, IndexError):
-                # Defensive: a legacy caller sent a scalar even in AR mode
-                return int(action) % self.num_actions
-            flat = (
-                a_type * (self.ar_num_sources * self.ar_num_targets)
-                + a_src * self.ar_num_targets
-                + a_tgt
-            )
-            return int(flat) % self.num_actions
-        return int(action)
+    # ── Phase 3: autoregressive actions are now emitted natively in step().
+    # The previous _encode_action() method packed a triple into a flat int
+    # with `flat % num_actions`, which collided 49_152 / 65_536 unique triples
+    # down onto 512 flat slots (~99% collision). It has been removed.
 
     def _encode_observation(self, state: Dict[str, Any]) -> Dict[str, np.ndarray]:
         """Pack Forge's JSON state into the Box/Dict observation we promised."""

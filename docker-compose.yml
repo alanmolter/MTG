@@ -1,0 +1,57 @@
+# ────────────────────────────────────────────────────────────────────────────
+#  docker-compose.yml — local dev Postgres with pgvector baked in.
+#
+#  Why this exists:
+#      The 8-pillar endgame needs pgvector (for card_oracle_embeddings HNSW
+#      index). Windows Postgres installs do NOT ship with pgvector, and
+#      there is no officially supported Windows build — you'd have to
+#      compile from source with MSVC. Running the official pgvector image
+#      via Docker is the standard solution.
+#
+#  Ports:
+#      Host 5434 → Container 5432
+#      We use 5434 on the host because this project's Windows box already
+#      has TWO postgres services running (one on 5432, one on 5433 - a
+#      multi-instance setup). Docker's port-map silently loses against an
+#      already-bound host port on Windows, so we pick 5434.
+#
+#  Data:
+#      Persisted in the named volume `mtg_pgdata`. Survives container
+#      restarts. To nuke it:  docker compose down -v
+#
+#  Usage:
+#      docker compose up -d          # start (daemon mode)
+#      docker compose logs -f db     # tail logs
+#      docker compose ps             # check health
+#      docker compose down           # stop (keep data)
+#      docker compose down -v        # stop + wipe data
+#
+#  After starting, update .env:
+#      DATABASE_URL=postgresql://postgres:postgres@localhost:5434/mtg
+#  ...and re-run:  .\setup.ps1
+# ────────────────────────────────────────────────────────────────────────────
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    container_name: mtg-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mtg
+    ports:
+      - "5434:5432"
+    volumes:
+      # NOTE: pg 18+ requires the whole /var/lib/postgresql to be mounted
+      # (not just /data) - the image now stores data in a version-specific
+      # subdir like /var/lib/postgresql/18/docker. Mounting the old /data
+      # path is rejected at init with "unused mount/volume".
+      - mtg_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mtg"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mtg_pgdata:
