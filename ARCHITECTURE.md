@@ -888,7 +888,11 @@ Get-Content logs\node_api.log -Tail 50 -Wait   # logs Node
 
 *Última atualização: abril/2026 — Phase 1 (Mana Efficiency reward),
 Phase 2 (pesos por arquétipo em `card_learning`), Phase 3 (MultiDiscrete
-autoregressive actions opt-in) e Phase 3.1 (hash collision hotfix:
+autoregressive actions opt-in), Phase 3.1 (hash collision hotfix:
 protocolo `step_autoregressive` nativo no rlbridge Java + fail-safe de
-range + 25 asserts Java + 6 testes pytest novos). 41 pytest + 251 vitest
-+ tsc exit 0 + Java unit tests green.*
+range + 25 asserts Java + 6 testes pytest novos) e Phase 4 (training
+hardening: `_validate_batch_alignment` contra IMPALA `_make_time_major`
+reshape, `max_cards=64` default para evitar `ArrayMemoryError` em 4×4 PBT,
+CUBLAS-cascade detector no GNN forward, `check_learning_progress` CLI e
+runbook `TRAINING_TROUBLESHOOTING.md`). 56 pytest + 251 vitest + tsc exit 0
++ Java unit tests green.*

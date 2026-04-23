@@ -98,12 +98,70 @@ def _resample_hparams(_config):
 # ── Training job definition ─────────────────────────────────────────────────
 
 
+# ── Config constants ────────────────────────────────────────────────────────
+#
+# These defaults have been validated against the IMPALA V-trace implementation.
+# `train_batch_size` MUST be an integer multiple of `rollout_fragment_length`,
+# otherwise `_make_time_major` inside ray.rllib.algorithms.impala.impala_torch_policy
+# tries to reshape a [train_batch_size, ...] tensor into [B, T, ...] where
+# B = train_batch_size // rollout_fragment_length and T = rollout_fragment_length.
+# Misalignment raises `ValueError: shape '[B, T]' is invalid for input of size
+# train_batch_size`, which kills the learner thread on iteration 1.
+#
+# See TRAINING_TROUBLESHOOTING.md → "shape '[B,T]' is invalid for input of size N"
+# for the full postmortem + user-facing fix.
+
+DEFAULT_ROLLOUT_FRAGMENT_LENGTH = 50
+
+# Memory-budget gate: RLlib pre-allocates a dummy batch of shape
+# [min(max(rollout_fragment_length*4, 32), train_batch_size), flat_obs_dim].
+# Our flat_obs_dim with max_cards=128 is ~53,406 floats → ~41 MiB per allocation.
+# With 4 trials × 4 workers concurrently initializing, this can exhaust RAM on
+# laptops. `max_cards=64` halves the dim and avoids the trap.
+DEFAULT_MAX_CARDS_FOR_TRAINING = 64
+
+
+def _validate_batch_alignment(train_batch_size: int, rollout_fragment_length: int) -> None:
+    """Raise a clear error if the IMPALA config would deadlock on reshape.
+
+    Must be called *before* we hand the config to Ray/tune.run(); otherwise the
+    failure surfaces as an opaque "The learner thread died while training!"
+    inside a daemon thread, with the real stack trace buried in trial logs.
+    """
+    if rollout_fragment_length <= 0:
+        raise ValueError(
+            f"rollout_fragment_length must be > 0, got {rollout_fragment_length}"
+        )
+    if train_batch_size % rollout_fragment_length != 0:
+        suggested_batch = (train_batch_size // rollout_fragment_length + 1) * rollout_fragment_length
+        # Find the largest divisor of train_batch_size that is <= rollout_fragment_length
+        # (so we never suggest a value that itself would be misaligned).
+        suggested_rfl = next(
+            (d for d in range(rollout_fragment_length, 0, -1) if train_batch_size % d == 0),
+            1,
+        )
+        raise ValueError(
+            f"IMPALA misconfig: train_batch_size ({train_batch_size}) must be an "
+            f"integer multiple of rollout_fragment_length ({rollout_fragment_length}). "
+            f"Suggested: train_batch_size={suggested_batch} (next multiple) or "
+            f"rollout_fragment_length={suggested_rfl} (largest divisor of {train_batch_size} ≤ {rollout_fragment_length})."
+            "\nSee TRAINING_TROUBLESHOOTING.md → 'shape [B,T] invalid for N'."
+        )
+
+
 def build_impala_config(
     num_workers: int,
     train_batch_size: int,
     opponent_pool_path: str,
+    rollout_fragment_length: int = DEFAULT_ROLLOUT_FRAGMENT_LENGTH,
+    max_cards: int = DEFAULT_MAX_CARDS_FOR_TRAINING,
 ) -> Dict[str, Any]:
     """Compose an IMPALA config with our custom env + GNN model + PBT-friendly hparams.
+
+    Raises:
+        ValueError: when train_batch_size is not a multiple of
+            rollout_fragment_length. See `_validate_batch_alignment` for the
+            rationale (IMPALA's `_make_time_major` reshape contract).
 
     Ray 2.x / new API stack note
     ----------------------------
@@ -113,6 +171,8 @@ def build_impala_config(
     on the legacy API by disabling both flags. This is documented in the
     Ray migration guide as the compatible shim.
     """
+    _validate_batch_alignment(train_batch_size, rollout_fragment_length)
+
     from ray.rllib.algorithms.impala import IMPALAConfig
 
     cfg = (
@@ -127,13 +187,17 @@ def build_impala_config(
                 "opponent_pool_path": opponent_pool_path,
                 "turn_limit": 50,
                 "step_timeout": 10.0,
+                # Cap obs size to avoid the 40 MiB×N_workers dummy-batch
+                # allocation storm on memory-constrained systems. See
+                # TRAINING_TROUBLESHOOTING.md → "Unable to allocate 40 MiB".
+                "max_cards": max_cards,
             },
             disable_env_checking=True,
         )
         .framework("torch")
         .env_runners(
             num_env_runners=num_workers,
-            rollout_fragment_length=50,
+            rollout_fragment_length=rollout_fragment_length,
         )
         .resources(
             num_gpus=_gpu_per_trial(),
@@ -201,6 +265,25 @@ class LeagueManager:
 # ── Main entrypoint ─────────────────────────────────────────────────────────
 
 
+def _align_batch_size(train_batch_size: int, rollout_fragment_length: int) -> int:
+    """Bump train_batch_size up to the next multiple of rollout_fragment_length.
+
+    We prefer to bump UP (never down) so the user's intent for at-least-this-many
+    samples-per-grad-step is honored. Emits a warning when alignment is needed so
+    the user sees what changed.
+    """
+    if train_batch_size % rollout_fragment_length == 0:
+        return train_batch_size
+    aligned = ((train_batch_size // rollout_fragment_length) + 1) * rollout_fragment_length
+    print(
+        f"[orchestrator] train_batch_size={train_batch_size} not divisible by "
+        f"rollout_fragment_length={rollout_fragment_length}; bumping to {aligned} "
+        f"(see TRAINING_TROUBLESHOOTING.md).",
+        file=sys.stderr,
+    )
+    return aligned
+
+
 def run(
     num_workers: int = 4,
     num_trials: int = 4,
@@ -208,8 +291,14 @@ def run(
     train_batch_size: int = 2000,
     checkpoint_freq: int = 10,
     perturbation_interval: int = 20,
+    rollout_fragment_length: int = DEFAULT_ROLLOUT_FRAGMENT_LENGTH,
+    max_cards: int = DEFAULT_MAX_CARDS_FOR_TRAINING,
 ):
     """Kick off the PBT + IMPALA job."""
+    # Auto-align the batch size BEFORE ray.init so the user sees the warning
+    # before any subprocesses spin up.
+    train_batch_size = _align_batch_size(train_batch_size, rollout_fragment_length)
+
     ray.init(
         address=os.getenv("RAY_ADDRESS"),  # None = local
         ignore_reinit_error=True,
@@ -244,6 +333,8 @@ def run(
         num_workers=num_workers,
         train_batch_size=train_batch_size,
         opponent_pool_path=opponent_pool_path,
+        rollout_fragment_length=rollout_fragment_length,
+        max_cards=max_cards,
     )
 
     analysis = tune.run(
@@ -280,9 +371,26 @@ def main():
     p.add_argument("--num-workers", type=int, default=4, help="rollout workers per trial")
     p.add_argument("--num-trials", type=int, default=4, help="population size")
     p.add_argument("--budget-hours", type=float, default=24.0, help="stop after N hours")
-    p.add_argument("--batch-size", type=int, default=2000, help="train batch size")
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=500,
+        help="train batch size (must be multiple of rollout-fragment-length; auto-bumped if not)",
+    )
     p.add_argument("--checkpoint-freq", type=int, default=10)
     p.add_argument("--perturbation-interval", type=int, default=20)
+    p.add_argument(
+        "--rollout-fragment-length",
+        type=int,
+        default=DEFAULT_ROLLOUT_FRAGMENT_LENGTH,
+        help="IMPALA rollout fragment length (T in B×T reshape)",
+    )
+    p.add_argument(
+        "--max-cards",
+        type=int,
+        default=DEFAULT_MAX_CARDS_FOR_TRAINING,
+        help="cap on card nodes in obs; lower = less RAM per worker",
+    )
     args = p.parse_args()
     run(
         num_workers=args.num_workers,
@@ -291,6 +399,8 @@ def main():
         train_batch_size=args.batch_size,
         checkpoint_freq=args.checkpoint_freq,
         perturbation_interval=args.perturbation_interval,
+        rollout_fragment_length=args.rollout_fragment_length,
+        max_cards=args.max_cards,
     )
 
 

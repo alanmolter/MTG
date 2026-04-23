@@ -34,7 +34,14 @@ param(
     [int]$NumWorkers           = 2,
     [int]$NumTrials            = 4,
     [double]$BudgetHours       = 8.0,
-    [int]$BatchSize            = 256,
+    # BatchSize MUST be a multiple of RolloutFragmentLength. The orchestrator
+    # auto-bumps misaligned values, but keeping the default aligned avoids the
+    # warning. Default 500 = 10 × 50 (safe, produces 4 grad steps per trial iter).
+    [int]$BatchSize            = 500,
+    [int]$RolloutFragmentLength = 50,
+    # MaxCards caps the obs-space card count. Lower = less RAM per worker.
+    # 64 fits comfortably in 16GB RAM when running 4 trials × 4 workers.
+    [int]$MaxCards             = 64,
     [int]$CheckpointFreq       = 5,
     [int]$PerturbationInterval = 10,
     [switch]$Resume            = $false,
@@ -50,10 +57,21 @@ Write-Host "  ============================================================" -For
 Write-Host "     Workers           : $NumWorkers" -ForegroundColor White
 Write-Host "     Trials            : $NumTrials" -ForegroundColor White
 Write-Host "     Budget            : $BudgetHours hours" -ForegroundColor White
-Write-Host "     Batch size        : $BatchSize" -ForegroundColor White
+Write-Host "     Batch size        : $BatchSize  (rollout fragment: $RolloutFragmentLength)" -ForegroundColor White
+Write-Host "     Max cards in obs  : $MaxCards" -ForegroundColor White
 Write-Host "     Checkpoint freq   : $CheckpointFreq iters" -ForegroundColor White
 Write-Host "     PBT perturbation  : every $PerturbationInterval iters" -ForegroundColor White
 Write-Host "     Resume            : $Resume" -ForegroundColor White
+
+# --- Preflight: batch-size alignment ----------------------------------------
+if ($BatchSize % $RolloutFragmentLength -ne 0) {
+    $aligned = ([math]::Ceiling($BatchSize / $RolloutFragmentLength) * $RolloutFragmentLength)
+    Write-Host ""
+    Write-Host "  WARN: BatchSize $BatchSize is not a multiple of RolloutFragmentLength $RolloutFragmentLength." -ForegroundColor Yellow
+    Write-Host "        This would crash IMPALA's _make_time_major with 'shape [B,T] invalid for input of N'." -ForegroundColor Yellow
+    Write-Host "        Bumping to $aligned. See TRAINING_TROUBLESHOOTING.md." -ForegroundColor Yellow
+    $BatchSize = $aligned
+}
 Write-Host "  ============================================================" -ForegroundColor Cyan
 
 # --- Preflight ---------------------------------------------------------------
@@ -88,6 +106,8 @@ $cliArgs = @(
     "--num-trials", $NumTrials,
     "--budget-hours", $BudgetHours,
     "--batch-size", $BatchSize,
+    "--rollout-fragment-length", $RolloutFragmentLength,
+    "--max-cards", $MaxCards,
     "--checkpoint-freq", $CheckpointFreq,
     "--perturbation-interval", $PerturbationInterval
 )

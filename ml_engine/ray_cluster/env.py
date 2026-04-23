@@ -64,6 +64,17 @@ DEFAULT_MAX_CARDS = 128        # cap on card nodes in obs
 DEFAULT_TURN_LIMIT = 50        # hard stop after N turns (draw)
 DEFAULT_STEP_TIMEOUT = 10.0    # seconds — if Forge doesn't respond, we abort
 
+# Memory-budget notes
+# ───────────────────
+# The flat observation dim scales roughly 395×max_cards + (constant ~2000).
+# RLlib pre-allocates a dummy batch of shape [dummy_B, flat_obs_dim] during
+# policy init (`Policy._initialize_loss_from_dummy_batch`). With 4 trials ×
+# 4 env runners × dummy_B=200 × max_cards=128, the peak concurrent allocation
+# is ~650 MiB — enough to trip Windows' heap on 8–16 GiB machines.
+#
+# `max_cards=64` is a safe default for training (halves obs). Inference/eval
+# can keep 128 if you've got the headroom — pass max_cards in env_config.
+
 # Phase 3 — autoregressive MultiDiscrete action mode. Disabled by default; opt
 # in via config["use_autoregressive_actions"] = True. The head emits a triple
 # (action_type, source, target); the env packs it into a flat int before

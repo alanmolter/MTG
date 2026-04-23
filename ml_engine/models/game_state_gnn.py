@@ -317,7 +317,24 @@ def register_with_rllib():
                 data = obs
             else:
                 data = _batched_dict_to_hetero(obs, GameStateGNN.EDGE_RELATIONS)
-            out = self.gnn(data)
+            try:
+                out = self.gnn(data)
+            except RuntimeError as e:
+                # CUBLAS_STATUS_EXECUTION_FAILED / cublasSgemm etc. typically
+                # mean the CUDA context got corrupted by a prior reshape/OOM
+                # failure (see TRAINING_TROUBLESHOOTING.md → "CUBLAS failure").
+                # Surface a clear message so users don't chase the wrong ghost.
+                msg = str(e).lower()
+                if "cublas" in msg or "cuda" in msg:
+                    raise RuntimeError(
+                        "GNN forward hit a CUDA/CUBLAS failure. This is almost "
+                        "always a cascade from an earlier error (OOM, tensor-shape "
+                        "mismatch in IMPALA's _make_time_major, or another trial "
+                        "killing the learner). Check the FIRST failure in the "
+                        "trial log, not this one. See TRAINING_TROUBLESHOOTING.md. "
+                        f"Original: {e}"
+                    ) from e
+                raise
             logits = out["logits"]
             # Apply action mask only when shapes line up. In Phase 3 the env may
             # use MultiDiscrete([4, 128, 128]) → logits has 260 columns while
