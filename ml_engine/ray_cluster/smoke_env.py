@@ -7,17 +7,41 @@ Pure-Python smoke test for MtgForgeEnv:
 
 Run:
   python -m ml_engine.ray_cluster.smoke_env
+
+Arena pool:
+  When TRAINING_POOL_ARENA_ONLY=1 is set, we resolve a pair of Arena-legal
+  decklists via `arena_pool.resolve_decks_for_training()` and pass them
+  through `agent_deck` / `opponent_deck`. Otherwise we use the legacy
+  "AggroRed" / "Control" string keywords which the Forge bridge maps to its
+  hardcoded paper-Modern fallback decks. See `ml_engine/ray_cluster/arena_pool.py`
+  for the contract.
 """
 import sys
 import time
 
+from ml_engine.ray_cluster.arena_pool import (
+    describe_training_pool,
+    is_arena_only_training,
+    resolve_decks_for_training,
+)
 from ml_engine.ray_cluster.env import MtgForgeEnv
 
 
 def main():
+    arena_only = is_arena_only_training()
+    print(f"[smoke_env] training pool: {describe_training_pool()}", flush=True)
+
+    if arena_only:
+        agent_deck, opponent_deck = resolve_decks_for_training(
+            arena_only=True, seed=42
+        )
+    else:
+        # Legacy keywords — bridge maps these to defaultDeckFor(...).
+        agent_deck, opponent_deck = "AggroRed", "Control"
+
     cfg = {
-        "agent_deck": "AggroRed",
-        "opponent_deck": "Control",
+        "agent_deck": agent_deck,
+        "opponent_deck": opponent_deck,
         "turn_limit": 40,
         "step_timeout": 30.0,
     }

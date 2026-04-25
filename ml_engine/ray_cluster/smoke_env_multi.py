@@ -1,17 +1,36 @@
 """
 Multi-episode smoke test — the real training-loop stress test:
 reuses one subprocess across many env.reset() calls.
+
+Arena pool:
+  Honors TRAINING_POOL_ARENA_ONLY=1 the same way as `smoke_env.py`. See
+  `ml_engine/ray_cluster/arena_pool.py` for the resolver contract.
 """
 import sys
 import time
 
+from ml_engine.ray_cluster.arena_pool import (
+    describe_training_pool,
+    is_arena_only_training,
+    resolve_decks_for_training,
+)
 from ml_engine.ray_cluster.env import MtgForgeEnv
 
 
 def main():
+    arena_only = is_arena_only_training()
+    print(f"[multi] training pool: {describe_training_pool()}", flush=True)
+
+    if arena_only:
+        agent_deck, opponent_deck = resolve_decks_for_training(
+            arena_only=True, seed=42
+        )
+    else:
+        agent_deck, opponent_deck = "AggroRed", "Control"
+
     cfg = {
-        "agent_deck": "AggroRed",
-        "opponent_deck": "Control",
+        "agent_deck": agent_deck,
+        "opponent_deck": opponent_deck,
         "turn_limit": 40,
         "step_timeout": 30.0,
     }

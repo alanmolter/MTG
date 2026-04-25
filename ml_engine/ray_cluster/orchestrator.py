@@ -33,7 +33,7 @@ import random
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 try:
     import ray
@@ -155,6 +155,8 @@ def build_impala_config(
     opponent_pool_path: str,
     rollout_fragment_length: int = DEFAULT_ROLLOUT_FRAGMENT_LENGTH,
     max_cards: int = DEFAULT_MAX_CARDS_FOR_TRAINING,
+    arena_only: Optional[bool] = None,
+    deck_seed: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Compose an IMPALA config with our custom env + GNN model + PBT-friendly hparams.
 
@@ -162,6 +164,18 @@ def build_impala_config(
         ValueError: when train_batch_size is not a multiple of
             rollout_fragment_length. See `_validate_batch_alignment` for the
             rationale (IMPALA's `_make_time_major` reshape contract).
+
+    Arena pool plumbing
+    -------------------
+    When `arena_only` is True (or `TRAINING_POOL_ARENA_ONLY=1` is set in the
+    environment if the arg is left at None), we resolve a pair of Arena-legal
+    decklists via `arena_pool.resolve_decks_for_training()` and stuff them
+    into `env_config["agent_deck"]` / `["opponent_deck"]`. The Forge bridge's
+    `parseDeck()` uses the literal decklist instead of falling back to the
+    hardcoded paper-Modern `AggroRed`/`Control` lists (which contain
+    Snapcaster Mage, Goblin Guide, etc. — not on Arena). This is the
+    Python-side mirror of `TRAINING_POOL_ARENA_ONLY` in
+    `server/scripts/utils/poolFilter.ts`.
 
     Ray 2.x / new API stack note
     ----------------------------
@@ -174,6 +188,36 @@ def build_impala_config(
     _validate_batch_alignment(train_batch_size, rollout_fragment_length)
 
     from ray.rllib.algorithms.impala import IMPALAConfig
+    from ml_engine.ray_cluster.arena_pool import (
+        is_arena_only_training,
+        resolve_decks_for_training,
+    )
+
+    if arena_only is None:
+        arena_only = is_arena_only_training()
+
+    env_config: Dict[str, Any] = {
+        "opponent_pool_path": opponent_pool_path,
+        "turn_limit": 50,
+        "step_timeout": 10.0,
+        # Cap obs size to avoid the 40 MiB×N_workers dummy-batch
+        # allocation storm on memory-constrained systems. See
+        # TRAINING_TROUBLESHOOTING.md → "Unable to allocate 40 MiB".
+        "max_cards": max_cards,
+    }
+
+    if arena_only:
+        agent_deck, opponent_deck = resolve_decks_for_training(
+            arena_only=True, seed=deck_seed
+        )
+        # Only set keys when we got real decklists — leaving them at None
+        # makes the bridge fall back to its hardcoded decks, defeating the
+        # whole purpose of arena_only=True.
+        if agent_deck:
+            env_config["agent_deck"] = agent_deck
+        if opponent_deck:
+            env_config["opponent_deck"] = opponent_deck
+        env_config["arena_only"] = True
 
     cfg = (
         IMPALAConfig()
@@ -183,15 +227,7 @@ def build_impala_config(
         )
         .environment(
             env="mtg_forge_env",
-            env_config={
-                "opponent_pool_path": opponent_pool_path,
-                "turn_limit": 50,
-                "step_timeout": 10.0,
-                # Cap obs size to avoid the 40 MiB×N_workers dummy-batch
-                # allocation storm on memory-constrained systems. See
-                # TRAINING_TROUBLESHOOTING.md → "Unable to allocate 40 MiB".
-                "max_cards": max_cards,
-            },
+            env_config=env_config,
             disable_env_checking=True,
         )
         .framework("torch")
@@ -293,11 +329,29 @@ def run(
     perturbation_interval: int = 20,
     rollout_fragment_length: int = DEFAULT_ROLLOUT_FRAGMENT_LENGTH,
     max_cards: int = DEFAULT_MAX_CARDS_FOR_TRAINING,
+    arena_only: Optional[bool] = None,
+    deck_seed: Optional[int] = None,
 ):
     """Kick off the PBT + IMPALA job."""
     # Auto-align the batch size BEFORE ray.init so the user sees the warning
     # before any subprocesses spin up.
     train_batch_size = _align_batch_size(train_batch_size, rollout_fragment_length)
+
+    # Surface the active pool BEFORE ray spins up so a misconfigured run is
+    # obvious in the first 10 lines of stdout. We import here (not at module
+    # top) to keep `import ml_engine.ray_cluster.orchestrator` fast in tests
+    # that only need the config helpers.
+    from ml_engine.ray_cluster.arena_pool import (
+        is_arena_only_training,
+        describe_training_pool,
+    )
+    if arena_only is None:
+        arena_only = is_arena_only_training()
+    print(
+        f"[orchestrator] training pool: {describe_training_pool()} "
+        f"(TRAINING_POOL_ARENA_ONLY={'1' if arena_only else '0'})",
+        file=sys.stderr,
+    )
 
     ray.init(
         address=os.getenv("RAY_ADDRESS"),  # None = local
@@ -335,6 +389,8 @@ def run(
         opponent_pool_path=opponent_pool_path,
         rollout_fragment_length=rollout_fragment_length,
         max_cards=max_cards,
+        arena_only=arena_only,
+        deck_seed=deck_seed,
     )
 
     analysis = tune.run(
@@ -391,6 +447,33 @@ def main():
         default=DEFAULT_MAX_CARDS_FOR_TRAINING,
         help="cap on card nodes in obs; lower = less RAM per worker",
     )
+    # Arena pool toggle. Three states encoded so a CLI flag can override the
+    # env var both ways:
+    #   --arena-only            → force arena_only=True
+    #   --no-arena-only         → force arena_only=False
+    #   (neither flag passed)   → fall back to TRAINING_POOL_ARENA_ONLY env var
+    arena_group = p.add_mutually_exclusive_group()
+    arena_group.add_argument(
+        "--arena-only",
+        dest="arena_only",
+        action="store_true",
+        default=None,
+        help="restrict the card pool to MTG Arena-legal cards "
+             "(overrides TRAINING_POOL_ARENA_ONLY env var)",
+    )
+    arena_group.add_argument(
+        "--no-arena-only",
+        dest="arena_only",
+        action="store_false",
+        help="force the full paper catalog (overrides "
+             "TRAINING_POOL_ARENA_ONLY env var)",
+    )
+    p.add_argument(
+        "--deck-seed",
+        type=int,
+        default=None,
+        help="seed for the Arena-only archetype matchup picker (deterministic when set)",
+    )
     args = p.parse_args()
     run(
         num_workers=args.num_workers,
@@ -401,6 +484,8 @@ def main():
         perturbation_interval=args.perturbation_interval,
         rollout_fragment_length=args.rollout_fragment_length,
         max_cards=args.max_cards,
+        arena_only=args.arena_only,
+        deck_seed=args.deck_seed,
     )
 
 

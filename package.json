@@ -33,9 +33,13 @@
     "ml:server": "node scripts/run-python.mjs -m ml_engine.rag.server",
     "ml:test": "node scripts/run-python.mjs -m pytest ml_engine/forge_worker/tests -v",
     "train:ray": "node scripts/run-python.mjs -m ml_engine.ray_cluster.orchestrator --num-workers 2 --num-trials 2",
+    "train:ray:arena": "cross-env TRAINING_POOL_ARENA_ONLY=1 node scripts/run-python.mjs -m ml_engine.ray_cluster.orchestrator --num-workers 2 --num-trials 2 --arena-only",
     "train:ray:smoke": "node scripts/run-python.mjs -m ml_engine.ray_cluster.orchestrator --num-workers 1 --num-trials 1 --budget-hours 0.02 --batch-size 200 --checkpoint-freq 1 --perturbation-interval 2",
+    "train:ray:smoke:arena": "cross-env TRAINING_POOL_ARENA_ONLY=1 node scripts/run-python.mjs -m ml_engine.ray_cluster.orchestrator --num-workers 1 --num-trials 1 --budget-hours 0.02 --batch-size 200 --checkpoint-freq 1 --perturbation-interval 2 --arena-only",
     "forge:smoke": "node scripts/run-python.mjs -m ml_engine.ray_cluster.smoke_env",
+    "forge:smoke:arena": "cross-env TRAINING_POOL_ARENA_ONLY=1 node scripts/run-python.mjs -m ml_engine.ray_cluster.smoke_env",
     "forge:smoke:multi": "node scripts/run-python.mjs -m ml_engine.ray_cluster.smoke_env_multi",
+    "forge:smoke:multi:arena": "cross-env TRAINING_POOL_ARENA_ONLY=1 node scripts/run-python.mjs -m ml_engine.ray_cluster.smoke_env_multi",
     "stack:up": "powershell -ExecutionPolicy Bypass -File run-stack.ps1"
   },
   "dependencies": {

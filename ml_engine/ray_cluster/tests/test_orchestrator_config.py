@@ -122,6 +122,102 @@ def test_build_config_default_max_cards_is_memory_safe():
     assert env_cfg.get("max_cards", 128) <= 64
 
 
+# ── Arena pool plumbing ────────────────────────────────────────────────────
+
+
+def test_build_config_does_not_inject_decks_when_arena_disabled(monkeypatch):
+    """Default behavior MUST be backward compatible: no agent_deck/opponent_deck
+    keys, no arena_only flag, so Forge's `parseDeck()` keeps falling back to
+    the hardcoded `AggroRed`/`Control` paper-Modern decks."""
+    monkeypatch.delenv("TRAINING_POOL_ARENA_ONLY", raising=False)
+    cfg = orchestrator.build_impala_config(
+        num_workers=2,
+        train_batch_size=500,
+        opponent_pool_path="/tmp/pool.json",
+        arena_only=False,
+    )
+    env_cfg = cfg.get("env_config") or {}
+    assert "agent_deck" not in env_cfg
+    assert "opponent_deck" not in env_cfg
+    assert env_cfg.get("arena_only") is not True
+
+
+def test_build_config_picks_up_env_var_when_arg_omitted(monkeypatch):
+    """Setting TRAINING_POOL_ARENA_ONLY=1 should be enough — no CLI flag
+    required. This is the parity hook with `npm run teach:arena`."""
+    monkeypatch.setenv("TRAINING_POOL_ARENA_ONLY", "1")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("POSTGRES_URL", raising=False)
+    cfg = orchestrator.build_impala_config(
+        num_workers=2,
+        train_batch_size=500,
+        opponent_pool_path="/tmp/pool.json",
+        # arena_only=None → fall through to env var
+    )
+    env_cfg = cfg.get("env_config") or {}
+    assert env_cfg.get("arena_only") is True
+    assert env_cfg.get("agent_deck"), (
+        "arena_only=True must inject a real decklist via env_config; "
+        "leaving agent_deck unset would fall back to the hardcoded "
+        "non-Arena `AggroRed` deck inside the Forge bridge."
+    )
+    assert env_cfg.get("opponent_deck")
+
+
+def test_build_config_explicit_arena_arg_overrides_env_unset(monkeypatch):
+    """Even without the env var, passing arena_only=True must inject decks.
+    This lets unit tests opt in without touching process env."""
+    monkeypatch.delenv("TRAINING_POOL_ARENA_ONLY", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    cfg = orchestrator.build_impala_config(
+        num_workers=2,
+        train_batch_size=500,
+        opponent_pool_path="/tmp/pool.json",
+        arena_only=True,
+    )
+    env_cfg = cfg.get("env_config") or {}
+    assert env_cfg.get("arena_only") is True
+    assert env_cfg.get("agent_deck")
+    assert env_cfg.get("opponent_deck")
+
+
+def test_build_config_explicit_no_arena_overrides_env_set(monkeypatch):
+    """`--no-arena-only` (arena_only=False) must beat `TRAINING_POOL_ARENA_ONLY=1`.
+    This matches the semantics of mutually-exclusive flags in argparse."""
+    monkeypatch.setenv("TRAINING_POOL_ARENA_ONLY", "1")
+    cfg = orchestrator.build_impala_config(
+        num_workers=2,
+        train_batch_size=500,
+        opponent_pool_path="/tmp/pool.json",
+        arena_only=False,
+    )
+    env_cfg = cfg.get("env_config") or {}
+    assert "agent_deck" not in env_cfg
+    assert "opponent_deck" not in env_cfg
+    assert env_cfg.get("arena_only") is not True
+
+
+def test_build_config_seeded_arena_is_reproducible():
+    """Same deck_seed → same decklists across two builds. Critical so PBT
+    trials within one experiment can be reproduced from the seed alone."""
+    a = orchestrator.build_impala_config(
+        num_workers=2,
+        train_batch_size=500,
+        opponent_pool_path="/tmp/pool.json",
+        arena_only=True,
+        deck_seed=12345,
+    )
+    b = orchestrator.build_impala_config(
+        num_workers=2,
+        train_batch_size=500,
+        opponent_pool_path="/tmp/pool.json",
+        arena_only=True,
+        deck_seed=12345,
+    )
+    assert a["env_config"]["agent_deck"] == b["env_config"]["agent_deck"]
+    assert a["env_config"]["opponent_deck"] == b["env_config"]["opponent_deck"]
+
+
 # ── CLI defaults ───────────────────────────────────────────────────────────
 
 
