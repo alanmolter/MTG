@@ -273,7 +273,12 @@ class MtgForgeEnv(gym.Env):
             )
 
         classpath = str(self.forge_jar) + os.pathsep + str(self.bridge_jar)
-        cmd = [self.java_bin, "-Xmx2G"]
+        # -Xmx1G: one Forge JVM per env runner. With the default
+        # PBT topology (2 trials × 2 workers = 4 concurrent JVMs), this caps
+        # aggregate JVM heap at ~4 GB. Bumping to -Xmx2G × 16 runners was the
+        # root cause of the 2026-04-24 OOM crash at iter ~127. See
+        # TRAINING_TROUBLESHOOTING.md → "IMPALA memory crash".
+        cmd = [self.java_bin, "-Xmx1G"]
         if self.assets_dir:
             cmd.append(f"-DFORGE_ASSETS_DIR={self.assets_dir}")
         cmd += ["-cp", classpath, "forge.rlbridge.ForgeRLBridge"]

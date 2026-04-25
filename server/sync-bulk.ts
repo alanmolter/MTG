@@ -23,6 +23,40 @@ function getImageUrl(card: any): string | null {
   return null;
 }
 
+/**
+ * Anomaly-3 fix (2026-04-23): resolve a card's `colors` column with a
+ * fallback chain. DFCs like Aclazotz have `colors=undefined` at top level
+ * and Scryfall only exposes their color identity on `color_identity` or
+ * inside `card_faces[i].colors`. Previously we only read `card.colors`
+ * and stored DFCs as "C" (colorless), which broke commander filters.
+ *
+ * Order: colors → union of card_faces colors → color_identity.
+ * Returns null only if Scryfall provided none of the three.
+ */
+function resolveCardColors(card: any): string | null {
+  if (Array.isArray(card.colors) && card.colors.length > 0) {
+    return card.colors.join("");
+  }
+  if (Array.isArray(card.card_faces) && card.card_faces.length > 0) {
+    const union = new Set<string>();
+    for (const face of card.card_faces) {
+      if (Array.isArray(face.colors)) for (const c of face.colors) union.add(c);
+    }
+    if (union.size > 0) {
+      return ["W", "U", "B", "R", "G"].filter((c) => union.has(c)).join("");
+    }
+  }
+  if (Array.isArray(card.color_identity) && card.color_identity.length > 0) {
+    return ["W", "U", "B", "R", "G"].filter((c) => card.color_identity.includes(c)).join("");
+  }
+  // Genuinely colorless (artifact, land, etc.): Scryfall returned an empty
+  // `colors: []`. Store "" so downstream queries can distinguish from null.
+  if (card.colors !== undefined || card.color_identity !== undefined || card.card_faces !== undefined) {
+    return "";
+  }
+  return null;
+}
+
 async function syncBulkOracleCards(): Promise<void> {
   console.log("[sync-bulk] Verificando banco de cartas...");
 
@@ -99,7 +133,8 @@ async function syncBulkOracleCards(): Promise<void> {
         oracleId:   card.oracle_id ?? null,
         name:       card.name,
         type:       card.type_line ?? null,
-        colors:     card.colors?.length ? card.colors.join("") : null,
+        // Anomaly-3 fix: use smart resolution so DFCs don't fall through as "C".
+        colors:     resolveCardColors(card),
         cmc:        Math.floor(Number(card.cmc)) || 0,
         rarity:     card.rarity || "unknown",
         imageUrl:   getImageUrl(card),

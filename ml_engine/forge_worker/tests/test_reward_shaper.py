@@ -256,3 +256,149 @@ class TestRewardShaper:
         r = shaper.shape(prev, curr)
         # life delta + tiny progress bonus — should be positive, well below cap
         assert 0 < r < 0.1
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Anomaly-1A regression tests (2026-04-23)
+#
+# Before this fix, a losing agent could net POSITIVE total episode reward by
+# farming mana-efficiency bonus turn after turn. The cumulative cap forbids
+# that — total shaped reward is bounded by |episode_shape_cap|, so the
+# terminal outcome (±1.0) always dominates.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestEpisodeShapeCap:
+    """Cumulative-cap invariants for the Anomaly-1A fix."""
+
+    def test_default_step_cap_is_tightened(self):
+        """Step-cap default lowered from 0.1 → 0.04."""
+        cfg = ShapingConfig()
+        assert cfg.step_cap == pytest.approx(0.04)
+
+    def test_default_episode_cap_exists_and_is_half(self):
+        """New knob: cumulative per-episode cap defaults to 0.5."""
+        cfg = ShapingConfig()
+        assert hasattr(cfg, "episode_shape_cap")
+        assert cfg.episode_shape_cap == pytest.approx(0.5)
+
+    def test_cumulative_cap_blocks_runaway_positive_shape(self):
+        """50 positive-shape steps should not exceed episode_shape_cap."""
+        cfg = ShapingConfig(episode_shape_cap=0.5)
+        shaper = RewardShaper(cfg)
+        # Each step: mana efficiency bonus == zeta_efficiency == 0.03
+        prev = _snap()
+        curr = _snap(mana_value_played=4, mana_available_you=4)
+        total = 0.0
+        for _ in range(50):
+            total += shaper.shape(prev, curr)
+        assert total <= 0.5 + 1e-9
+        # And we actually saturated (not just got lucky with small rewards):
+        assert total > 0.4
+
+    def test_cumulative_cap_blocks_runaway_negative_shape(self):
+        """50 damage-absorbing steps should not exceed -episode_shape_cap."""
+        cfg = ShapingConfig(episode_shape_cap=0.5)
+        shaper = RewardShaper(cfg)
+        total = 0.0
+        for _ in range(50):
+            # Each step: take 2 damage → r_life = 0.02 * -2 = -0.04
+            prev = _snap()
+            curr = _snap(life_you=18)
+            total += shaper.shape(prev, curr)
+        assert total >= -0.5 - 1e-9
+        assert total < -0.4
+
+    def test_loss_outcome_always_dominates_total_return(self):
+        """
+        The canonical Anomaly-1A scenario:
+        Agent played efficiently for 30 turns (cumulative positive shape hits
+        the cap) but ultimately LOST. Total episode return MUST be negative.
+        Before the fix, this could be +2.0 (shape=+3.0, terminal=-1.0).
+        After the fix, shape is capped at +0.5, terminal is -1.0, total is ≤ -0.5.
+        """
+        shaper = RewardShaper()  # default cfg
+        total = 0.0
+        # 30 "good" non-terminal turns: full mana efficiency + cards up
+        for _ in range(30):
+            prev = _snap()
+            curr = _snap(
+                mana_value_played=4,
+                mana_available_you=4,
+                hand_you=9, hand_opp=5,
+                power_you=3, power_opp=0,
+            )
+            total += shaper.shape(prev, curr)
+
+        # Terminal LOSS on turn 31
+        prev = _snap()
+        curr = _snap(is_terminal=True, life_you=0, life_opp=20)
+        total += shaper.shape(prev, curr, outcome=-1)
+
+        # With cap=0.5 + terminal=-1.0 (+ one last capped step of -0.04):
+        # total ≤ 0.5 - 1.0 - 0.04 = -0.54
+        assert total < -0.4, (
+            f"Losing agent netted total={total:.3f} — terminal loss did not "
+            "dominate! This is the Anomaly-1A regression."
+        )
+
+    def test_win_outcome_still_clearly_positive_with_cap(self):
+        """Symmetric: winning agent with capped shape still has positive return."""
+        shaper = RewardShaper()
+        total = 0.0
+        for _ in range(30):
+            prev = _snap()
+            curr = _snap(mana_value_played=4, mana_available_you=4)
+            total += shaper.shape(prev, curr)
+        prev = _snap()
+        curr = _snap(is_terminal=True, life_you=20)
+        total += shaper.shape(prev, curr, outcome=1)
+        # ≥ 0.5 (cap) + 1.0 (terminal win) − 0.04 (last capped step variance) ≈ 1.46
+        assert total > 1.0
+
+    def test_reset_episode_clears_cumulative(self):
+        """After reset_episode(), the cap budget must be fresh again."""
+        cfg = ShapingConfig(episode_shape_cap=0.5)
+        shaper = RewardShaper(cfg)
+        # Saturate
+        for _ in range(50):
+            shaper.shape(_snap(), _snap(mana_value_played=4, mana_available_you=4))
+        # Now a new positive step should be ~zero (cap reached)
+        r_saturated = shaper.shape(
+            _snap(), _snap(mana_value_played=4, mana_available_you=4)
+        )
+        assert r_saturated == pytest.approx(0.0, abs=1e-9)
+
+        # Reset → budget restored
+        shaper.reset_episode()
+        r_fresh = shaper.shape(
+            _snap(), _snap(mana_value_played=4, mana_available_you=4)
+        )
+        assert r_fresh > 0.02
+
+    def test_terminal_auto_resets_cumulative(self):
+        """Terminal transition automatically clears cumulative for next episode."""
+        shaper = RewardShaper()
+        # Saturate positive
+        for _ in range(50):
+            shaper.shape(_snap(), _snap(mana_value_played=4, mana_available_you=4))
+        # Terminal step with loss
+        shaper.shape(
+            _snap(), _snap(is_terminal=True, life_you=0, life_opp=20), outcome=-1
+        )
+        # Next "episode" first step should have full budget again
+        r_new = shaper.shape(
+            _snap(), _snap(mana_value_played=4, mana_available_you=4)
+        )
+        assert r_new > 0.02
+
+    def test_illegal_action_does_not_consume_shape_budget(self):
+        """Illegal-action penalty is its own channel — it must not touch cumulative."""
+        shaper = RewardShaper()
+        # Trigger a couple of illegal actions
+        for _ in range(5):
+            r = shaper.shape(_snap(), _snap(illegal_action=True))
+            assert r == pytest.approx(-0.05)
+        # Shape budget should still be fully available
+        r = shaper.shape(_snap(), _snap(mana_value_played=4, mana_available_you=4))
+        assert r > 0.02

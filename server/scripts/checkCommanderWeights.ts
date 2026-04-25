@@ -54,17 +54,44 @@ async function check() {
     }
   }
 
-  // Segundo passo: ordenar por (tem partidas reais DESC, peso DESC) e pegar top 10
+  // Segundo passo: ordenar com REALITY GUARD.
+  //
+  // Anomaly-2 fix (2026-04-23): antes, o sort só considerava "tem partidas
+  // reais" e "peso DESC". Isso expunha exatamente o caso patológico do
+  // bug report — Aatchik (1% WR, peso 45) aparecia em #1 só porque seu
+  // peso estava alto. Para o display público, queremos mostrar COMANDANTES
+  // APRENDIDOS, não comandantes cujos pesos o aprendizado ainda não
+  // corrigiu. A nova ordenação usa uma "score de confiança" que:
+  //   - penaliza winrate < 20% com ≥ 10 partidas (puxa score pra baixo)
+  //   - premia winrate > 50% com ≥ 10 partidas (puxa score pra cima)
+  //   - usa peso como desempate e para cartas sem partidas reais
+  const MIN_GAMES_FOR_CONFIDENCE = 10;
+  const scoreOf = (c: typeof rawCommanders[0]): number => {
+    const total = (c.winCount ?? 0) + (c.lossCount ?? 0);
+    const wr = total > 0 ? (c.winCount ?? 0) / total : 0;
+
+    if (total === 0) {
+      // Sem partidas reais: usa peso bruto com teto de 40 para não deixar
+      // que cartas "infladas por calibração" sem evidência empírica
+      // dominem o top. Permite comandantes novos aparecerem, mas não
+      // acima dos com histórico positivo confirmado.
+      return Math.min(40, c.weight);
+    }
+
+    if (total >= MIN_GAMES_FOR_CONFIDENCE && wr < 0.20) {
+      // Reality guard: winrate horrível com dados = CAI para baixo.
+      // Mantém peso mas drena 50 pontos para empurrar para o fim da lista.
+      return c.weight - 50 + wr * 10;
+    }
+
+    // Caso geral: peso ajustado pelo winrate real. Fator ×1.2 para wr=100%
+    // e ×0.6 para wr=0%; neutro (×1.0) em wr=66%.
+    const winrateFactor = 0.6 + 0.9 * wr;
+    return c.weight * winrateFactor;
+  };
+
   const topCommanders = Array.from(personagemMap.values())
-    .sort((a, b) => {
-      const aTotal = (a.winCount ?? 0) + (a.lossCount ?? 0);
-      const bTotal = (b.winCount ?? 0) + (b.lossCount ?? 0);
-      // Primeiro: cartas com partidas reais
-      if (aTotal > 0 && bTotal === 0) return -1;
-      if (bTotal > 0 && aTotal === 0) return 1;
-      // Depois: por peso
-      return b.weight - a.weight;
-    })
+    .sort((a, b) => scoreOf(b) - scoreOf(a))
     .slice(0, 10);
 
   const seenPersonagem = personagemMap;

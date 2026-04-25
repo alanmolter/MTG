@@ -41,6 +41,13 @@ const MODEL      = "claude-haiku-4-5-20251001"; // ~50x mais barato que Opus
 interface CardWeight {
   cardName: string;
   weight: number;
+  // Anomaly-1B fix (2026-04-23): carry real-game stats so the calibrator
+  // can CROSS-CHECK the LLM's judgement against actual winrate before
+  // writing any positive delta. Before this, the LLM saw only "this card
+  // has weight 45" and could inflate it further without ever being told
+  // the card only wins 3% of the time.
+  winCount: number;
+  lossCount: number;
 }
 
 interface LLMCardScore {
@@ -89,20 +96,39 @@ function buildBatchPrompt(
   cards: CardWeight[],
   archetype: string
 ): string {
+  // Anomaly-1B fix: include winrate in the prompt so the LLM can *see*
+  // reality. Cards with many games and a low winrate should NOT be
+  // inflated further, regardless of how "staple" they look on paper.
   const cardList = cards
-    .map((c) => `${c.cardName} (peso atual: ${c.weight.toFixed(1)})`)
+    .map((c) => {
+      const total = c.winCount + c.lossCount;
+      const wr    = total > 0 ? ((c.winCount / total) * 100).toFixed(0) : "n/a";
+      const gamesTag =
+        total === 0
+          ? "sem partidas reais"
+          : `${total} partidas · ${wr}% WR`;
+      return `${c.cardName} (peso: ${c.weight.toFixed(1)} · ${gamesTag})`;
+    })
     .join("\n");
 
   return `Você é especialista em Magic: The Gathering competitivo.
 
 ARQUÉTIPO: ${archetype}
 
-Avalie cada carta abaixo numa escala 0-100 considerando sua utilidade no arquétipo ${archetype}:
-- 90-100: staple, carta essencial do arquétipo
+Avalie cada carta abaixo numa escala 0-100 considerando sua utilidade no arquétipo ${archetype}.
+
+IMPORTANTE — CALIBRAÇÃO COM REALIDADE:
+- Se a carta tem winrate REAL < 30% com ≥10 partidas, ela NÃO pode receber score > 50.
+  (Ela pode ser "staple" na teoria, mas está perdendo na prática — não recompense.)
+- Se a carta tem winrate REAL > 60% com ≥10 partidas, prefira score ≥ 70.
+- Cartas "sem partidas reais" podem ser avaliadas só pela teoria.
+
+Escala:
+- 90-100: staple, carta essencial do arquétipo E com desempenho real forte
 - 70-89 : boa carta, frequentemente jogada
 - 50-69 : situacional, mas relevante
 - 30-49 : fraca neste arquétipo
-- 0-29  : inútil ou prejudicial neste arquétipo
+- 0-29  : inútil ou com desempenho real ruim neste arquétipo
 
 CARTAS:
 ${cardList}
@@ -126,10 +152,57 @@ function parseLLMResponse(raw: string): LLMCardScore[] {
 // Score 50 = neutro (sem mudança)
 // Score 90 = carta muito boa → delta +0.15
 // Score 20 = carta ruim → delta -0.10
-function scoreToDelta(llmScore: number, currentWeight: number): number {
-  const normalized = (llmScore - 50) / 50; // -1.0 a +1.0
-  const maxDelta = normalized > 0 ? 0.15 : 0.10;
-  return normalized * maxDelta;
+//
+// Anomaly-1B fix (2026-04-23): adiciona REALITY GUARD.
+// Se a carta tem winrate real < 30% com ≥ MIN_GAMES_FOR_VETO partidas,
+// qualquer delta POSITIVO é vetado (retornamos 0 ou um delta negativo).
+// Isso impede o loop "LLM gosta de staple X → peso sobe → RL escolhe X
+// mais → X perde mais → LLM ainda gosta de X → peso sobe de novo",
+// que foi exatamente o que aconteceu com Aatchik (1% WR, peso 45).
+const VETO_WINRATE_PCT = 30;   // abaixo disso, LLM não pode subir peso
+const MIN_GAMES_FOR_VETO = 10; // menos que isso = "sem dados", LLM livre
+const FORCE_DOWN_WINRATE_PCT = 25; // abaixo disso com muitas partidas → delta negativo forçado
+
+function scoreToDelta(
+  llmScore: number,
+  currentWeight: number,
+  winCount: number,
+  lossCount: number,
+): number {
+  const total = winCount + lossCount;
+  const winrate = total > 0 ? (winCount / total) * 100 : -1; // -1 = sem dados
+
+  const normalized = (llmScore - 50) / 50;           // -1.0 a +1.0
+  const maxDelta   = normalized > 0 ? 0.15 : 0.10;
+  let   delta      = normalized * maxDelta;
+
+  // Reality guard #1: veto de delta POSITIVO quando a carta perde muito.
+  if (
+    total >= MIN_GAMES_FOR_VETO &&
+    winrate >= 0 &&
+    winrate < VETO_WINRATE_PCT &&
+    delta > 0
+  ) {
+    // LLM achou boa, mas reality disagrees. Anula o boost.
+    return 0;
+  }
+
+  // Reality guard #2: carta muito ruim com muitas partidas deve CAIR,
+  // mesmo que o LLM a tenha avaliado neutra-positiva (score 50-70).
+  if (
+    total >= MIN_GAMES_FOR_VETO &&
+    winrate >= 0 &&
+    winrate < FORCE_DOWN_WINRATE_PCT
+  ) {
+    // Force a small negative delta proporcional ao quanto ela está abaixo
+    // do threshold. Exemplo: winrate=10% → delta=-0.05; winrate=24% → -0.004.
+    const severity = (FORCE_DOWN_WINRATE_PCT - winrate) / FORCE_DOWN_WINRATE_PCT;
+    const forcedDown = -0.05 * severity;
+    // Mantém o mais negativo entre o que o LLM sugeriu e o forçado.
+    delta = Math.min(delta, forcedDown);
+  }
+
+  return delta;
 }
 
 // ── Função principal ──────────────────────────────────────────────
@@ -152,8 +225,16 @@ export async function runLLMWeeklyCalibration(): Promise<{
   console.log("────────────────────────────────────────────────────────");
 
   // ── 1. Carregar top-N cartas por peso aprendido ───────────────
+  // Anomaly-1B fix: também carregamos winCount/lossCount para que a
+  // LLM receba o contexto de winrate real no prompt e o scoreToDelta
+  // possa vetar ajustes que contrariem a reality.
   const topCards = await db
-    .select({ cardName: cardLearning.cardName, weight: cardLearning.weight })
+    .select({
+      cardName: cardLearning.cardName,
+      weight: cardLearning.weight,
+      winCount: cardLearning.winCount,
+      lossCount: cardLearning.lossCount,
+    })
     .from(cardLearning)
     .orderBy(desc(cardLearning.weight))
     .limit(TOP_N);
@@ -175,9 +256,12 @@ export async function runLLMWeeklyCalibration(): Promise<{
     console.log(`\n  [${archetype.toUpperCase()}] Avaliando ${topCards.length} cartas...`);
 
     for (let i = 0; i < topCards.length; i += BATCH_SIZE) {
-      const batch = topCards.slice(i, i + BATCH_SIZE).map((c) => ({
+      const batch: CardWeight[] = topCards.slice(i, i + BATCH_SIZE).map((c) => ({
         cardName: c.cardName,
         weight: c.weight as number,
+        // Anomaly-1B fix: transportamos winrate real para o prompt + veto.
+        winCount: (c.winCount as number) ?? 0,
+        lossCount: (c.lossCount as number) ?? 0,
       }));
 
       const prompt = buildBatchPrompt(batch, archetype);
@@ -197,7 +281,13 @@ export async function runLLMWeeklyCalibration(): Promise<{
           );
           if (!current) continue;
 
-          const delta = scoreToDelta(scored.score, current.weight);
+          // Anomaly-1B fix: scoreToDelta agora aplica o reality guard.
+          const delta = scoreToDelta(
+            scored.score,
+            current.weight,
+            current.winCount,
+            current.lossCount,
+          );
 
           // Só ajustar se o delta for significativo (>0.02)
           if (Math.abs(delta) > 0.02) {
@@ -257,6 +347,16 @@ export async function runLLMWeeklyCalibration(): Promise<{
 runLLMWeeklyCalibration()
   .catch((e) => {
     console.error("[LLMCalibrator] Erro fatal:", e?.message);
+    // Surface the underlying Postgres error (migration missing column,
+    // wrong DB, auth failure, etc). Drizzle wraps the real cause, which
+    // a plain `.message` read hides.
+    if (e?.cause) {
+      console.error("[LLMCalibrator] Causa raiz:", e.cause?.message ?? e.cause);
+      if (e.cause?.code)   console.error("  code  :", e.cause.code);
+      if (e.cause?.detail) console.error("  detail:", e.cause.detail);
+      if (e.cause?.hint)   console.error("  hint  :", e.cause.hint);
+    }
+    if (e?.stack) console.error("\n[stack]\n" + e.stack);
     process.exit(1);
   })
   .finally(() => {

@@ -18,13 +18,14 @@
  */
 
 import { parseArgs, getFloat, getInt, getBool, getString } from './utils/parseArgs';
+import { describeTrainingPool, isArenaOnlyTraining } from './utils/poolFilter';
 import { getDb, closeDb } from '../db';
 import { cardLearning, cards as cardsTable } from '../../drizzle/schema';
 import { getCardLearningQueue } from '../services/cardLearningQueue';
 import { ModelEvaluator } from '../services/modelEvaluation';
 import { evaluateDeckQuick } from '../services/deckEvaluationBrain';
 import { getCardSynergy, updateSynergy } from '../services/synergy';
-import { sql, asc, inArray } from 'drizzle-orm';
+import { sql, asc, eq, inArray } from 'drizzle-orm';
 import {
   printForgeSelfPlayStatus,
   printForgeTrainingComplete,
@@ -62,6 +63,14 @@ type CardRow = {
 async function loadPool(): Promise<CardRow[]> {
   const db = await getDb();
   if (!db) throw new Error('[SelfPlay] Banco de dados indisponível');
+
+  // Arena-only mode (TRAINING_POOL_ARENA_ONLY=1): restrição adicional ao
+  // catálogo do MTG Arena via cards.is_arena. Quando off, comportamento
+  // idêntico ao anterior (catálogo completo). Drizzle aceita `undefined`
+  // em `.where()` como no-op, então não precisamos de branches.
+  const arenaOnly = isArenaOnlyTraining();
+  const arenaCondition = arenaOnly ? eq(cardsTable.isArena, 1) : undefined;
+
   // Ordenar por id para garantir que o offset seja determinístico entre runs
   const pool = await db
     .select({
@@ -74,11 +83,13 @@ async function loadPool(): Promise<CardRow[]> {
       rarity: cardsTable.rarity,
     })
     .from(cardsTable)
+    .where(arenaCondition)
     .orderBy(asc(cardsTable.id))
     .offset(POOL_OFFSET)
     .limit(POOL_SIZE);
 
-  console.log(`[Forge] Pool carregado : ${pool.length} cartas (offset=${POOL_OFFSET})`);
+  const suffix = arenaOnly ? ', arena-only' : '';
+  console.log(`[Forge] Pool carregado : ${pool.length} cartas (offset=${POOL_OFFSET}${suffix})`);
   return pool as CardRow[];
 }
 
@@ -217,6 +228,7 @@ async function main() {
   console.log(`  Motor de regras : Forge (simulacao com variancia estocastica)`);
   console.log(`  Fonte gravada   : ${SOURCE}`);
   console.log(`  Pool offset     : ${POOL_OFFSET} (cartas ${POOL_OFFSET}–${POOL_OFFSET + POOL_SIZE})`);
+  console.log(`  Pool de cartas  : ${describeTrainingPool()}`);
   console.log(`  Mutation rate   : ${MUTATION_RATE}`);
   console.log(`  Exploração      : ${EXPLORATION_MODE}`);
   console.log(`  Injeção aleat.  : ${(INJECT_RANDOM * 100).toFixed(0)}% a cada 20 it`);

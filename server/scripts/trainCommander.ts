@@ -16,6 +16,7 @@
  */
 
 import { parseArgs, getFloat, getInt, getBool, getString } from './utils/parseArgs';
+import { describeTrainingPool, isArenaOnlyTraining } from './utils/poolFilter';
 import { getDb, closeDb } from '../db';
 import { cardLearning, cards as cardsTable } from '../../drizzle/schema';
 import { getCardLearningQueue } from '../services/cardLearningQueue';
@@ -75,7 +76,14 @@ async function loadCommanderPool(): Promise<CardRow[]> {
   if (!db) throw new Error('[Commander] Banco de dados indisponível');
 
   // Filtramos por cmc <= 8 para incluir cartas Commander típicas
-  // e excluímos a cor proibida se especificada
+  // e excluímos a cor proibida se especificada.
+  //
+  // Arena-only mode (TRAINING_POOL_ARENA_ONLY=1): adicionamos AND is_arena = 1
+  // ao WHERE para restringir o espaço de busca ao catálogo do MTG Arena
+  // (~3k Standard, ~12k Pioneer/Historic). O resto do filtro permanece
+  // idêntico — é um corte adicional, não um caminho alternativo.
+  const arenaOnly = isArenaOnlyTraining();
+  const arenaFilter = arenaOnly ? sql` AND is_arena = 1` : sql``;
   let pool: CardRow[];
 
   if (FORBIDDEN_COLOR) {
@@ -85,6 +93,7 @@ async function loadCommanderPool(): Promise<CardRow[]> {
       FROM cards
       WHERE (colors IS NULL OR colors NOT LIKE ${'%' + FORBIDDEN_COLOR + '%'})
         AND (cmc IS NULL OR cmc <= 8)
+        ${arenaFilter}
       ORDER BY RANDOM()
       LIMIT 2000
     `) as unknown as CardRow[];
@@ -93,6 +102,7 @@ async function loadCommanderPool(): Promise<CardRow[]> {
       SELECT id, name, type, colors, cmc, text, rarity
       FROM cards
       WHERE (cmc IS NULL OR cmc <= 8)
+        ${arenaFilter}
       ORDER BY RANDOM()
       LIMIT 2000
     `) as unknown as CardRow[];
@@ -233,10 +243,35 @@ async function main() {
   console.log(`  Formato         : Commander (100 cartas, singleton, identidade de cor)`);
   console.log(`  Fonte gravada   : ${SOURCE}`);
   console.log(`  Cor excluída    : ${FORBIDDEN_COLOR ?? 'nenhuma'}`);
+  console.log(`  Pool de cartas  : ${describeTrainingPool()}`);
   console.log(`  Modo exploração : ${EXPLORATION_MODE}`);
   console.log(`  Taxa de mutação : ${MUTATION_RATE}`);
   console.log(`  Iterações       : ${ITERATIONS}`);
   console.log('────────────────────────────────────────────────────────');
+
+  // ── Anomaly-2 fix (2026-04-23): Global weight decay ─────────────
+  // Anteriormente apenas `continuousTraining.ts` aplicava decay global.
+  // Sem decay aqui, as cartas escolhidas nas primeiras iterações (ordem
+  // alfabética do `ORDER BY RANDOM()` não garante isso, mas o viés
+  // de self-reinforcement sim) viravam "vencedoras permanentes" porque
+  // `weightedSample` sempre as re-escolhia mesmo quando perdiam. Isso
+  // foi o vetor direto do caso "top 10 comandantes começando com A"
+  // (todos com weight > 40 e winrate < 10%).
+  //
+  // Decay 3% por run + applyDecay quadrático da CardLearningQueue juntos
+  // garantem que cartas que param de aparecer (ou que aparecem e perdem)
+  // regridem naturalmente para 1.0 em algumas dezenas de runs.
+  {
+    const db = await getDb();
+    if (db) {
+      const MIN_WEIGHT = 0.1;
+      await db.update(cardLearning).set({
+        weight: sql`GREATEST(${MIN_WEIGHT}, weight * 0.97)`,
+        updatedAt: new Date(),
+      });
+      console.log('  [Decay] Pesos decaídos 3% (fator 0.97) — anti-saturação ativa');
+    }
+  }
 
   const pool    = await loadCommanderPool();
   const weights = await loadWeights(pool);

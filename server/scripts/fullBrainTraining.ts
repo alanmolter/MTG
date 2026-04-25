@@ -1,12 +1,13 @@
 import { getDb, closeDb } from "../db";
-import { cardLearning } from "../../drizzle/schema";
-import { count, gt, gte, lt, and, sql } from "drizzle-orm";
+import { cardLearning, cards as cardsTable } from "../../drizzle/schema";
+import { count, gt, gte, lt, and, eq, sql } from "drizzle-orm";
 import { spawn } from "child_process";
 import {
   printForgeStartupBanner,
   printForgeConnectionStatus,
   printForgeRulesLearning,
 } from "../services/forgeStatus";
+import { describeTrainingPool, isArenaOnlyTraining } from "./utils/poolFilter";
 
 /**
  * MASTER BRAIN TRAINING SCRIPT
@@ -175,6 +176,35 @@ async function launchMasterTraining() {
 
   // ── 4. Status completo do banco de inteligência ───────────────────────────
   await reportBrainDataStatus(db);
+
+  // ── 4b. Escopo do pool de treinamento (Arena vs full catalog) ─────────────
+  // O env var TRAINING_POOL_ARENA_ONLY=1 restringe os trainers ao subset
+  // do MTG Arena (~3k Standard, ~12k Pioneer/Historic) em vez do catálogo
+  // completo (~35k paper). Como `fullBrainTraining` faz spawn dos trainers
+  // como subprocessos, o env var é herdado automaticamente — não precisa
+  // plumbing CLI. Aqui só reportamos o estado pra o usuário ver no banner.
+  const arenaOnly = isArenaOnlyTraining();
+  const [{ value: arenaCount }] = await db
+    .select({ value: count() })
+    .from(cardsTable)
+    .where(eq(cardsTable.isArena, 1));
+  const [{ value: totalCardCount }] = await db
+    .select({ value: count() })
+    .from(cardsTable);
+
+  console.log("\n" + "═".repeat(52));
+  console.log("  POOL DE TREINAMENTO");
+  console.log("═".repeat(52));
+  console.log(`  Modo                : ${describeTrainingPool()}`);
+  console.log(`  Cartas Arena no DB  : ${arenaCount} (${pct(Number(arenaCount), Number(totalCardCount))})`);
+  console.log(`  Cartas totais no DB : ${totalCardCount}`);
+  if (arenaOnly && Number(arenaCount) === 0) {
+    console.log("");
+    console.log("  [AVISO] TRAINING_POOL_ARENA_ONLY=1 mas nenhuma carta tem is_arena=1.");
+    console.log("           Rode `npm run db:repair-arena -- --apply` antes do treino,");
+    console.log("           senão o pool ficará vazio e os decks não serão gerados.");
+  }
+  console.log("═".repeat(52) + "\n");
 
   const [{ value: initialCount }] = await db
     .select({ value: count() })

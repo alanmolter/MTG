@@ -21,6 +21,7 @@ this file exists.
 | `RuntimeError: CUDA error: CUBLAS_STATUS_EXECUTION_FAILED when calling cublasSgemm`               | [§3](#3-cublas_status_execution_failed) |
 | `No module named ml_engine.scripts.check_learning_progress`                                       | [§4](#4-no-module-named-ml_enginescriptscheck_learning_progress) |
 | All 4 trials die with `max_failures` reached, `.\train.ps1` exits with code ≠0                    | [§5](#5-every-trial-dies-immediately) |
+| Crash after 1–3 hours around iter 100+, allocation fails for a *tiny* (5 MiB) shape               | [§10](#10--late-stage-oom-during-long-pbt-runs-anomaly-4) |
 
 ---
 
@@ -280,6 +281,241 @@ Get-Content ray_results\pbt_mtg_*\IMPALA_*\error.txt | Select-Object -First 40
 # 3) Re-run with conservative knobs:
 .\train.ps1 -NumWorkers 2 -NumTrials 2 -BatchSize 500 -MaxCards 32
 ```
+
+---
+
+## §6 — Reward shaper: losing agent netting positive return (Anomaly-1A)
+
+**Symptom (from `npm run check:learn`):**
+
+```
+ 1. Aatchik, Dire Fabricator                | B     | Peso: 45.00 | 1% wr
+ 2. Aang, Avatar of Last Airbender           | U     | Peso: 42.29 | 3% wr
+```
+
+Cards with 1–3% winrate pinned to weight 42–45 (near the 50.0 cap).
+Those commanders were *losing almost every match*, yet the learning system
+kept ranking them at the top.
+
+**Root cause:** before 2026-04-23, `ShapingConfig.step_cap = 0.1` was the
+only brake on dense reward. A 30-turn game with good mana efficiency could
+accumulate up to +3.0 shaped reward, completely drowning out the ±1.0
+terminal. The losing agent was rewarded for *playing efficiently while
+losing*.
+
+**Fix in `ml_engine/forge_worker/reward_shaper.py`:**
+
+- `step_cap` lowered from 0.1 → **0.04**
+- New `episode_shape_cap = 0.5` — cumulative per-episode bound
+- `RewardShaper._episode_shape_total` tracks running sum; clips additions
+  that would push past the cap; auto-resets on terminal transitions
+- Public `reset_episode()` method for env.reset() hook
+
+**Invariant enforced:**  Σ r_shape ∈ [−0.5, +0.5] over any episode,
+so `outcome_weight = ±1.0` is always the decisive term.
+
+**Regression tests (all in `ml_engine/forge_worker/tests/test_reward_shaper.py`):**
+
+- `test_cumulative_cap_blocks_runaway_positive_shape`
+- `test_cumulative_cap_blocks_runaway_negative_shape`
+- `test_loss_outcome_always_dominates_total_return` ← the canonical Anomaly-1A
+- `test_reset_episode_clears_cumulative`
+- `test_terminal_auto_resets_cumulative`
+
+Run: `python -m pytest ml_engine/forge_worker/tests/test_reward_shaper.py -v`
+
+---
+
+## §7 — LLM calibrator inflating bad cards (Anomaly-1B)
+
+**Symptom:** weekly `llmWeeklyCalibrator.ts` was pushing cards up to
+weight 45+ even when they had empirical winrate < 5%. The LLM (Claude
+Haiku) was only shown the card name + current weight, never the real
+win/loss record, so it kept endorsing "staples on paper" that were
+actually bleeding games.
+
+**Root cause in `server/scripts/llmWeeklyCalibrator.ts` (pre-fix):**
+
+```ts
+const topCards = await db.select({ cardName, weight })
+  .from(cardLearning)
+  .orderBy(desc(cardLearning.weight))
+  // no winCount / lossCount loaded → prompt has no reality signal
+```
+
+And `scoreToDelta(llmScore, currentWeight)` had no reality guard — any
+score > 50 produced a positive delta regardless of actual performance.
+
+**Fix:**
+
+1. Query now also loads `winCount` and `lossCount`.
+2. Prompt includes real winrate per card and an explicit rule: "winrate
+   real < 30% with ≥10 games cannot receive score > 50".
+3. `scoreToDelta()` now takes `(llmScore, weight, winCount, lossCount)`
+   and applies two guards:
+   - **Veto:** any positive delta is zeroed when winrate < 30% and total ≥ 10
+   - **Force-down:** winrate < 25% with ≥10 games receives a mandatory
+     negative delta proportional to how bad the winrate is
+
+Even if the LLM still "likes" the card, it can no longer push the weight
+higher against empirical evidence.
+
+**Operational check:** after the next weekly calibration run, verify with
+`npm run check:learn` that no card with winrate < 30% + total ≥ 10 has
+weight above ~35. If it does, the guard didn't fire — check for recent
+edits to `VETO_WINRATE_PCT` or `MIN_GAMES_FOR_VETO`.
+
+---
+
+## §8 — DFC color identity stored as "C" colorless (Anomaly-3)
+
+**Symptom:** Aclazotz (a black MDFC — Modal Double-Faced Card) showed
+up in `check:learn` output as color "C" (colorless), so commander-colour
+filters silently excluded him from black-identity decks.
+
+**Root cause:** `server/seed-scryfall.ts` and `server/sync-bulk.ts` both
+persisted colors with `card.colors?.join("") || null`. Scryfall reports
+DFC colors on `card_faces[i].colors`, not on the top-level `colors`
+field, so DFCs ended up with NULL → rendered as "C".
+
+**Fix — fallback chain in both seed scripts:**
+
+```
+1.  card.colors                       (normal cards)
+2.  union(card_faces[i].colors)       (DFCs, split cards)
+3.  card.color_identity               (authoritative fallback)
+4.  ""  (empty string = truly colorless, distinct from NULL)
+```
+
+New public helpers:
+- `resolveScryfallColors()` in `seed-scryfall.ts` (exported for reuse)
+- `resolveCardColors()` in `sync-bulk.ts` (module-local)
+- `server/scripts/repairCardColors.ts` — one-shot retroactive repair
+  that re-fetches every card with NULL/empty colors from Scryfall and
+  updates the row
+
+**Operational recovery for an existing database:**
+
+```bash
+# Dry-run first — shows what would change, writes nothing
+npx tsx server/scripts/repairCardColors.ts
+
+# Then commit the repair (can be re-run; idempotent)
+npx tsx server/scripts/repairCardColors.ts --apply
+```
+
+After this, `npm run check:learn` should no longer show legendary
+creatures as color "C" unless they are genuinely colorless (e.g.
+Kozilek, Karn, etc.).
+
+---
+
+## §9 — Commander display ordering with reality guard (Anomaly-2 display layer)
+
+Even after the weight decay + LLM guard are live, the `check:learn`
+display can still *show* a bad card on top for a few days while the
+decay rolls in. The display script was updated to apply its own
+reality guard:
+
+- Cards with total ≥ 10 and winrate < 20% are *pushed to the bottom*
+  of the top-10 regardless of raw weight.
+- Cards with total = 0 are capped at a display-score of 40, so any
+  real-data commander with positive winrate ranks above them.
+
+Source: `server/scripts/checkCommanderWeights.ts` (function `scoreOf`).
+If the top-10 still looks wrong, inspect that ordering first — the
+underlying weights may already be fine.
+
+---
+
+## §10 — Late-stage OOM during long PBT runs (Anomaly-4)
+
+### Symptom
+
+Training survives the warm-up (so this is NOT §2, the dummy-batch
+allocation), runs for 1–3 hours, then crashes somewhere around
+iteration 100+ per trial with:
+
+```
+numpy._core._exceptions._ArrayMemoryError:
+  Unable to allocate 5.14 MiB for an array with shape (50, 26974) and data type float32
+```
+
+…often followed by a secondary failure inside the checkpoint
+serializer:
+
+```
+MemoryError  in cloudpickle.dumps(...)
+```
+
+The allocation size (5 MiB) is tiny — it's a single rollout fragment.
+That it fails means the **process/system** is out of contiguous memory,
+not that the tensor is big.
+
+### Root cause
+
+Aggregate pressure from the PBT topology, not any single tensor:
+
+- `num_trials=4 × num_workers=4` = **16 concurrent env runners**
+- Each env runner spawns one Forge JVM with `-Xmx2G`
+- Forge JVMs grow to ~0.5–1 GB each after warm-up → **8–16 GB of JVM heap**
+- PBT perturbations (every 20 iters) clone winner weights + optimizer
+  state → transient spikes 2–3× model size
+- Checkpoint serialization (every `checkpoint_freq` iters) holds the
+  full state in memory during `cloudpickle.dumps`
+
+Over 2–3 hours the Python learner process fragments, the JVMs grow,
+Windows commits near system limits, and the next small allocation
+fails. The traceback looks like a plain OOM but the real disease is
+**too many concurrent heavyweight processes for a laptop-class box**.
+
+### Guards now in code
+
+1. **`scripts/teach-loop.ps1` peer**: `npm run train:ray` defaults to
+   `--num-workers 2 --num-trials 2` (was `4 × 4`). Cuts concurrent
+   JVMs from 16 to 4. Override with explicit CLI flags if you're on
+   a workstation with 64+ GB.
+
+2. **`env.py` line ~281**: Forge JVM launched with `-Xmx1G` (was
+   `-Xmx2G`). Caps aggregate JVM reserve at ~4 GB with the default
+   topology. Forge runs comfortably in 1 GB for Commander/Brawl.
+
+3. `max_cards=64` already enforced by §2 — keeps per-tensor size bounded.
+
+### Verify the guard
+
+```powershell
+# Expect to see: --num-workers 2 --num-trials 2
+Select-String -Path package.json -Pattern '"train:ray":'
+
+# Expect to see: -Xmx1G
+Select-String -Path ml_engine\ray_cluster\env.py -Pattern '-Xmx'
+```
+
+### Fix if you hit it again
+
+In order of invasiveness, pick the first that works:
+
+1. **Confirm nothing else is eating RAM.** Chrome, Docker Desktop, and
+   VSCode Copilot all like to sit on 2–4 GB. Close them.
+2. **Lower population further**: `--num-trials 1` (kills PBT but runs
+   a single IMPALA trial fine) or `--num-workers 1`.
+3. **Enable observation compression** in `build_impala_config`
+   (`orchestrator.py`): add `compress_observations=True` to
+   `.env_runners(...)`. LZ4 in-transit, ~5–10× on MTG obs.
+4. **Structural**: replace the 26,974-dim flat card-pool obs with a
+   variable-length `(deck_length, embedding_dim)` tensor backed by
+   the existing card embeddings. Requires model + env changes.
+
+### Recovery from a crash
+
+The orchestrator writes checkpoints every `--checkpoint-freq` iters
+under `ray_results/pbt_mtg_<ts>/`. You can inspect them but the
+current `orchestrator.py` does **not** expose a `--resume` flag — the
+experiment name is regenerated each run (`pbt_mtg_{time.time()}`). If
+you want true resume, add `resume="LATEST"` + a stable `name=` to the
+`tune.run(...)` call. Most of the time it's cheaper to relaunch with
+the smaller topology than to wire up resume.
 
 ---
 

@@ -53,7 +53,28 @@ from typing import Optional
 
 @dataclass
 class ShapingConfig:
-    """Reward weights. Tuned on 1000 games vs random opponent."""
+    """Reward weights. Tuned on 1000 games vs random opponent.
+
+    # ── Anomaly-1A fix (2026-04-23) ─────────────────────────────────────
+    Before this fix the shaper could hand out up to `step_cap=0.1` per
+    transition, uncapped across an episode. In a 30-turn game that meant
+    dense shaping could reach ±3.0 cumulative, completely drowning out the
+    terminal `outcome_weight=±1.0`. Agents that lost the game would still
+    net POSITIVE total reward by farming mana efficiency + progress bonuses
+    turn after turn — exactly what we saw in production with Aatchik (1% WR,
+    weight 45) and Aang (3% WR, weight 42.29).
+
+    Two fixes compound to guarantee the terminal signal dominates:
+      1. `step_cap` lowered from 0.1 → 0.04   (caps per-step magnitude)
+      2. `episode_shape_cap = 0.5` (NEW)       (caps cumulative per-episode)
+
+    With both caps in place, worst-case |Σ r_shape| ≤ 0.5, so the final
+    outcome (+1 win / -1 loss) is ALWAYS the decisive contribution to the
+    episode return. This is the shaper-math equivalent of the Ng-Harada-
+    Russell potential-invariance guarantee, but enforced at runtime instead
+    of by construction, because Forge state is noisy and we can't trust
+    a pure potential function here.
+    """
     alpha_life: float = 0.02        # per 1 life advantage swing
     # NOTE: beta_tempo kept for backward-compat but deprecated. Prefer
     # zeta_efficiency below, which uses mana_used/mana_available ratio.
@@ -69,7 +90,12 @@ class ShapingConfig:
                                             #   with untapped lands + instants
 
     outcome_weight: float = 1.0     # sparse terminal (+1 / -1)
-    step_cap: float = 0.1           # cap on per-step shaped reward magnitude
+    # Anomaly-1A fix: step_cap lowered from 0.1 to 0.04 (per-step magnitude)
+    step_cap: float = 0.04          # cap on per-step shaped reward magnitude
+    # Anomaly-1A fix: NEW — cumulative per-episode cap. Guarantees that
+    # dense shaping can never exceed ±0.5 across an entire game, so the
+    # terminal ±1.0 reward always dominates the episode return.
+    episode_shape_cap: float = 0.5
     penalty_illegal_action: float = -0.05
 
 
@@ -107,10 +133,32 @@ class GameStateSnapshot:
 
 
 class RewardShaper:
-    """Stateless(-ish) reward shaper. Stores last snapshot to compute deltas."""
+    """Reward shaper with per-step AND per-episode caps.
+
+    # ── Anomaly-1A fix (2026-04-23) ─────────────────────────────────────
+    The shaper now also tracks cumulative shaped reward across an episode
+    so that (a) dense shaping can never swamp the terminal outcome and
+    (b) a losing agent can NEVER net positive total reward by gaming the
+    mana-efficiency bonus turn after turn.
+
+    Lifecycle:
+      - `reset_episode()` is called at env.reset(). Clears cumulative.
+      - Each call to `shape()` adds to `_episode_shape_total`.
+      - When the running total would exceed ±episode_shape_cap, the
+        addition is clipped so the total stops growing.
+      - On a terminal transition, the cumulative is returned to zero so
+        the same RewardShaper instance can be reused across episodes.
+    """
 
     def __init__(self, config: Optional[ShapingConfig] = None):
         self.config = config or ShapingConfig()
+        # Cumulative shaped reward for the current episode. Does NOT include
+        # the terminal outcome or the illegal-action penalty.
+        self._episode_shape_total: float = 0.0
+
+    def reset_episode(self) -> None:
+        """Call at env.reset() to clear the per-episode cumulative cap."""
+        self._episode_shape_total = 0.0
 
     def shape(
         self,
@@ -126,9 +174,14 @@ class RewardShaper:
              0 = draw
            None = non-terminal step (will be ignored, only dense shaping applies)
 
-        Returns a scalar. Clamped to [-1.1, +1.1] worst case (outcome=1 + shape).
+        Returns a scalar. With the episode cap, worst-case return of a
+        single call is ±(outcome_weight + episode_shape_cap) = ±1.5; across
+        an entire episode the sum of dense shaping is bounded to ±0.5, so
+        the ±1.0 terminal ALWAYS dominates.
         """
         if curr.illegal_action:
+            # Illegal actions are a separate channel — they don't count
+            # against the shaping budget.
             return self.config.penalty_illegal_action
 
         # ── Sparse terminal term ────────────────────────────────────────────
@@ -155,11 +208,28 @@ class RewardShaper:
             + r_progress + r_efficiency + r_archetype
         )
 
-        # Cap shaping so it can't dominate the terminal signal
+        # ── Per-step cap (Anomaly-1A fix: lowered to 0.04) ──────────────────
         if r_shape > self.config.step_cap:
             r_shape = self.config.step_cap
         elif r_shape < -self.config.step_cap:
             r_shape = -self.config.step_cap
+
+        # ── Per-episode cap (Anomaly-1A fix: NEW cumulative guard) ──────────
+        # Clip r_shape so that adding it to the running total never pushes
+        # |_episode_shape_total| beyond episode_shape_cap. This is the key
+        # invariant: Σ r_shape over the episode ∈ [-cap, +cap].
+        cap = self.config.episode_shape_cap
+        projected = self._episode_shape_total + r_shape
+        if projected > cap:
+            r_shape = cap - self._episode_shape_total
+        elif projected < -cap:
+            r_shape = -cap - self._episode_shape_total
+        self._episode_shape_total += r_shape
+
+        # On terminal, reset cumulative so the same shaper works for the
+        # next episode without needing explicit reset_episode() from the env.
+        if curr.is_terminal:
+            self._episode_shape_total = 0.0
 
         return r_terminal + r_shape
 
