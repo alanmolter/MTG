@@ -20,11 +20,13 @@ import "dotenv/config";
 import { and, eq, gte, inArray } from "drizzle-orm";
 import {
   cardLearning,
+  cards,
   competitiveDeckCards,
   competitiveDecks,
 } from "../../drizzle/schema";
 import { closeDb, getDb } from "../db";
 import { getCardLearningQueue } from "../services/cardLearningQueue";
+import { describeTrainingPool, isArenaOnlyTraining } from "./utils/poolFilter";
 
 // Deltas por seção — mainboard vale muito mais que sideboard
 const DELTA_MAINBOARD = 0.10;
@@ -52,6 +54,18 @@ export async function applyTournamentSignal(): Promise<{
   }
 
   divider("SINAL DE TORNEIO → card_learning");
+
+  // Pool scope. Quando TRAINING_POOL_ARENA_ONLY=1, filtramos as cartas que
+  // recebem reforço pra apenas as legais no MTG Arena. Os scrapers continuam
+  // baixando todos os 6 formatos (info útil pra embeddings de sinergia), mas
+  // o sinal de peso só vai pra cartas Arena. Sem isso, decks Modern/Legacy
+  // injetariam sinal em cartas como Snapcaster Mage que nunca aparecem no
+  // pool de treinamento Arena — peso morto poluindo o card_learning.
+  const arenaOnly = isArenaOnlyTraining();
+  console.log(`  Pool scope         : ${describeTrainingPool()}`);
+  if (arenaOnly) {
+    console.log(`  (cartas não-Arena serão registradas mas não receberão delta)`);
+  }
 
   // ── 1. Buscar decks reais importados nas últimas 48h ─────────────
   const cutoff = new Date(Date.now() - HOURS_WINDOW * 60 * 60 * 1000);
@@ -109,6 +123,29 @@ export async function applyTournamentSignal(): Promise<{
 
   console.log(`  Cartas únicas identificadas: ${deltaMap.size}`);
 
+  // ── 2b. Filtrar por Arena-legal quando flag está on ──────────────
+  // Uma única query pra resolver todos os nomes contra cards.is_arena.
+  // Mais barato e mais simples que JOIN no select de competitive_deck_cards
+  // (cartas com mesmo nome em múltiplos sets gerariam row-multiplication).
+  let skippedNonArena = 0;
+  if (arenaOnly && deltaMap.size > 0) {
+    const cardNamesArray = Array.from(deltaMap.keys());
+    const arenaRows = await db
+      .select({ name: cards.name })
+      .from(cards)
+      .where(and(eq(cards.isArena, 1), inArray(cards.name, cardNamesArray)));
+    const arenaSet = new Set(arenaRows.map((r) => r.name));
+
+    for (const cardName of cardNamesArray) {
+      if (!arenaSet.has(cardName)) {
+        deltaMap.delete(cardName);
+        skippedNonArena++;
+      }
+    }
+    console.log(`  Filtrados (não-Arena)      : ${skippedNonArena}`);
+    console.log(`  Cartas Arena restantes     : ${deltaMap.size}`);
+  }
+
   // ── 3. Enfileirar atualizações via CardLearningQueue ─────────────
   const queue = getCardLearningQueue();
   let totalDelta = 0;
@@ -131,6 +168,9 @@ export async function applyTournamentSignal(): Promise<{
   console.log(`  Delta total       : +${totalDelta.toFixed(2)}`);
   console.log(`  Decks processados : ${recentDecks.length}`);
   console.log(`  Saturadas (decay) : ${stats.totalSaturated}`);
+  if (arenaOnly) {
+    console.log(`  Não-Arena ignoradas: ${skippedNonArena}`);
+  }
   console.log("  ✓ Sinal de torneio aplicado ao card_learning");
 
   return {
