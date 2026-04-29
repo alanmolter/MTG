@@ -123,6 +123,17 @@ class MtgForgeEnv(gym.Env):
         # Accepts "aggro" | "control" | "midrange" | "combo" | "ramp" | "".
         self.archetype: str = str(config.get("archetype", "") or "").strip().lower()
 
+        # Arena pool integration — when True, every reset() resamples a fresh
+        # (agent_deck, opponent_deck) pair from arena_pool.resolve_decks_for_training
+        # using a seed derived from the gym reset seed XOR an internal counter.
+        # Why: pre-2026-04-29, arena_only put decks in env_config once at config
+        # build time, so the same matchup was repeated for the entire run
+        # (~600k timesteps in 1 matchup → score plateau at 1.1 in PBT). Per-episode
+        # rotation gives the agent variance to actually learn Arena play, not just
+        # one matchup. See `arena_pool.py` for the archetype catalog.
+        self.arena_only: bool = bool(config.get("arena_only", False))
+        self._episode_count: int = 0
+
         # Phase 3: autoregressive action space (opt-in, default OFF). When
         # True, the agent emits MultiDiscrete([type, source, target]); we
         # pack it into a single int before sending to Forge.
@@ -175,6 +186,27 @@ class MtgForgeEnv(gym.Env):
     def reset(self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None):
         super().reset(seed=seed)
         self._ensure_subprocess()
+
+        # Per-episode deck rotation when Arena mode is on. Each reset() draws
+        # a fresh archetype pair from arena_pool's catalog (12 archetypes), so
+        # the agent sees varied matchups instead of one fixed Aggro vs Control.
+        # Deck seed combines the caller's gym seed with an internal counter so
+        # back-to-back resets always rotate, even if Ray reuses the same seed.
+        if self.arena_only:
+            try:
+                from ml_engine.ray_cluster.arena_pool import resolve_decks_for_training
+                deck_seed = ((seed or 0) ^ (self._episode_count * 2654435761)) & 0xFFFFFFFF
+                a_deck, o_deck = resolve_decks_for_training(arena_only=True, seed=deck_seed)
+                if a_deck:
+                    self.agent_deck = a_deck
+                if o_deck:
+                    self.opponent_deck = o_deck
+            except Exception:
+                # Never let deck resolution kill an episode — fall through to
+                # whatever the previous deck was (or None → bridge fallback).
+                pass
+        self._episode_count += 1
+
         self._send_command({"cmd": "new_game", "agent_deck": self.agent_deck, "opponent_deck": self.opponent_deck, "seed": seed})
         # Forge's cold-start (card DB load) takes ~5s. Give new_game a generous
         # one-time budget so the first reset survives the warm-up.

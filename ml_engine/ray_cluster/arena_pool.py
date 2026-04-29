@@ -41,7 +41,34 @@ from __future__ import annotations
 
 import os
 import random
+import sys
 from typing import Optional, Sequence, Tuple
+
+# When DB-backed synthesis falls back, emit a single warning per process so
+# the operator sees that the trainers are running on hardcoded decks. Set the
+# env var `ARENA_POOL_QUIET=1` to silence (e.g. in tests).
+_FALLBACK_WARNED = False
+
+
+def _warn_fallback(reason: str) -> None:
+    """Print a one-shot warning when DB synthesis is unavailable.
+
+    Without this, operators silently get the hardcoded AggroRed/ControlUW
+    matchup repeated forever — exactly the failure mode that polluted the
+    2026-04-29 Ray run (no deck variance → score plateau at ~1.1).
+    """
+    global _FALLBACK_WARNED
+    if _FALLBACK_WARNED:
+        return
+    if os.environ.get("ARENA_POOL_QUIET") == "1":
+        return
+    _FALLBACK_WARNED = True
+    msg = (
+        f"[arena_pool] WARN: DB synthesis disabled ({reason}). "
+        f"Falling back to hardcoded Aggro Red / Control UW decks. "
+        f"Set DATABASE_URL + `pip install psycopg2-binary` for varied decks."
+    )
+    print(msg, file=sys.stderr, flush=True)
 
 
 # Mirror of TRUTHY_VALUES in server/scripts/utils/poolFilter.ts. Kept in lock
@@ -123,9 +150,20 @@ ARENA_FALLBACK_CONTROL = """
 # which the seed pipeline stores as concatenated colour identity letters.
 _ARCHETYPE_RECIPES: Tuple[Tuple[str, str, Sequence[str]], ...] = (
     # (archetype_name, primary_colors, basic_lands)
-    ("aggro_red",   "R",  ("Mountain",)),
-    ("control_uw",  "WU", ("Island", "Plains")),
-    ("midrange_bg", "BG", ("Swamp", "Forest")),
+    # Mono-color
+    ("aggro_red",       "R",  ("Mountain",)),
+    ("aggro_white",     "W",  ("Plains",)),
+    ("control_blue",    "U",  ("Island",)),
+    ("midrange_black",  "B",  ("Swamp",)),
+    ("ramp_green",      "G",  ("Forest",)),
+    # Two-color
+    ("control_uw",      "WU", ("Island", "Plains")),
+    ("midrange_bg",     "BG", ("Swamp", "Forest")),
+    ("aggro_rw",        "WR", ("Mountain", "Plains")),
+    ("midrange_br",     "BR", ("Swamp", "Mountain")),
+    ("control_ub",      "UB", ("Island", "Swamp")),
+    ("ramp_gw",         "WG", ("Forest", "Plains")),
+    ("aggro_gr",        "GR", ("Mountain", "Forest")),
 )
 
 
@@ -199,11 +237,13 @@ def _query_arena_pool(
     """
     dsn = dsn or os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
     if not dsn:
+        _warn_fallback("DATABASE_URL not set in this Python process")
         return ()
 
     try:
         import psycopg2  # noqa: WPS433 — lazy import keeps this module dep-free
     except ImportError:
+        _warn_fallback("psycopg2 not installed (run `pip install psycopg2-binary` in the venv)")
         return ()
 
     # Colour-identity match: colors LIKE '%R%' for mono-red, both letters
@@ -227,14 +267,22 @@ def _query_arena_pool(
     try:
         conn = psycopg2.connect(dsn, connect_timeout=5)
         conn.autocommit = True
-    except Exception:
+    except Exception as e:
+        _warn_fallback(f"psycopg2 connect failed: {e!s}")
         return ()
 
     try:
         with conn.cursor() as cur:
             cur.execute(sql, [*color_params, int(limit)])
-            return cur.fetchall()
-    except Exception:
+            rows = cur.fetchall()
+            if not rows:
+                _warn_fallback(
+                    f"DB query returned 0 rows for primary_colors={primary_colors!r}; "
+                    f"check that cards.is_arena=1 was applied via `npm run db:repair-arena -- --apply`"
+                )
+            return rows
+    except Exception as e:
+        _warn_fallback(f"DB query failed: {e!s}")
         return ()
     finally:
         try:
