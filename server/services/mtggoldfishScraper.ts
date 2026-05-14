@@ -16,6 +16,7 @@ const BATCH_DELAY_MS = 500;
 /** Formatos suportados pelo MTGGoldfish metagame */
 export const GOLDFISH_FORMATS = [
   "standard",
+  "historic",
   "modern",
   "legacy",
   "pioneer",
@@ -134,6 +135,86 @@ async function getDeckIdsFromArchetype(
     return results;
   } catch {
     return [];
+  }
+}
+
+// ─── Cloudflare detection ────────────────────────────────────────────────────
+//
+// As of 2026-05, MTGGoldfish put `/deck/download/{id}` behind Cloudflare's
+// JavaScript challenge ("Just a moment..."). The metagame and archetype pages
+// stay open (so our archetype scraping still works), but the per-deck download
+// endpoint returns HTTP 403 with a JS challenge body for any non-browser
+// client. Realistic User-Agent + Referer + Sec-Fetch-* headers do NOT help —
+// the only known workarounds are a real headless browser (Puppeteer/Playwright)
+// or a paid CF-bypass service.
+//
+// We probe one URL up-front to detect this state, so we can fail fast with a
+// clear diagnostic instead of pretending to "skip" 60 decks per import run.
+let _cloudflareCheckedAt = 0;
+let _cloudflareBlocked: boolean | null = null;
+const CLOUDFLARE_RECHECK_MS = 30 * 60_000; // re-probe every 30 min
+
+async function isCloudflareBlockingDownloads(): Promise<boolean> {
+  const now = Date.now();
+  if (_cloudflareBlocked !== null && now - _cloudflareCheckedAt < CLOUDFLARE_RECHECK_MS) {
+    return _cloudflareBlocked;
+  }
+  try {
+    // 1) Fetch a metagame index to confirm general connectivity AND grab an
+    //    archetype slug. The metagame page has /archetype/* links but NOT
+    //    /deck/download/* links — those only appear on the archetype detail.
+    const metaPage = await fetchWithTimeout(
+      `${MTGGOLDFISH_BASE_URL}/metagame/standard/full`,
+      { headers: { "User-Agent": USER_AGENT } }
+    );
+    if (!metaPage.ok) {
+      _cloudflareBlocked = false;
+      _cloudflareCheckedAt = now;
+      return false;
+    }
+    const metaHtml = await metaPage.text();
+    const archeMatch = metaHtml.match(/href="\/archetype\/([^"#]+)(?:#[^"]*)?"/);
+    if (!archeMatch) {
+      _cloudflareBlocked = false;
+      _cloudflareCheckedAt = now;
+      return false;
+    }
+
+    // 2) Fetch one archetype page to locate a real deck download URL.
+    const archePage = await fetchWithTimeout(
+      `${MTGGOLDFISH_BASE_URL}/archetype/${archeMatch[1]}`,
+      { headers: { "User-Agent": USER_AGENT } }
+    );
+    if (!archePage.ok) {
+      _cloudflareBlocked = false;
+      _cloudflareCheckedAt = now;
+      return false;
+    }
+    const archeHtml = await archePage.text();
+    const dlMatch = archeHtml.match(/\/deck\/download\/(\d+)/);
+    if (!dlMatch) {
+      _cloudflareBlocked = false;
+      _cloudflareCheckedAt = now;
+      return false;
+    }
+
+    // 3) Probe the actual download endpoint. CF returns 403 with a JS-challenge
+    //    HTML body. A real deck download returns 200 + text/plain.
+    const probeDeck = await fetchWithTimeout(
+      `${MTGGOLDFISH_BASE_URL}/deck/download/${dlMatch[1]}`,
+      { headers: { "User-Agent": USER_AGENT } }
+    );
+    const ct = probeDeck.headers.get("content-type") || "";
+    const blocked = probeDeck.status === 403 || ct.includes("text/html");
+    _cloudflareBlocked = blocked;
+    _cloudflareCheckedAt = now;
+    return blocked;
+  } catch {
+    // Treat probe errors as "not blocked" — let the real scraper retry +
+    // surface its own error rather than masking a transient network issue.
+    _cloudflareBlocked = false;
+    _cloudflareCheckedAt = now;
+    return false;
   }
 }
 
@@ -401,6 +482,21 @@ export async function importAllGoldfishFormats(
   console.log(`\n  [MTGGoldfish] Importando ${decksPerFormat} decks de cada formato:`);
   console.log(`  [MTGGoldfish] Formatos: ${GOLDFISH_FORMATS.join(", ")}`);
   console.log(`  [MTGGoldfish] Total máximo: ${GOLDFISH_FORMATS.length * decksPerFormat} decks\n`);
+
+  // Pre-flight: probe Cloudflare. If `/deck/download/{id}` is gated by the JS
+  // challenge, downloading 60 decks is a 40s no-op. Bail with one clear line
+  // explaining what to do (use MTGTop8 + manual import) so the operator isn't
+  // misled by "60 pulados" looking like a transient error.
+  if (await isCloudflareBlockingDownloads()) {
+    console.warn(
+      `  [MTGGoldfish] BLOQUEADO: /deck/download/{id} esta atras do desafio JS\n` +
+      `              do Cloudflare ("Just a moment..."). Esse endpoint nao e\n` +
+      `              acessivel via fetch direto.\n` +
+      `              Solucao: use MTGTop8 (funciona) ou rode o scraper via\n` +
+      `              Puppeteer/Playwright. Pulando MTGGoldfish nesta sessao.`
+    );
+    return totals;
+  }
 
   for (const format of GOLDFISH_FORMATS) {
     const r = await importMTGGoldfishDecks(format, decksPerFormat);
