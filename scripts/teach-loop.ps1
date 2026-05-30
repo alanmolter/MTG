@@ -52,7 +52,12 @@ param(
     # / ~12k Pioneer + Historic) em vez do catálogo paper completo. Setamos
     # a env var antes do loop para que TODOS os subprocessos npm/tsx
     # herdem. Os trainers leem via server/scripts/utils/poolFilter.ts.
-    [switch]$Arena = $false
+    [switch]$Arena = $false,
+    # Deadline em horas. Quando setado (> 0), o loop sai cedo se já
+    # passou desse tempo, mesmo que ainda haja runs pendentes em $Count.
+    # Use junto com -Count alto pra criar uma janela de treino com cap de
+    # tempo (ex.: `-Count 100 -DurationHours 12` roda até 12h ou 100 runs).
+    [double]$DurationHours = 0
 )
 
 $ErrorActionPreference = 'Continue'
@@ -73,29 +78,50 @@ if ($Arena) {
 
 $start       = Get-Date
 $failCount   = 0
-$etaMinutes  = $Count * 11
+$deadline    = if ($DurationHours -gt 0) { $start.AddHours($DurationHours) } else { $null }
+$etaMinutes  = if ($DurationHours -gt 0) {
+                  [math]::Min($Count * 11, $DurationHours * 60)
+              } else {
+                  $Count * 11
+              }
 $startedTag  = (Get-Date -Format 'HH:mm:ss')
 $poolLabel   = if ($Arena) { 'Arena-only' } else { 'Catalogo completo' }
+$deadlineLbl = if ($deadline) { $deadline.ToString('HH:mm:ss (yyyy-MM-dd)') } else { 'sem deadline' }
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  TEACH LOOP -- $Count runs sequenciais" -ForegroundColor Cyan
+Write-Host "  TEACH LOOP -- ate $Count runs (deadline: $deadlineLbl)" -ForegroundColor Cyan
 Write-Host "  Start : $startedTag   ETA: ~${etaMinutes} min" -ForegroundColor Cyan
 Write-Host "  Pool  : $poolLabel" -ForegroundColor Cyan
 Write-Host "  Decay : 0.97^$Count = $([math]::Round([math]::Pow(0.97, $Count), 3))  (peso 46 -> $([math]::Round(46 * [math]::Pow(0.97, $Count), 1)))" -ForegroundColor Cyan
 Write-Host "  Check : $(if ($CheckBetween) { 'após cada run' } else { 'apenas ao final' })" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
+$completedRuns = 0
 for ($i = 1; $i -le $Count; $i++) {
+    # Sai antes de começar o próximo run se já passamos do deadline. Não
+    # interrompe um run no meio (idempotente do ponto de vista do banco,
+    # mas matar um teach no meio desperdiça os ~10 min já gastos).
+    if ($deadline -and ((Get-Date) -ge $deadline)) {
+        Write-Host ""
+        Write-Host "  [DEADLINE] $DurationHours h atingido apos $completedRuns runs. Parando." -ForegroundColor Cyan
+        break
+    }
+
     $runStart    = Get-Date
     $elapsedMin  = [math]::Round(((Get-Date) - $start).TotalMinutes, 1)
+    $remainTag   = if ($deadline) {
+                      $r = [math]::Round(($deadline - (Get-Date)).TotalMinutes, 0)
+                      "deadline em ${r}min"
+                   } else { '' }
 
     Write-Host ""
     Write-Host "-----------------------------------------------------------" -ForegroundColor Yellow
-    Write-Host " Run $i / $Count   elapsed ${elapsedMin}min   failures: $failCount" -ForegroundColor Yellow
+    Write-Host " Run $i / $Count   elapsed ${elapsedMin}min   failures: $failCount   $remainTag" -ForegroundColor Yellow
     Write-Host "-----------------------------------------------------------" -ForegroundColor Yellow
 
     & npm run teach
+    $completedRuns = $i
 
     if ($LASTEXITCODE -ne 0) {
         $failCount++
@@ -117,14 +143,14 @@ for ($i = 1; $i -le $Count; $i++) {
 }
 
 $totalMin    = [math]::Round(((Get-Date) - $start).TotalMinutes, 1)
-$successRuns = $Count - $failCount
+$successRuns = $completedRuns - $failCount
 $peakDecay   = [math]::Round((1 - [math]::Pow(0.97, $successRuns)) * 100, 1)
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host "  TEACH LOOP CONCLUIDO" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host "  Runs totais        : $Count" -ForegroundColor White
+Write-Host "  Runs executados    : $completedRuns / $Count" -ForegroundColor White
 Write-Host "  Runs com sucesso   : $successRuns" -ForegroundColor White
 Write-Host "  Runs com falha     : $failCount" -ForegroundColor White
 Write-Host "  Duracao total      : ${totalMin} min" -ForegroundColor White
