@@ -431,7 +431,7 @@ async function synthesizeArenaDeckFromBrain(
       WHERE c.is_arena = 1
         AND (c.cmc IS NULL OR c.cmc <= 8)
         AND (${colorClause})
-        AND (c.type IS NULL OR c.type NOT ILIKE '%basic land%')
+        AND (c.type IS NULL OR c.type NOT ILIKE '%land%')
       ORDER BY c.name, COALESCE(cl.weight, 1.0) DESC, RANDOM()
     ) deduped
     ORDER BY weight DESC, RANDOM()
@@ -456,11 +456,13 @@ async function synthesizeArenaDeckFromBrain(
   if (candidates.length < 9) return null;
 
   // Pull synergy edges where at least one side is in our candidate pool.
-  // The card_synergies table stores numeric card_ids; resolve to names so we
-  // can apply boosts by name during deck construction. We exclude self-pairs
-  // (card1_id = card2_id) — those are spurious entries from the synergy
-  // service's early days that would self-amplify the anchor.
+  // Drizzle's auto-binding of `= ANY(${jsArray})` produces invalid SQL
+  // (Postgres reads `ANY(($1,$2,...))` as ANY(record), not ANY(text[])).
+  // We expand to an IN (...) list using sql.join — same semantics, valid SQL.
+  // Edge case: empty IN () would be a Postgres syntax error, but we've
+  // already returned null above when candidates.length < 9.
   const candNameList = candidates.map((c) => c.name);
+  const inFragment = sql.join(candNameList.map((n) => sql`${n}`), sql`, `);
   const synRows = await db.execute(sql`
     SELECT c1.name AS a, c2.name AS b, cs.weight AS w
     FROM card_synergies cs
@@ -468,7 +470,7 @@ async function synthesizeArenaDeckFromBrain(
     JOIN cards c2 ON c2.id = cs.card2_id
     WHERE cs.card1_id <> cs.card2_id
       AND c1.is_arena = 1 AND c2.is_arena = 1
-      AND (c1.name = ANY(${candNameList}) OR c2.name = ANY(${candNameList}))
+      AND (c1.name IN (${inFragment}) OR c2.name IN (${inFragment}))
       AND cs.weight > 0
   `);
   const synergyMap = new Map<string, SynergyEdge[]>();
