@@ -357,16 +357,53 @@ function writeLastArchetypeIdx(agentIdx: number, opponentIdx: number) {
  * Returns null when fewer than 9 distinct Arena-legal cards match the colour
  * identity (caller falls back to import-based selection).
  */
+type CardCandidate = {
+  name: string;
+  type: string | null;
+  weight: number;        // brain weight (card_learning)
+  games: number;         // win + loss count (signal maturity)
+  winrate: number;       // 0..1
+  source: "learned" | "neutral";  // 'learned' if >=10 games, else neutral 1.0
+};
+
+type SynergyEdge = { partner: string; weight: number };
+
+type DeckCardProvenance = {
+  name: string;
+  quantity: number;
+  brainWeight: number;
+  games: number;
+  winrate: number;
+  source: "learned" | "neutral" | "synergy" | "basic-land";
+  synergyBoostFrom?: string;  // which already-picked card pulled this in
+};
+
+/**
+ * Build a 60-card Arena-legal deck using EVERY learning signal we have:
+ *   - card_learning.weight       (teach:arena + Ray IMPALA reward signal)
+ *   - card_learning.win/loss     (empirical winrate, marks "stable" cards)
+ *   - card_synergies             (PairLearning from continuousTraining +
+ *                                 embedding co-occurrence from import-and-train)
+ *
+ * Algorithm:
+ *   1. Pull top-N Arena-legal candidates in the requested colour identity,
+ *      DEDUPED by name (Postgres DISTINCT ON kills the printing-duplicate
+ *      bias that promotes Blossoming Sands to #1 just because it has 10
+ *      reprints in the cards table).
+ *   2. Weighted-sample an "anchor" card (highest combined signal).
+ *   3. For each subsequent pick (rounds 2..9), bias the weight by synergy
+ *      score with already-picked cards: candidate_weight × (1 + Σ synergy
+ *      with picked). Cards that the model learned PAIR WELL with the anchor
+ *      surface to the top.
+ *   4. Fill 24 land slots from recipe.basics.
+ *
+ * Returns null + reason if < 9 distinct candidates in this colour identity.
+ */
 async function synthesizeArenaDeckFromBrain(
   db: any,
   recipe: ArenaArchetype,
-): Promise<PickedDeck | null> {
+): Promise<{ deck: PickedDeck; provenance: DeckCardProvenance[]; stats: { learnedCount: number; synergyAssistCount: number; avgBrainWeight: number; avgWinrate: number; pool: number } } | null> {
   const colorLetters = recipe.colors.split("");
-
-  // Compose AND clauses for each requested colour. Mono-color: `colors LIKE '%R%'`.
-  // Two-color: `colors LIKE '%W%' AND colors LIKE '%U%'`. This requires the
-  // card to be EITHER mono- in the requested colour OR a multi-color card that
-  // contains all requested letters in its identity string.
   const colorConditions = colorLetters.map(
     (c) => sql`c.colors LIKE ${'%' + c + '%'}`
   );
@@ -374,77 +411,208 @@ async function synthesizeArenaDeckFromBrain(
     ? sql.join(colorConditions, sql` AND `)
     : sql`TRUE`;
 
-  // Query top-N candidates by learned weight. RANDOM() tiebreak avoids
-  // identical orderings when many cards share the default 1.0 weight.
+  // DISTINCT ON (c.name) → one row per unique card name. Without this, a
+  // card with 10 reprints accumulates 10× the weighted-sampling probability
+  // — exactly the bug that pinned Blossoming Sands/Bloodfell Caves at the
+  // top of every weighted draw despite their middling impact.
+  // Inner ORDER BY chooses which printing wins the dedupe: highest weight,
+  // then RANDOM() as tiebreak. Outer ORDER BY then sorts the deduped set.
   const rows = await db.execute(sql`
-    SELECT
-      c.name        AS name,
-      c.type        AS type,
-      COALESCE(cl.weight, 1.0) AS weight
-    FROM cards c
-    LEFT JOIN card_learning cl ON cl.card_name = c.name
-    WHERE c.is_arena = 1
-      AND (c.cmc IS NULL OR c.cmc <= 8)
-      AND (${colorClause})
-      AND (c.type IS NULL OR c.type NOT ILIKE '%basic land%')
-    ORDER BY COALESCE(cl.weight, 1.0) DESC, RANDOM()
-    LIMIT 120
+    SELECT name, type, weight, win_count, loss_count
+    FROM (
+      SELECT DISTINCT ON (c.name)
+        c.name           AS name,
+        c.type           AS type,
+        COALESCE(cl.weight,    1.0) AS weight,
+        COALESCE(cl.win_count,  0)  AS win_count,
+        COALESCE(cl.loss_count, 0)  AS loss_count
+      FROM cards c
+      LEFT JOIN card_learning cl ON cl.card_name = c.name
+      WHERE c.is_arena = 1
+        AND (c.cmc IS NULL OR c.cmc <= 8)
+        AND (${colorClause})
+        AND (c.type IS NULL OR c.type NOT ILIKE '%basic land%')
+      ORDER BY c.name, COALESCE(cl.weight, 1.0) DESC, RANDOM()
+    ) deduped
+    ORDER BY weight DESC, RANDOM()
+    LIMIT 180
   `);
 
-  const candidates = (rows as any[])
-    .map((r) => ({
-      name: String(r.name ?? ""),
-      type: r.type ? String(r.type) : null,
-      weight: Math.max(0.01, Number(r.weight ?? 1)),
-    }))
+  const candidates: CardCandidate[] = (rows as any[])
+    .map((r) => {
+      const games = Number(r.win_count ?? 0) + Number(r.loss_count ?? 0);
+      const wins = Number(r.win_count ?? 0);
+      return {
+        name: String(r.name ?? ""),
+        type: r.type ? String(r.type) : null,
+        weight: Math.max(0.01, Number(r.weight ?? 1)),
+        games,
+        winrate: games > 0 ? wins / games : 0.5,
+        source: (games >= 10 ? "learned" : "neutral") as "learned" | "neutral",
+      };
+    })
     .filter((r) => r.name.length > 0);
 
   if (candidates.length < 9) return null;
 
-  // Weighted random sampling WITHOUT replacement — high-weight cards heavily
-  // preferred but every run gets some variance so the same recipe doesn't
-  // produce an identical decklist twice.
-  const picked: { name: string; quantity: number }[] = [];
-  const pool = [...candidates];
-  while (picked.length < 9 && pool.length > 0) {
-    const total = pool.reduce((s, c) => s + c.weight, 0);
-    let r = Math.random() * total;
-    let idx = pool.length - 1;
-    for (let i = 0; i < pool.length; i++) {
-      r -= pool[i].weight;
-      if (r <= 0) { idx = i; break; }
-    }
-    const chosen = pool[idx];
-    pool.splice(idx, 1);
-    if (!picked.some((p) => p.name === chosen.name)) {
-      picked.push({ name: chosen.name, quantity: 4 });
-    }
+  // Pull synergy edges where at least one side is in our candidate pool.
+  // The card_synergies table stores numeric card_ids; resolve to names so we
+  // can apply boosts by name during deck construction. We exclude self-pairs
+  // (card1_id = card2_id) — those are spurious entries from the synergy
+  // service's early days that would self-amplify the anchor.
+  const candNameList = candidates.map((c) => c.name);
+  const synRows = await db.execute(sql`
+    SELECT c1.name AS a, c2.name AS b, cs.weight AS w
+    FROM card_synergies cs
+    JOIN cards c1 ON c1.id = cs.card1_id
+    JOIN cards c2 ON c2.id = cs.card2_id
+    WHERE cs.card1_id <> cs.card2_id
+      AND c1.is_arena = 1 AND c2.is_arena = 1
+      AND (c1.name = ANY(${candNameList}) OR c2.name = ANY(${candNameList}))
+      AND cs.weight > 0
+  `);
+  const synergyMap = new Map<string, SynergyEdge[]>();
+  const addEdge = (from: string, to: string, w: number) => {
+    if (from === to) return;
+    if (!synergyMap.has(from)) synergyMap.set(from, []);
+    synergyMap.get(from)!.push({ partner: to, weight: w });
+  };
+  for (const r of synRows as any[]) {
+    const a = String(r.a), b = String(r.b), w = Number(r.w ?? 0);
+    if (!a || !b || w <= 0) continue;
+    addEdge(a, b, w);
+    addEdge(b, a, w);
   }
 
-  if (picked.length < 9) return null;
+  // Weighted sampling without replacement, with synergy bias for picks 2+.
+  // Bias formula: effective_weight = base_weight * (1 + 0.4 * Σ synergy_with_picked)
+  //   - 0.4 multiplier keeps the brain weight as the primary signal but lets
+  //     a strong synergy (w=20) roughly double a neutral card's probability.
+  const provenance: DeckCardProvenance[] = [];
+  const pool: CardCandidate[] = [...candidates];
+  const SYNERGY_BIAS = 0.4;
+  let learnedPicks = 0;
+  let synergyAssists = 0;
 
-  // Lands: 60 - 36 spells = 24 lands, round-robin across recipe.basics
-  const spellsQty = picked.reduce((s, c) => s + c.quantity, 0);
+  while (provenance.length < 9 && pool.length > 0) {
+    const pickedNames = new Set(provenance.map((p) => p.name));
+    const effective = pool.map((c) => {
+      let synBoost = 0;
+      let bestSynPartner = "";
+      let bestSynWeight = 0;
+      const edges = synergyMap.get(c.name) ?? [];
+      for (const e of edges) {
+        if (pickedNames.has(e.partner)) {
+          synBoost += e.weight;
+          if (e.weight > bestSynWeight) {
+            bestSynWeight = e.weight;
+            bestSynPartner = e.partner;
+          }
+        }
+      }
+      return {
+        cand: c,
+        effective: c.weight * (1 + SYNERGY_BIAS * synBoost),
+        synBoost,
+        bestSynPartner,
+      };
+    });
+
+    const total = effective.reduce((s, e) => s + e.effective, 0);
+    let r = Math.random() * total;
+    let idx = effective.length - 1;
+    for (let i = 0; i < effective.length; i++) {
+      r -= effective[i].effective;
+      if (r <= 0) { idx = i; break; }
+    }
+    const chosen = effective[idx];
+    pool.splice(idx, 1);
+    if (pickedNames.has(chosen.cand.name)) continue;
+
+    const source: DeckCardProvenance["source"] =
+      chosen.synBoost > 0 ? "synergy" :
+      chosen.cand.source === "learned" ? "learned" : "neutral";
+    if (source === "learned") learnedPicks++;
+    if (source === "synergy") { synergyAssists++; learnedPicks++; }
+
+    provenance.push({
+      name: chosen.cand.name,
+      quantity: 4,
+      brainWeight: chosen.cand.weight,
+      games: chosen.cand.games,
+      winrate: chosen.cand.winrate,
+      source,
+      synergyBoostFrom: chosen.bestSynPartner || undefined,
+    });
+  }
+
+  if (provenance.length < 9) return null;
+
+  // Lands
+  const spellsQty = provenance.reduce((s, p) => s + p.quantity, 0);
   const landCount = DECK_TARGET_SIZE - spellsQty;
   const basics = recipe.basics.length > 0 ? recipe.basics : ["Plains"];
   const perBasic = Math.floor(landCount / basics.length);
   const remainder = landCount - perBasic * basics.length;
-  const lands: { name: string; quantity: number }[] = basics.map((b, i) => ({
+  const landProvenance: DeckCardProvenance[] = basics.map((b, i) => ({
     name: b,
     quantity: perBasic + (i < remainder ? 1 : 0),
+    brainWeight: 0,
+    games: 0,
+    winrate: 0,
+    source: "basic-land",
   }));
 
-  return {
-    id: -1, // synthetic — no DB row
+  const totalProvenance = [...provenance, ...landProvenance];
+
+  const deck: PickedDeck = {
+    id: -1,
     name: recipe.name,
     format: "historic",
     archetype: recipe.name.toLowerCase().replace(/\s+/g, "_"),
     colors: recipe.colors,
-    cards: [
-      ...picked.map((p) => ({ ...p, section: "mainboard" as const })),
-      ...lands.map((l) => ({ ...l, section: "mainboard" as const })),
-    ],
+    cards: totalProvenance.map((p) => ({
+      name: p.name,
+      quantity: p.quantity,
+      section: "mainboard" as const,
+    })),
   };
+
+  const learned = provenance.filter((p) => p.source === "learned" || p.source === "synergy");
+  const stats = {
+    learnedCount: learnedPicks,
+    synergyAssistCount: synergyAssists,
+    avgBrainWeight: learned.length > 0
+      ? learned.reduce((s, p) => s + p.brainWeight, 0) / learned.length
+      : 0,
+    avgWinrate: learned.length > 0
+      ? learned.reduce((s, p) => s + p.winrate, 0) / learned.length
+      : 0,
+    pool: candidates.length,
+  };
+
+  return { deck, provenance: totalProvenance, stats };
+}
+
+function printProvenance(label: string, prov: DeckCardProvenance[], stats: { learnedCount: number; synergyAssistCount: number; avgBrainWeight: number; avgWinrate: number; pool: number }) {
+  console.log(`\n  ── ${label} — provenance (de onde veio cada carta) ──`);
+  const spells = prov.filter((p) => p.source !== "basic-land");
+  const lands  = prov.filter((p) => p.source === "basic-land");
+  for (const p of spells) {
+    const tag =
+      p.source === "synergy" ? `S+${p.synergyBoostFrom?.slice(0, 22) ?? "?"}`.padEnd(26) :
+      p.source === "learned" ? "L (card_learning)        ".padEnd(26) :
+                               "N (peso neutro 1.0)      ".padEnd(26);
+    const wrTag = p.games >= 10 ? `${(p.winrate * 100).toFixed(0)}%wr/${p.games}j` : `${p.games}j`;
+    console.log(`    ${p.quantity}x ${p.name.padEnd(32)} w=${p.brainWeight.toFixed(2).padStart(6)}  ${wrTag.padStart(10)}  ${tag}`);
+  }
+  console.log(`    ${lands.map((l) => `${l.quantity} ${l.name}`).join(" + ")}`);
+  console.log(`  ───────────────────────────────────────────────────`);
+  console.log(`    Pool candidato       : ${stats.pool} cartas Arena (DISTINCT name)`);
+  console.log(`    Spells learned       : ${stats.learnedCount}/9  (>=10 partidas no card_learning)`);
+  console.log(`    Spells via sinergia  : ${stats.synergyAssistCount}/9  (boost de card_synergies)`);
+  console.log(`    Peso medio cerebro   : ${stats.avgBrainWeight.toFixed(2)}`);
+  console.log(`    Winrate medio        : ${(stats.avgWinrate * 100).toFixed(1)}%`);
 }
 
 async function pickTwoArenaDecks(db: any): Promise<PickedDeck[]> {
@@ -464,17 +632,19 @@ async function pickTwoArenaDecks(db: any): Promise<PickedDeck[]> {
   console.log(`  Rotação agent    : [${agentIdx}] ${agentRecipe.name} (${agentRecipe.colors})`);
   console.log(`  Rotação opponent : [${opponentIdx}] ${opponentRecipe.name} (${opponentRecipe.colors})`);
 
-  // 2. Try brain-driven synthesis first. This uses card_learning weights as
-  //    the bias for which cards make the cut, so the model's accumulated
-  //    knowledge directly shapes the deck.
+  // 2. Try brain-driven synthesis first. Uses card_learning weights + card_
+  //    synergies pair bias so every spell pick reflects what the model has
+  //    learned across teach:arena AND Ray IMPALA training so far.
   const [agentSynth, opponentSynth] = await Promise.all([
     synthesizeArenaDeckFromBrain(db, agentRecipe),
     synthesizeArenaDeckFromBrain(db, opponentRecipe),
   ]);
 
   if (agentSynth && opponentSynth) {
-    console.log("  Síntese cerebro  : OK (card_learning weights aplicados)");
-    return [agentSynth, opponentSynth];
+    console.log("  Síntese cerebro  : OK (card_learning + card_synergies aplicados)");
+    printProvenance("AGENT  " + agentRecipe.name,      agentSynth.provenance,     agentSynth.stats);
+    printProvenance("OPPNT  " + opponentRecipe.name,   opponentSynth.provenance,  opponentSynth.stats);
+    return [agentSynth.deck, opponentSynth.deck];
   }
 
   // 3. Fallback: if brain synthesis failed (DB has <9 Arena cards in the
