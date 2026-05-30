@@ -1,4 +1,4 @@
-#Requires -Version 5.0
+﻿#Requires -Version 5.0
 <#
 .SYNOPSIS
     MTG AI - End-to-end Arena pipeline (convergence audit + fresh deck +
