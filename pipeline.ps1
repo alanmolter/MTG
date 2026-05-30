@@ -214,7 +214,8 @@ if ($conv.db_error) {
     Fail "DB inacessivel: $($conv.db_error)"
 } else {
     if ($arenaPool -ge 1000)    { Pass "cards.is_arena populado ($arenaPool cartas)" } else { Fail "Pool Arena minusculo: $arenaPool — rode db:repair-arena" }
-    if ($cardTouches -ge 10000) { Pass "card_learning ativo ($($cardTouches.ToString('N0')) touches)" } else { Warn "card_learning quase vazio — rode teach:arena" }
+    $cardTouchesFmt = '{0:N0}' -f $cardTouches
+    if ($cardTouches -ge 10000) { Pass "card_learning ativo ($cardTouchesFmt touches)" } else { Warn "card_learning quase vazio — rode teach:arena" }
     if ($synArena    -ge 100)   { Pass "card_synergies Arena ativo ($synArena pares)" } else { Warn "Sinergias Arena fracas — rode continuousTraining" }
 }
 
@@ -439,8 +440,10 @@ Write-Host "  RESUMO:" -ForegroundColor White
 Write-Host "    Tier atual                : $tier ($([Math]::Round($coverage,1))% Arena estavel)" -ForegroundColor White
 Write-Host "    Pode gerar deck jogavel?  : $(if ($canBuildPlayable) { 'SIM' } else { 'PARCIAL — falta cobertura/sinergia' })" -ForegroundColor White
 Write-Host "    Partida                   : $matchSummary" -ForegroundColor White
-Write-Host "    Ray env_steps totais      : $([string]::Format('{0:N0}', $rayTotalTs))" -ForegroundColor White
-Write-Host "    Card-touches cumulativos  : $([string]::Format('{0:N0}', $cardTouches))" -ForegroundColor White
+$rayTotalTsFmt   = '{0:N0}' -f $rayTotalTs
+$cardTouchesFmt2 = '{0:N0}' -f $cardTouches
+Write-Host "    Ray env_steps totais      : $rayTotalTsFmt" -ForegroundColor White
+Write-Host "    Card-touches cumulativos  : $cardTouchesFmt2" -ForegroundColor White
 Write-Host "    Sinergias Arena<->Arena   : $synArena pares" -ForegroundColor White
 
 if ($tier -eq "Aprendiz" -or $tier -eq "Iniciante") {
