@@ -159,16 +159,22 @@ try { $conv = $convJson | ConvertFrom-Json } catch { $conv = @{} }
 
 if ($conv.db_error) { Fail "DB: $($conv.db_error)" }
 
-$arenaPool   = [int]($conv.arena_pool   ?? 0)
-$arenaStable = [int]($conv.arena_stable ?? 0)
-$arenaMature = [int]($conv.arena_mature ?? 0)
-$arenaWr     = [double]($conv.arena_winrate_avg ?? 0)
-$cardTouches = [int]($conv.card_touches_total ?? 0)
-$rayTotalTs  = [int]($conv.ray_env_steps_total ?? 0)
-$rayIters    = [int]($conv.ray_iters_total ?? 0)
-$rayBiggest  = [int]($conv.ray_biggest_trial_ts ?? 0)
-$synTotal    = [int]($conv.syn_total ?? 0)
-$synArena    = [int]($conv.syn_arena ?? 0)
+# PS 5.1 doesn't support `??`. Helper does the equivalent.
+function CoalesceNum($v, $default) {
+    if ($null -eq $v -or "$v" -eq "") { return $default }
+    return $v
+}
+
+$arenaPool   = [int](CoalesceNum $conv.arena_pool          0)
+$arenaStable = [int](CoalesceNum $conv.arena_stable        0)
+$arenaMature = [int](CoalesceNum $conv.arena_mature        0)
+$arenaWr     = [double](CoalesceNum $conv.arena_winrate_avg 0)
+$cardTouches = [int](CoalesceNum $conv.card_touches_total  0)
+$rayTotalTs  = [int](CoalesceNum $conv.ray_env_steps_total 0)
+$rayIters    = [int](CoalesceNum $conv.ray_iters_total     0)
+$rayBiggest  = [int](CoalesceNum $conv.ray_biggest_trial_ts 0)
+$synTotal    = [int](CoalesceNum $conv.syn_total           0)
+$synArena    = [int](CoalesceNum $conv.syn_arena           0)
 $coverage    = if ($arenaPool -gt 0) { $arenaStable * 100.0 / $arenaPool } else { 0 }
 
 $tier =
