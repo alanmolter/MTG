@@ -248,17 +248,24 @@ $rayResultsDir = if ($env:RAY_RESULTS_DIR) { $env:RAY_RESULTS_DIR } `
 python -m ml_engine.scripts.check_learning_progress --results-dir "$rayResultsDir" --tail 1 2>&1 |
     Select-Object -First 25 | ForEach-Object { Write-Host $_ }
 
-# Capture pre-match weights distribution for FASE 7 delta
-$preMatchSnapshot = python -c @"
+# Capture pre-match weights distribution for FASE 7 delta. We write the JSON
+# to a temp file instead of embedding via `python -c "..."` because the
+# Arena set is ~12k cards and Windows CreateProcess caps argv at ~8KB.
+$preMatchFile = Join-Path $env:TEMP ("mtg-pipeline-pre-" + (Get-Date -Format yyyyMMddHHmmss) + ".json")
+$snapshotScript = @"
 import os, psycopg2, json
 c = psycopg2.connect(os.environ['DATABASE_URL'], connect_timeout=5); cur=c.cursor()
 cur.execute('''SELECT cl.card_name, cl.weight, cl.win_count, cl.loss_count
                FROM card_learning cl JOIN cards ca ON ca.name=cl.card_name
                WHERE ca.is_arena=1''')
 out = {r[0]: {'w': float(r[1]), 'wc': int(r[2]), 'lc': int(r[3])} for r in cur.fetchall()}
-print(json.dumps(out))
+with open(r'$preMatchFile', 'w', encoding='utf-8') as f:
+    json.dump(out, f)
+print(len(out))
 c.close()
-"@ 2>&1 | Select-Object -Last 1
+"@
+$preCount = python -c $snapshotScript 2>&1 | Select-Object -Last 1
+Info "Snapshot pre-partida: $preCount cartas Arena salvas em $preMatchFile"
 
 # ── FASE 5: Forge match (deck novo + provenance + visual) ───────────────────
 $matchVerdict = "skipped"
@@ -357,9 +364,11 @@ if (Test-Path $autoArena) {
 # ── FASE 7: pos-match — delta de aprendizado e novo top ─────────────────────
 Phase "FASE 7: pos-match — delta de aprendizado"
 if ($matchVerdict -in @("win","loss")) {
+    # Read pre-snapshot from FILE — argv-limit safe for 12k Arena cards.
     $postScript = @"
-import os, psycopg2, json, sys
-pre = json.loads('''$preMatchSnapshot''')
+import os, psycopg2, json
+with open(r'$preMatchFile', 'r', encoding='utf-8') as f:
+    pre = json.load(f)
 c = psycopg2.connect(os.environ['DATABASE_URL'], connect_timeout=5); cur=c.cursor()
 cur.execute('''SELECT cl.card_name, cl.weight, cl.win_count, cl.loss_count
                FROM card_learning cl JOIN cards ca ON ca.name=cl.card_name
@@ -386,8 +395,10 @@ print(f'  Delta soma peso                   : {delta_w:+.2f}')
 print(f'  Cartas que viraram ESTAVEIS agora : +{new_stable}')
 "@
     python -c $postScript 2>&1 | ForEach-Object { Write-Host $_ }
+    Remove-Item -Path $preMatchFile -ErrorAction SilentlyContinue
 } else {
     Info "Sem delta (partida nao aplicou sinal — $matchVerdict)"
+    Remove-Item -Path $preMatchFile -ErrorAction SilentlyContinue
 }
 
 # ── FASE 8: confirmar uso das sinergias ─────────────────────────────────────
