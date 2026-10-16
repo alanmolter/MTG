@@ -1,0 +1,2 @@
+# Mantém os bytes exatos (package.json usa CRLF no repositório).
+package.json -text

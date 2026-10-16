@@ -216,7 +216,7 @@ export type CompetitiveDeckCard = typeof competitiveDeckCards.$inferSelect;
 export type InsertCompetitiveDeckCard = typeof competitiveDeckCards.$inferInsert;
 
 // Log de jobs de treinamento de embeddings
-export const statusEnum = pgEnum("status", ["pending", "running", "completed", "failed"]);
+export const statusEnum = pgEnum("job_status", ["pending", "running", "completed", "failed"]);
 
 export const trainingJobs = pgTable("training_jobs", {
   id: serial("id").primaryKey(),
