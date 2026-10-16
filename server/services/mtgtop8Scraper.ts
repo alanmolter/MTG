@@ -40,7 +40,7 @@ export interface ImportResult {
 
 // ─── Utilitários ──────────────────────────────────────────────────────────────
 
-async function fetchWithTimeout(
+async function rawFetchWithTimeout(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
@@ -51,6 +51,135 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ─── Politeness: robots.txt, rate limit and on-disk cache (opt-in via env) ───
+//
+// MTGTOP8_CHECK_ROBOTS=1     fetch /robots.txt once; refuse disallowed paths
+// MTGTOP8_MIN_DELAY_MS=N     minimum gap between network requests (serialised)
+// MTGTOP8_CACHE_DIR=dir      cache 200 responses on disk, keyed by URL hash
+// MTGTOP8_CACHE_TTL_HOURS=N  cache freshness (default 24)
+// MTGTOP8_USER_AGENT=...     override the User-Agent header
+// All are off by default, so existing callers and tests keep their behaviour.
+
+export class RobotsDisallowedError extends Error {}
+
+let robotsRules: { allow: string[]; disallow: string[] } | null = null;
+
+/** Rules for User-agent: * only (sufficient for a generic crawler). */
+export function parseRobots(text: string): { allow: string[]; disallow: string[] } {
+  const rules = { allow: [] as string[], disallow: [] as string[] };
+  let inStar = false;
+  let lastWasAgent = false;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const idx = line.indexOf(":");
+    if (idx < 0) continue;
+    const key = line.slice(0, idx).trim().toLowerCase();
+    const value = line.slice(idx + 1).trim();
+    if (key === "user-agent") {
+      if (!lastWasAgent) inStar = false;
+      if (value === "*") inStar = true;
+      lastWasAgent = true;
+      continue;
+    }
+    lastWasAgent = false;
+    if (!inStar) continue;
+    if (key === "disallow" && value) rules.disallow.push(value);
+    if (key === "allow" && value) rules.allow.push(value);
+  }
+  return rules;
+}
+
+function ruleMatches(rule: string, path: string): number {
+  const anchored = rule.endsWith("$");
+  const body = anchored ? rule.slice(0, -1) : rule;
+  const re = new RegExp(
+    "^" + body.split("*").map((p) => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + (anchored ? "$" : "")
+  );
+  return re.test(path) ? body.length : -1;
+}
+
+export function isPathAllowed(rules: { allow: string[]; disallow: string[] }, path: string): boolean {
+  const longest = (list: string[]) => Math.max(-1, ...list.map((r) => ruleMatches(r, path)));
+  const dis = longest(rules.disallow);
+  if (dis < 0) return true;
+  return longest(rules.allow) >= dis;
+}
+
+async function assertRobotsAllows(url: string): Promise<void> {
+  if (process.env.MTGTOP8_CHECK_ROBOTS !== "1") return;
+  if (!robotsRules) {
+    const res = await rawFetchWithTimeout(`${MTGTOP8_BASE_URL}/robots.txt`, {
+      headers: { "User-Agent": userAgent() },
+    });
+    if (res.status >= 500) throw new Error(`robots.txt HTTP ${res.status}; refusing to crawl`);
+    robotsRules = res.ok ? parseRobots(await res.text()) : { allow: [], disallow: [] };
+  }
+  const u = new URL(url);
+  if (!isPathAllowed(robotsRules, u.pathname + u.search)) {
+    throw new RobotsDisallowedError(`robots.txt disallows ${u.pathname}${u.search}`);
+  }
+}
+
+let rateChain: Promise<void> = Promise.resolve();
+let lastRequestAt = 0;
+
+function waitForSlot(): Promise<void> {
+  const gap = Number(process.env.MTGTOP8_MIN_DELAY_MS || 0);
+  if (!(gap > 0)) return Promise.resolve();
+  const next = rateChain.then(async () => {
+    const wait = lastRequestAt + gap - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastRequestAt = Date.now();
+  });
+  rateChain = next.catch(() => undefined);
+  return next;
+}
+
+function userAgent(): string {
+  return process.env.MTGTOP8_USER_AGENT || USER_AGENT;
+}
+
+async function cachePath(url: string): Promise<string | null> {
+  const dir = process.env.MTGTOP8_CACHE_DIR;
+  if (!dir) return null;
+  const { createHash } = await import("node:crypto");
+  const path = await import("node:path");
+  return path.join(dir, createHash("sha256").update(url).digest("hex") + ".txt");
+}
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const file = await cachePath(url);
+  const fs = file ? await import("node:fs/promises") : null;
+  if (file && fs) {
+    try {
+      const st = await fs.stat(file);
+      const ttlMs = Number(process.env.MTGTOP8_CACHE_TTL_HOURS || 24) * 3_600_000;
+      if (Date.now() - st.mtimeMs < ttlMs) {
+        return new Response(await fs.readFile(file, "utf8"), { status: 200 });
+      }
+    } catch {
+      /* cache miss */
+    }
+  }
+  await assertRobotsAllows(url);
+  await waitForSlot();
+  const headers = { ...(options.headers as Record<string, string> | undefined), "User-Agent": userAgent() };
+  const response = await rawFetchWithTimeout(url, { ...options, headers });
+  if (!file || !fs || !response.ok) return response;
+  const body = await response.text();
+  try {
+    await fs.mkdir((await import("node:path")).dirname(file), { recursive: true });
+    await fs.writeFile(file, body, "utf8");
+  } catch {
+    /* cache is best-effort */
+  }
+  return new Response(body, { status: response.status });
 }
 
 function bar(current: number, total: number, width = 20): string {

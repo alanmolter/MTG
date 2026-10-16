@@ -50,3 +50,17 @@ describe("importMTGTop8Decks", () => {
     expect(result.decksImported).toBe(1);
   });
 });
+
+describe("robots.txt helpers", () => {
+  it("applies User-agent: * rules with longest-match allow", async () => {
+    const { parseRobots, isPathAllowed } = await import("./mtgtop8Scraper");
+    const rules = parseRobots(
+      "User-agent: bad\nDisallow: /\n\nUser-agent: *\nDisallow: /search\nDisallow: /private/*.php$\nAllow: /search/ok\n"
+    );
+    expect(isPathAllowed(rules, "/format?f=MO")).toBe(true);
+    expect(isPathAllowed(rules, "/search?x=1")).toBe(false);
+    expect(isPathAllowed(rules, "/search/ok")).toBe(true);
+    expect(isPathAllowed(rules, "/private/a.php")).toBe(false);
+    expect(isPathAllowed(rules, "/private/a.phpx")).toBe(true);
+  });
+});
