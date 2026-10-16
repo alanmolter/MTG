@@ -1,0 +1,23 @@
+About
+Name Mono-Red Burn
+
+Deck
+4 Bomat Courier (KLD) 199
+4 Soul-Scar Mage (AKH) 148
+4 Ghitu Lavarunner (DOM) 127
+4 Monastery Swiftspear (KTK) 118
+4 Viashino Pyromancer (M19) 166
+4 Light Up the Stage (RNA) 107
+4 Bonecrusher Giant (ELD) 115
+4 Wild Slash (Q06) 8
+4 Lightning Strike (M19) 152
+4 Wizard's Lightning (DOM) 152
+4 Ramunap Ruins (HOU) 181
+16 Mountain (MID) 383
+
+Sideboard
+1 Chandra, Torch of Defiance (Q06) 6
+4 Roiling Vortex (ZNR) 156
+3 Goblin Chainwhirler (DOM) 129
+4 Searing Blood (Q06) 7
+3 Magma Spray (AKH) 141

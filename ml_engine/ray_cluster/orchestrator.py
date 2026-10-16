@@ -213,14 +213,10 @@ def build_impala_config(
     Arena pool plumbing
     -------------------
     When `arena_only` is True (or `TRAINING_POOL_ARENA_ONLY=1` is set in the
-    environment if the arg is left at None), we resolve a pair of Arena-legal
-    decklists via `arena_pool.resolve_decks_for_training()` and stuff them
-    into `env_config["agent_deck"]` / `["opponent_deck"]`. The Forge bridge's
-    `parseDeck()` uses the literal decklist instead of falling back to the
-    hardcoded paper-Modern `AggroRed`/`Control` lists (which contain
-    Snapcaster Mage, Goblin Guide, etc. — not on Arena). This is the
-    Python-side mirror of `TRAINING_POOL_ARENA_ONLY` in
-    `server/scripts/utils/poolFilter.ts`.
+    environment if the arg is left at None), we resolve a pair of decks from
+    the train split via `arena_pool.resolve_decks_for_training()` and stuff
+    them into `env_config["agent_deck"]` / `["opponent_deck"]`. Each episode
+    then resamples that split. Holdout lists are not used here.
 
     Ray 2.x / new API stack note
     ----------------------------

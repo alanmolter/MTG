@@ -1,0 +1,2326 @@
+{
+  "source": "Card-Forge/forge forge-gui/res/cardsfolder on master, fetched 2026-10-16. Fields kept: Forge Name, ManaCost, Types, and the colors a land face can add (basic types, {WUBRG} symbols on land faces, Produced$ Any / 'mana of any color'). Oracle text is not stored. forge_slug is the cardsfolder filename without .txt; modal and adventure cards use both face names in that filename while Name is the front face.",
+  "forge_repo": "https://github.com/Card-Forge/forge",
+  "forge_path": "forge-gui/res/cardsfolder/<first-letter>/<forge_slug>.txt",
+  "cards": [
+    {
+      "name": "Abrade",
+      "mana_cost": "1 R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "abrade",
+      "aliases": []
+    },
+    {
+      "name": "Aether Gust",
+      "mana_cost": "1 U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "aether_gust",
+      "aliases": []
+    },
+    {
+      "name": "Agonizing Remorse",
+      "mana_cost": "1 B",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "agonizing_remorse",
+      "aliases": []
+    },
+    {
+      "name": "Akoum Hellhound",
+      "mana_cost": "R",
+      "types": "Creature Elemental Dog",
+      "produces": [],
+      "forge_slug": "akoum_hellhound",
+      "aliases": []
+    },
+    {
+      "name": "All That Glitters",
+      "mana_cost": "1 W",
+      "types": "Enchantment Aura",
+      "produces": [],
+      "forge_slug": "all_that_glitters",
+      "aliases": []
+    },
+    {
+      "name": "Alseid of Life's Bounty",
+      "mana_cost": "W",
+      "types": "Enchantment Creature Nymph",
+      "produces": [],
+      "forge_slug": "alseid_of_lifes_bounty",
+      "aliases": []
+    },
+    {
+      "name": "Anax, Hardened in the Forge",
+      "mana_cost": "1 R R",
+      "types": "Legendary Enchantment Creature Demigod",
+      "produces": [],
+      "forge_slug": "anax_hardened_in_the_forge",
+      "aliases": []
+    },
+    {
+      "name": "Anje, Maid of Dishonor",
+      "mana_cost": "2 B R",
+      "types": "Legendary Creature Vampire",
+      "produces": [],
+      "forge_slug": "anje_maid_of_dishonor",
+      "aliases": []
+    },
+    {
+      "name": "Apostle of Purifying Light",
+      "mana_cost": "1 W",
+      "types": "Creature Human Cleric",
+      "produces": [],
+      "forge_slug": "apostle_of_purifying_light",
+      "aliases": []
+    },
+    {
+      "name": "Archon of Sun's Grace",
+      "mana_cost": "2 W W",
+      "types": "Creature Archon",
+      "produces": [],
+      "forge_slug": "archon_of_suns_grace",
+      "aliases": []
+    },
+    {
+      "name": "Arclight Phoenix",
+      "mana_cost": "3 R",
+      "types": "Creature Phoenix",
+      "produces": [],
+      "forge_slug": "arclight_phoenix",
+      "aliases": []
+    },
+    {
+      "name": "Baleful Mastery",
+      "mana_cost": "3 B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "baleful_mastery",
+      "aliases": []
+    },
+    {
+      "name": "Banishing Light",
+      "mana_cost": "2 W",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "banishing_light",
+      "aliases": []
+    },
+    {
+      "name": "Behold the Multiverse",
+      "mana_cost": "3 U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "behold_the_multiverse",
+      "aliases": []
+    },
+    {
+      "name": "Blackbloom Rogue",
+      "mana_cost": "2 B",
+      "types": "Creature Human Rogue",
+      "produces": [
+        "B"
+      ],
+      "forge_slug": "blackbloom_rogue_blackbloom_bog",
+      "aliases": [
+        "Blackbloom Rogue // Blackbloom Bog"
+      ]
+    },
+    {
+      "name": "Blightstep Pathway",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "R"
+      ],
+      "forge_slug": "blightstep_pathway_searstep_pathway",
+      "aliases": [
+        "Blightstep Pathway // Searstep Pathway"
+      ]
+    },
+    {
+      "name": "Blood on the Snow",
+      "mana_cost": "4 B B",
+      "types": "Snow Sorcery",
+      "produces": [],
+      "forge_slug": "blood_on_the_snow",
+      "aliases": []
+    },
+    {
+      "name": "Bloodchief's Thirst",
+      "mana_cost": "B",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "bloodchiefs_thirst",
+      "aliases": []
+    },
+    {
+      "name": "Bloodfell Caves",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "R"
+      ],
+      "forge_slug": "bloodfell_caves",
+      "aliases": []
+    },
+    {
+      "name": "Bloodsoaked Champion",
+      "mana_cost": "B",
+      "types": "Creature Human Warrior",
+      "produces": [],
+      "forge_slug": "bloodsoaked_champion",
+      "aliases": []
+    },
+    {
+      "name": "Bloodtithe Harvester",
+      "mana_cost": "B R",
+      "types": "Creature Vampire",
+      "produces": [],
+      "forge_slug": "bloodtithe_harvester",
+      "aliases": []
+    },
+    {
+      "name": "Bloodvial Purveyor",
+      "mana_cost": "2 B B",
+      "types": "Creature Vampire",
+      "produces": [],
+      "forge_slug": "bloodvial_purveyor",
+      "aliases": []
+    },
+    {
+      "name": "Bomat Courier",
+      "mana_cost": "1",
+      "types": "Artifact Creature Construct",
+      "produces": [],
+      "forge_slug": "bomat_courier",
+      "aliases": []
+    },
+    {
+      "name": "Bonecrusher Giant",
+      "mana_cost": "2 R",
+      "types": "Creature Giant",
+      "produces": [],
+      "forge_slug": "bonecrusher_giant_stomp",
+      "aliases": [
+        "Bonecrusher Giant // Stomp"
+      ]
+    },
+    {
+      "name": "Brazen Borrower",
+      "mana_cost": "1 U U",
+      "types": "Creature Faerie Rogue",
+      "produces": [],
+      "forge_slug": "brazen_borrower_petty_theft",
+      "aliases": [
+        "Brazen Borrower // Petty Theft"
+      ]
+    },
+    {
+      "name": "Briarbridge Tracker",
+      "mana_cost": "2 G",
+      "types": "Creature Human Scout",
+      "produces": [],
+      "forge_slug": "briarbridge_tracker",
+      "aliases": []
+    },
+    {
+      "name": "Burning Hands",
+      "mana_cost": "1 R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "burning_hands",
+      "aliases": []
+    },
+    {
+      "name": "Callous Bloodmage",
+      "mana_cost": "2 B",
+      "types": "Creature Vampire Warlock",
+      "produces": [],
+      "forge_slug": "callous_bloodmage",
+      "aliases": []
+    },
+    {
+      "name": "Cartouche of Solidarity",
+      "mana_cost": "W",
+      "types": "Enchantment Aura Cartouche",
+      "produces": [],
+      "forge_slug": "cartouche_of_solidarity",
+      "aliases": []
+    },
+    {
+      "name": "Castle Embereth",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "R"
+      ],
+      "forge_slug": "castle_embereth",
+      "aliases": []
+    },
+    {
+      "name": "Cathar Commando",
+      "mana_cost": "1 W",
+      "types": "Creature Human Soldier",
+      "produces": [],
+      "forge_slug": "cathar_commando",
+      "aliases": []
+    },
+    {
+      "name": "Caves of Koilos",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "W"
+      ],
+      "forge_slug": "caves_of_koilos",
+      "aliases": []
+    },
+    {
+      "name": "Chainweb Aracnir",
+      "mana_cost": "G",
+      "types": "Creature Spider",
+      "produces": [],
+      "forge_slug": "chainweb_aracnir",
+      "aliases": []
+    },
+    {
+      "name": "Chandra, Torch of Defiance",
+      "mana_cost": "2 R R",
+      "types": "Legendary Planeswalker Chandra",
+      "produces": [],
+      "forge_slug": "chandra_torch_of_defiance",
+      "aliases": []
+    },
+    {
+      "name": "Chart a Course",
+      "mana_cost": "1 U",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "chart_a_course",
+      "aliases": []
+    },
+    {
+      "name": "Cindervines",
+      "mana_cost": "R G",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "cindervines",
+      "aliases": []
+    },
+    {
+      "name": "Clarion Spirit",
+      "mana_cost": "1 W",
+      "types": "Creature Spirit",
+      "produces": [],
+      "forge_slug": "clarion_spirit",
+      "aliases": []
+    },
+    {
+      "name": "Cling to Dust",
+      "mana_cost": "B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "cling_to_dust",
+      "aliases": []
+    },
+    {
+      "name": "Codespell Cleric",
+      "mana_cost": "W",
+      "types": "Creature Human Cleric",
+      "produces": [],
+      "forge_slug": "codespell_cleric",
+      "aliases": []
+    },
+    {
+      "name": "Concealed Courtyard",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "W"
+      ],
+      "forge_slug": "concealed_courtyard",
+      "aliases": []
+    },
+    {
+      "name": "Confounding Conundrum",
+      "mana_cost": "1 U",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "confounding_conundrum",
+      "aliases": []
+    },
+    {
+      "name": "Consider",
+      "mana_cost": "U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "consider",
+      "aliases": []
+    },
+    {
+      "name": "Containment Priest",
+      "mana_cost": "1 W",
+      "types": "Creature Human Cleric",
+      "produces": [],
+      "forge_slug": "containment_priest",
+      "aliases": []
+    },
+    {
+      "name": "Crackling Drake",
+      "mana_cost": "U U R R",
+      "types": "Creature Drake",
+      "produces": [],
+      "forge_slug": "crackling_drake",
+      "aliases": []
+    },
+    {
+      "name": "Crippling Fear",
+      "mana_cost": "2 B B",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "crippling_fear",
+      "aliases": []
+    },
+    {
+      "name": "Dauntless Bodyguard",
+      "mana_cost": "W",
+      "types": "Creature Human Knight",
+      "produces": [],
+      "forge_slug": "dauntless_bodyguard",
+      "aliases": []
+    },
+    {
+      "name": "Dead Weight",
+      "mana_cost": "B",
+      "types": "Enchantment Aura",
+      "produces": [],
+      "forge_slug": "dead_weight",
+      "aliases": []
+    },
+    {
+      "name": "Den of the Bugbear",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "R"
+      ],
+      "forge_slug": "den_of_the_bugbear",
+      "aliases": []
+    },
+    {
+      "name": "Devout Decree",
+      "mana_cost": "1 W",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "devout_decree",
+      "aliases": []
+    },
+    {
+      "name": "Dire Tactics",
+      "mana_cost": "W B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "dire_tactics",
+      "aliases": []
+    },
+    {
+      "name": "Dismal Backwater",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "U"
+      ],
+      "forge_slug": "dismal_backwater",
+      "aliases": []
+    },
+    {
+      "name": "Dominating Vampire",
+      "mana_cost": "1 R R",
+      "types": "Creature Vampire",
+      "produces": [],
+      "forge_slug": "dominating_vampire",
+      "aliases": []
+    },
+    {
+      "name": "Doomskar",
+      "mana_cost": "3 W W",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "doomskar",
+      "aliases": []
+    },
+    {
+      "name": "Dream Trawler",
+      "mana_cost": "2 W W U U",
+      "types": "Creature Sphinx",
+      "produces": [],
+      "forge_slug": "dream_trawler",
+      "aliases": []
+    },
+    {
+      "name": "Drown in the Loch",
+      "mana_cost": "U B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "drown_in_the_loch",
+      "aliases": []
+    },
+    {
+      "name": "Duress",
+      "mana_cost": "B",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "duress",
+      "aliases": []
+    },
+    {
+      "name": "Eliminate",
+      "mana_cost": "1 B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "eliminate",
+      "aliases": []
+    },
+    {
+      "name": "Elite Spellbinder",
+      "mana_cost": "2 W",
+      "types": "Creature Human Cleric",
+      "produces": [],
+      "forge_slug": "elite_spellbinder",
+      "aliases": []
+    },
+    {
+      "name": "Elspeth Conquers Death",
+      "mana_cost": "3 W W",
+      "types": "Enchantment Saga",
+      "produces": [],
+      "forge_slug": "elspeth_conquers_death",
+      "aliases": []
+    },
+    {
+      "name": "Elvish Mystic",
+      "mana_cost": "G",
+      "types": "Creature Elf Druid",
+      "produces": [],
+      "forge_slug": "elvish_mystic",
+      "aliases": []
+    },
+    {
+      "name": "Embercleave",
+      "mana_cost": "4 R R",
+      "types": "Legendary Artifact Equipment",
+      "produces": [],
+      "forge_slug": "embercleave",
+      "aliases": []
+    },
+    {
+      "name": "Emeria's Call",
+      "mana_cost": "4 W W W",
+      "types": "Sorcery",
+      "produces": [
+        "W"
+      ],
+      "forge_slug": "emerias_call_emeria_shattered_skyclave",
+      "aliases": [
+        "Emeria's Call // Emeria, Shattered Skyclave"
+      ]
+    },
+    {
+      "name": "Empyrean Eagle",
+      "mana_cost": "1 W U",
+      "types": "Creature Bird Spirit",
+      "produces": [],
+      "forge_slug": "empyrean_eagle",
+      "aliases": []
+    },
+    {
+      "name": "Essence Scatter",
+      "mana_cost": "1 U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "essence_scatter",
+      "aliases": []
+    },
+    {
+      "name": "Ethereal Armor",
+      "mana_cost": "W",
+      "types": "Enchantment Aura",
+      "produces": [],
+      "forge_slug": "ethereal_armor",
+      "aliases": []
+    },
+    {
+      "name": "Evolving Wilds",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [],
+      "forge_slug": "evolving_wilds",
+      "aliases": []
+    },
+    {
+      "name": "Expressive Iteration",
+      "mana_cost": "U R",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "expressive_iteration",
+      "aliases": []
+    },
+    {
+      "name": "Faceless Haven",
+      "mana_cost": "no cost",
+      "types": "Snow Land",
+      "produces": [],
+      "forge_slug": "faceless_haven",
+      "aliases": []
+    },
+    {
+      "name": "Falkenrath Forebear",
+      "mana_cost": "2 B",
+      "types": "Creature Vampire",
+      "produces": [],
+      "forge_slug": "falkenrath_forebear",
+      "aliases": []
+    },
+    {
+      "name": "Fateful Absence",
+      "mana_cost": "1 W",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "fateful_absence",
+      "aliases": []
+    },
+    {
+      "name": "Fervent Champion",
+      "mana_cost": "R",
+      "types": "Creature Human Knight",
+      "produces": [],
+      "forge_slug": "fervent_champion",
+      "aliases": []
+    },
+    {
+      "name": "Field of Ruin",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [],
+      "forge_slug": "field_of_ruin",
+      "aliases": []
+    },
+    {
+      "name": "Fiery Impulse",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "fiery_impulse",
+      "aliases": []
+    },
+    {
+      "name": "Flame-Blessed Bolt",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "flame_blessed_bolt",
+      "aliases": []
+    },
+    {
+      "name": "Florian, Voldaren Scion",
+      "mana_cost": "1 B R",
+      "types": "Legendary Creature Vampire Noble",
+      "produces": [],
+      "forge_slug": "florian_voldaren_scion",
+      "aliases": []
+    },
+    {
+      "name": "Forest",
+      "mana_cost": "no cost",
+      "types": "Basic Land Forest",
+      "produces": [
+        "G"
+      ],
+      "forge_slug": "forest",
+      "aliases": []
+    },
+    {
+      "name": "Froghemoth",
+      "mana_cost": "3 G G",
+      "types": "Creature Frog Horror",
+      "produces": [],
+      "forge_slug": "froghemoth",
+      "aliases": []
+    },
+    {
+      "name": "Garruk, Unleashed",
+      "mana_cost": "2 G G",
+      "types": "Legendary Planeswalker Garruk",
+      "produces": [],
+      "forge_slug": "garruk_unleashed",
+      "aliases": []
+    },
+    {
+      "name": "Gemrazer",
+      "mana_cost": "3 G",
+      "types": "Creature Beast",
+      "produces": [],
+      "forge_slug": "gemrazer",
+      "aliases": []
+    },
+    {
+      "name": "Ghitu Lavarunner",
+      "mana_cost": "R",
+      "types": "Creature Human Wizard",
+      "produces": [],
+      "forge_slug": "ghitu_lavarunner",
+      "aliases": []
+    },
+    {
+      "name": "Giant Killer",
+      "mana_cost": "W",
+      "types": "Creature Human Peasant",
+      "produces": [],
+      "forge_slug": "giant_killer_chop_down",
+      "aliases": [
+        "Giant Killer // Chop Down"
+      ]
+    },
+    {
+      "name": "Glacial Fortress",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "U",
+        "W"
+      ],
+      "forge_slug": "glacial_fortress",
+      "aliases": []
+    },
+    {
+      "name": "Glass Casket",
+      "mana_cost": "1 W",
+      "types": "Artifact",
+      "produces": [],
+      "forge_slug": "glass_casket",
+      "aliases": []
+    },
+    {
+      "name": "Glorybringer",
+      "mana_cost": "3 R R",
+      "types": "Creature Dragon",
+      "produces": [],
+      "forge_slug": "glorybringer",
+      "aliases": []
+    },
+    {
+      "name": "Goblin Chainwhirler",
+      "mana_cost": "R R R",
+      "types": "Creature Goblin Warrior",
+      "produces": [],
+      "forge_slug": "goblin_chainwhirler",
+      "aliases": []
+    },
+    {
+      "name": "Godless Shrine",
+      "mana_cost": "no cost",
+      "types": "Land Plains Swamp",
+      "produces": [
+        "B",
+        "W"
+      ],
+      "forge_slug": "godless_shrine",
+      "aliases": []
+    },
+    {
+      "name": "Goldspan Dragon",
+      "mana_cost": "3 R R",
+      "types": "Creature Dragon",
+      "produces": [],
+      "forge_slug": "goldspan_dragon",
+      "aliases": []
+    },
+    {
+      "name": "Graveyard Trespasser",
+      "mana_cost": "2 B",
+      "types": "Creature Human Werewolf",
+      "produces": [],
+      "forge_slug": "graveyard_trespasser_graveyard_glutton",
+      "aliases": [
+        "Graveyard Trespasser // Graveyard Glutton"
+      ]
+    },
+    {
+      "name": "Gryff's Boon",
+      "mana_cost": "W",
+      "types": "Enchantment Aura",
+      "produces": [],
+      "forge_slug": "gryffs_boon",
+      "aliases": []
+    },
+    {
+      "name": "Halana and Alena, Partners",
+      "mana_cost": "2 R G",
+      "types": "Legendary Creature Human Ranger",
+      "produces": [],
+      "forge_slug": "halana_and_alena_partners",
+      "aliases": []
+    },
+    {
+      "name": "Hall of Storm Giants",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "U"
+      ],
+      "forge_slug": "hall_of_storm_giants",
+      "aliases": []
+    },
+    {
+      "name": "Hateful Eidolon",
+      "mana_cost": "B",
+      "types": "Enchantment Creature Spirit",
+      "produces": [],
+      "forge_slug": "hateful_eidolon",
+      "aliases": []
+    },
+    {
+      "name": "Heartless Act",
+      "mana_cost": "1 B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "heartless_act",
+      "aliases": []
+    },
+    {
+      "name": "Henrika Domnathi",
+      "mana_cost": "2 B B",
+      "types": "Legendary Creature Vampire",
+      "produces": [],
+      "forge_slug": "henrika_domnathi_henrika_infernal_seer",
+      "aliases": [
+        "Henrika Domnathi // Henrika, Infernal Seer"
+      ]
+    },
+    {
+      "name": "Hero's Downfall",
+      "mana_cost": "1 B B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "heros_downfall",
+      "aliases": []
+    },
+    {
+      "name": "Hullbreaker Horror",
+      "mana_cost": "5 U U",
+      "types": "Creature Kraken Horror",
+      "produces": [],
+      "forge_slug": "hullbreaker_horror",
+      "aliases": []
+    },
+    {
+      "name": "Hushbringer",
+      "mana_cost": "1 W",
+      "types": "Creature Faerie",
+      "produces": [],
+      "forge_slug": "hushbringer",
+      "aliases": []
+    },
+    {
+      "name": "Ice Tunnel",
+      "mana_cost": "no cost",
+      "types": "Snow Land Island Swamp",
+      "produces": [
+        "B",
+        "U"
+      ],
+      "forge_slug": "ice_tunnel",
+      "aliases": []
+    },
+    {
+      "name": "Immersturm Predator",
+      "mana_cost": "2 B R",
+      "types": "Creature Vampire Dragon",
+      "produces": [],
+      "forge_slug": "immersturm_predator",
+      "aliases": []
+    },
+    {
+      "name": "Imperial Recovery Unit",
+      "mana_cost": "2 W",
+      "types": "Artifact Vehicle",
+      "produces": [],
+      "forge_slug": "imperial_recovery_unit",
+      "aliases": []
+    },
+    {
+      "name": "Infernal Grasp",
+      "mana_cost": "1 B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "infernal_grasp",
+      "aliases": []
+    },
+    {
+      "name": "Into the Story",
+      "mana_cost": "5 U U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "into_the_story",
+      "aliases": []
+    },
+    {
+      "name": "Intrepid Adversary",
+      "mana_cost": "1 W",
+      "types": "Creature Human Scout",
+      "produces": [],
+      "forge_slug": "intrepid_adversary",
+      "aliases": []
+    },
+    {
+      "name": "Invasive Surgery",
+      "mana_cost": "U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "invasive_surgery",
+      "aliases": []
+    },
+    {
+      "name": "Island",
+      "mana_cost": "no cost",
+      "types": "Basic Land Island",
+      "produces": [
+        "U"
+      ],
+      "forge_slug": "island",
+      "aliases": []
+    },
+    {
+      "name": "Isolate",
+      "mana_cost": "W",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "isolate",
+      "aliases": []
+    },
+    {
+      "name": "Iymrith, Desert Doom",
+      "mana_cost": "3 U U",
+      "types": "Legendary Creature Dragon",
+      "produces": [],
+      "forge_slug": "iymrith_desert_doom",
+      "aliases": []
+    },
+    {
+      "name": "Izzet Charm",
+      "mana_cost": "U R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "izzet_charm",
+      "aliases": []
+    },
+    {
+      "name": "Jaspera Sentinel",
+      "mana_cost": "G",
+      "types": "Creature Elf Rogue",
+      "produces": [],
+      "forge_slug": "jaspera_sentinel",
+      "aliases": []
+    },
+    {
+      "name": "Jwari Disruption",
+      "mana_cost": "1 U",
+      "types": "Instant",
+      "produces": [
+        "U"
+      ],
+      "forge_slug": "jwari_disruption_jwari_ruins",
+      "aliases": [
+        "Jwari Disruption // Jwari Ruins"
+      ]
+    },
+    {
+      "name": "Kabira Takedown",
+      "mana_cost": "1 W",
+      "types": "Instant",
+      "produces": [
+        "W"
+      ],
+      "forge_slug": "kabira_takedown_kabira_plateau",
+      "aliases": [
+        "Kabira Takedown // Kabira Plateau"
+      ]
+    },
+    {
+      "name": "Kappa Tech-Wrecker",
+      "mana_cost": "1 G",
+      "types": "Creature Turtle Ninja",
+      "produces": [],
+      "forge_slug": "kappa_tech_wrecker",
+      "aliases": []
+    },
+    {
+      "name": "Karametra's Blessing",
+      "mana_cost": "W",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "karametras_blessing",
+      "aliases": []
+    },
+    {
+      "name": "Kargan Intimidator",
+      "mana_cost": "1 R",
+      "types": "Creature Human Warrior",
+      "produces": [],
+      "forge_slug": "kargan_intimidator",
+      "aliases": []
+    },
+    {
+      "name": "Karplusan Forest",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "G",
+        "R"
+      ],
+      "forge_slug": "karplusan_forest",
+      "aliases": []
+    },
+    {
+      "name": "Kazandu Mammoth",
+      "mana_cost": "1 G G",
+      "types": "Creature Elephant",
+      "produces": [
+        "G"
+      ],
+      "forge_slug": "kazandu_mammoth_kazandu_valley",
+      "aliases": [
+        "Kazandu Mammoth // Kazandu Valley"
+      ]
+    },
+    {
+      "name": "Khalni Ambush",
+      "mana_cost": "2 G",
+      "types": "Instant",
+      "produces": [
+        "G"
+      ],
+      "forge_slug": "khalni_ambush_khalni_territory",
+      "aliases": [
+        "Khalni Ambush // Khalni Territory"
+      ]
+    },
+    {
+      "name": "Kitesail Freebooter",
+      "mana_cost": "1 B",
+      "types": "Creature Human Pirate",
+      "produces": [],
+      "forge_slug": "kitesail_freebooter",
+      "aliases": []
+    },
+    {
+      "name": "Lair of the Hydra",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "G"
+      ],
+      "forge_slug": "lair_of_the_hydra",
+      "aliases": []
+    },
+    {
+      "name": "Lantern of the Lost",
+      "mana_cost": "1",
+      "types": "Artifact",
+      "produces": [],
+      "forge_slug": "lantern_of_the_lost",
+      "aliases": []
+    },
+    {
+      "name": "Lava Coil",
+      "mana_cost": "1 R",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "lava_coil",
+      "aliases": []
+    },
+    {
+      "name": "Light Up the Night",
+      "mana_cost": "X R",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "light_up_the_night",
+      "aliases": []
+    },
+    {
+      "name": "Light Up the Stage",
+      "mana_cost": "2 R",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "light_up_the_stage",
+      "aliases": []
+    },
+    {
+      "name": "Light of Hope",
+      "mana_cost": "W",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "light_of_hope",
+      "aliases": []
+    },
+    {
+      "name": "Lightning Axe",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "lightning_axe",
+      "aliases": []
+    },
+    {
+      "name": "Lightning Strike",
+      "mana_cost": "1 R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "lightning_strike",
+      "aliases": []
+    },
+    {
+      "name": "Llanowar Elves",
+      "mana_cost": "G",
+      "types": "Creature Elf Druid",
+      "produces": [],
+      "forge_slug": "llanowar_elves",
+      "aliases": []
+    },
+    {
+      "name": "Lofty Denial",
+      "mana_cost": "1 U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "lofty_denial",
+      "aliases": []
+    },
+    {
+      "name": "Lovestruck Beast",
+      "mana_cost": "2 G",
+      "types": "Creature Beast Noble",
+      "produces": [],
+      "forge_slug": "lovestruck_beast_hearts_desire",
+      "aliases": [
+        "Lovestruck Beast // Heart's Desire"
+      ]
+    },
+    {
+      "name": "Loyal Warhound",
+      "mana_cost": "1 W",
+      "types": "Creature Dog",
+      "produces": [],
+      "forge_slug": "loyal_warhound",
+      "aliases": []
+    },
+    {
+      "name": "Luminarch Aspirant",
+      "mana_cost": "1 W",
+      "types": "Creature Human Cleric",
+      "produces": [],
+      "forge_slug": "luminarch_aspirant",
+      "aliases": []
+    },
+    {
+      "name": "Lurrus of the Dream-Den",
+      "mana_cost": "1 WB WB",
+      "types": "Legendary Creature Cat Nightmare",
+      "produces": [],
+      "forge_slug": "lurrus_of_the_dream_den",
+      "aliases": []
+    },
+    {
+      "name": "Magda, Brazen Outlaw",
+      "mana_cost": "1 R",
+      "types": "Legendary Creature Dwarf Berserker",
+      "produces": [],
+      "forge_slug": "magda_brazen_outlaw",
+      "aliases": []
+    },
+    {
+      "name": "Magma Spray",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "magma_spray",
+      "aliases": []
+    },
+    {
+      "name": "Malakir Rebirth",
+      "mana_cost": "B",
+      "types": "Instant",
+      "produces": [
+        "B"
+      ],
+      "forge_slug": "malakir_rebirth_malakir_mire",
+      "aliases": [
+        "Malakir Rebirth // Malakir Mire"
+      ]
+    },
+    {
+      "name": "March of Wretched Sorrow",
+      "mana_cost": "X B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "march_of_wretched_sorrow",
+      "aliases": []
+    },
+    {
+      "name": "Maul of the Skyclaves",
+      "mana_cost": "2 W",
+      "types": "Artifact Equipment",
+      "produces": [],
+      "forge_slug": "maul_of_the_skyclaves",
+      "aliases": []
+    },
+    {
+      "name": "Mausoleum Wanderer",
+      "mana_cost": "U",
+      "types": "Creature Spirit",
+      "produces": [],
+      "forge_slug": "mausoleum_wanderer",
+      "aliases": []
+    },
+    {
+      "name": "Memory Deluge",
+      "mana_cost": "2 U U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "memory_deluge",
+      "aliases": []
+    },
+    {
+      "name": "Merfolk Windrobber",
+      "mana_cost": "U",
+      "types": "Creature Merfolk Rogue",
+      "produces": [],
+      "forge_slug": "merfolk_windrobber",
+      "aliases": []
+    },
+    {
+      "name": "Mischievous Catgeist",
+      "mana_cost": "1 U",
+      "types": "Creature Cat Spirit",
+      "produces": [],
+      "forge_slug": "mischievous_catgeist_catlike_curiosity",
+      "aliases": [
+        "Mischievous Catgeist // Catlike Curiosity"
+      ]
+    },
+    {
+      "name": "Mizzium Mortars",
+      "mana_cost": "1 R",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "mizzium_mortars",
+      "aliases": []
+    },
+    {
+      "name": "Monastery Swiftspear",
+      "mana_cost": "R",
+      "types": "Creature Human Monk",
+      "produces": [],
+      "forge_slug": "monastery_swiftspear",
+      "aliases": []
+    },
+    {
+      "name": "Monk of the Open Hand",
+      "mana_cost": "W",
+      "types": "Creature Elf Monk",
+      "produces": [],
+      "forge_slug": "monk_of_the_open_hand",
+      "aliases": []
+    },
+    {
+      "name": "Mountain",
+      "mana_cost": "no cost",
+      "types": "Basic Land Mountain",
+      "produces": [
+        "R"
+      ],
+      "forge_slug": "mountain",
+      "aliases": []
+    },
+    {
+      "name": "Mukotai Soulripper",
+      "mana_cost": "1 B",
+      "types": "Artifact Vehicle",
+      "produces": [],
+      "forge_slug": "mukotai_soulripper",
+      "aliases": []
+    },
+    {
+      "name": "Mutavault",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [],
+      "forge_slug": "mutavault",
+      "aliases": []
+    },
+    {
+      "name": "Mystical Dispute",
+      "mana_cost": "2 U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "mystical_dispute",
+      "aliases": []
+    },
+    {
+      "name": "Narset, Parter of Veils",
+      "mana_cost": "1 U U",
+      "types": "Legendary Planeswalker Narset",
+      "produces": [],
+      "forge_slug": "narset_parter_of_veils",
+      "aliases": []
+    },
+    {
+      "name": "Negate",
+      "mana_cost": "1 U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "negate",
+      "aliases": []
+    },
+    {
+      "name": "Neutralize",
+      "mana_cost": "1 U U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "neutralize",
+      "aliases": []
+    },
+    {
+      "name": "Nighthawk Scavenger",
+      "mana_cost": "1 B B",
+      "types": "Creature Vampire Rogue",
+      "produces": [],
+      "forge_slug": "nighthawk_scavenger",
+      "aliases": []
+    },
+    {
+      "name": "Oakhame Adversary",
+      "mana_cost": "3 G",
+      "types": "Creature Elf Warrior",
+      "produces": [],
+      "forge_slug": "oakhame_adversary",
+      "aliases": []
+    },
+    {
+      "name": "Omen of the Sea",
+      "mana_cost": "1 U",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "omen_of_the_sea",
+      "aliases": []
+    },
+    {
+      "name": "Oni-Cult Anvil",
+      "mana_cost": "B R",
+      "types": "Artifact",
+      "produces": [],
+      "forge_slug": "oni_cult_anvil",
+      "aliases": []
+    },
+    {
+      "name": "Opt",
+      "mana_cost": "U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "opt",
+      "aliases": []
+    },
+    {
+      "name": "Paladin Class",
+      "mana_cost": "W",
+      "types": "Enchantment Class",
+      "produces": [],
+      "forge_slug": "paladin_class",
+      "aliases": []
+    },
+    {
+      "name": "Parasitic Grasp",
+      "mana_cost": "1 B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "parasitic_grasp",
+      "aliases": []
+    },
+    {
+      "name": "Pestilent Haze",
+      "mana_cost": "1 B B",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "pestilent_haze",
+      "aliases": []
+    },
+    {
+      "name": "Pieces of the Puzzle",
+      "mana_cost": "2 U",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "pieces_of_the_puzzle",
+      "aliases": []
+    },
+    {
+      "name": "Plains",
+      "mana_cost": "no cost",
+      "types": "Basic Land Plains",
+      "produces": [
+        "W"
+      ],
+      "forge_slug": "plains",
+      "aliases": []
+    },
+    {
+      "name": "Portable Hole",
+      "mana_cost": "W",
+      "types": "Artifact",
+      "produces": [],
+      "forge_slug": "portable_hole",
+      "aliases": []
+    },
+    {
+      "name": "Power Word Kill",
+      "mana_cost": "1 B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "power_word_kill",
+      "aliases": []
+    },
+    {
+      "name": "Primal Might",
+      "mana_cost": "X G",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "primal_might",
+      "aliases": []
+    },
+    {
+      "name": "Questing Beast",
+      "mana_cost": "2 G G",
+      "types": "Legendary Creature Beast",
+      "produces": [],
+      "forge_slug": "questing_beast",
+      "aliases": []
+    },
+    {
+      "name": "Rally the Ranks",
+      "mana_cost": "1 W",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "rally_the_ranks",
+      "aliases": []
+    },
+    {
+      "name": "Ram Through",
+      "mana_cost": "1 G",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "ram_through",
+      "aliases": []
+    },
+    {
+      "name": "Ramunap Ruins",
+      "mana_cost": "no cost",
+      "types": "Land Desert",
+      "produces": [
+        "R"
+      ],
+      "forge_slug": "ramunap_ruins",
+      "aliases": []
+    },
+    {
+      "name": "Ranger Class",
+      "mana_cost": "1 G",
+      "types": "Enchantment Class",
+      "produces": [],
+      "forge_slug": "ranger_class",
+      "aliases": []
+    },
+    {
+      "name": "Rankle, Master of Pranks",
+      "mana_cost": "2 B B",
+      "types": "Legendary Creature Faerie Rogue",
+      "produces": [],
+      "forge_slug": "rankle_master_of_pranks",
+      "aliases": []
+    },
+    {
+      "name": "Rattlechains",
+      "mana_cost": "1 U",
+      "types": "Creature Spirit",
+      "produces": [],
+      "forge_slug": "rattlechains",
+      "aliases": []
+    },
+    {
+      "name": "Ray of Enfeeblement",
+      "mana_cost": "B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "ray_of_enfeeblement",
+      "aliases": []
+    },
+    {
+      "name": "Redcap Melee",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "redcap_melee",
+      "aliases": []
+    },
+    {
+      "name": "Reidane, God of the Worthy",
+      "mana_cost": "2 W",
+      "types": "Legendary Creature God",
+      "produces": [],
+      "forge_slug": "reidane_god_of_the_worthy_valkmira_protectors_shield",
+      "aliases": [
+        "Reidane, God of the Worthy // Valkmira, Protector's Shield"
+      ]
+    },
+    {
+      "name": "Relic Robber",
+      "mana_cost": "2 R",
+      "types": "Creature Goblin Rogue",
+      "produces": [],
+      "forge_slug": "relic_robber",
+      "aliases": []
+    },
+    {
+      "name": "Remorseful Cleric",
+      "mana_cost": "1 W",
+      "types": "Creature Spirit Cleric",
+      "produces": [],
+      "forge_slug": "remorseful_cleric",
+      "aliases": []
+    },
+    {
+      "name": "Rending Volley",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "rending_volley",
+      "aliases": []
+    },
+    {
+      "name": "Return to Nature",
+      "mana_cost": "1 G",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "return_to_nature",
+      "aliases": []
+    },
+    {
+      "name": "Rimrock Knight",
+      "mana_cost": "1 R",
+      "types": "Creature Dwarf Knight",
+      "produces": [],
+      "forge_slug": "rimrock_knight_boulder_rush",
+      "aliases": [
+        "Rimrock Knight // Boulder Rush"
+      ]
+    },
+    {
+      "name": "Rockfall Vale",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "G",
+        "R"
+      ],
+      "forge_slug": "rockfall_vale",
+      "aliases": []
+    },
+    {
+      "name": "Roil Eruption",
+      "mana_cost": "1 R",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "roil_eruption",
+      "aliases": []
+    },
+    {
+      "name": "Roiling Vortex",
+      "mana_cost": "1 R",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "roiling_vortex",
+      "aliases": []
+    },
+    {
+      "name": "Run Afoul",
+      "mana_cost": "G",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "run_afoul",
+      "aliases": []
+    },
+    {
+      "name": "Saw It Coming",
+      "mana_cost": "1 U U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "saw_it_coming",
+      "aliases": []
+    },
+    {
+      "name": "Scavenging Ooze",
+      "mana_cost": "1 G",
+      "types": "Creature Ooze",
+      "produces": [],
+      "forge_slug": "scavenging_ooze",
+      "aliases": []
+    },
+    {
+      "name": "Seal Away",
+      "mana_cost": "1 W",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "seal_away",
+      "aliases": []
+    },
+    {
+      "name": "Searing Blood",
+      "mana_cost": "R R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "searing_blood",
+      "aliases": []
+    },
+    {
+      "name": "Secluded Courtyard",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "forge_slug": "secluded_courtyard",
+      "aliases": []
+    },
+    {
+      "name": "Selfless Samurai",
+      "mana_cost": "1 W",
+      "types": "Creature Fox Samurai",
+      "produces": [],
+      "forge_slug": "selfless_samurai",
+      "aliases": []
+    },
+    {
+      "name": "Selfless Savior",
+      "mana_cost": "W",
+      "types": "Creature Dog",
+      "produces": [],
+      "forge_slug": "selfless_savior",
+      "aliases": []
+    },
+    {
+      "name": "Selfless Spirit",
+      "mana_cost": "1 W",
+      "types": "Creature Spirit Cleric",
+      "produces": [],
+      "forge_slug": "selfless_spirit",
+      "aliases": []
+    },
+    {
+      "name": "Sentinel's Eyes",
+      "mana_cost": "W",
+      "types": "Enchantment Aura",
+      "produces": [],
+      "forge_slug": "sentinels_eyes",
+      "aliases": []
+    },
+    {
+      "name": "Shacklegeist",
+      "mana_cost": "1 U",
+      "types": "Creature Spirit",
+      "produces": [],
+      "forge_slug": "shacklegeist",
+      "aliases": []
+    },
+    {
+      "name": "Shark Typhoon",
+      "mana_cost": "5 U",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "shark_typhoon",
+      "aliases": []
+    },
+    {
+      "name": "Shatter the Sky",
+      "mana_cost": "2 W W",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "shatter_the_sky",
+      "aliases": []
+    },
+    {
+      "name": "Shatterskull Smashing",
+      "mana_cost": "X R R",
+      "types": "Sorcery",
+      "produces": [
+        "R"
+      ],
+      "forge_slug": "shatterskull_smashing_shatterskull_the_hammer_pass",
+      "aliases": [
+        "Shatterskull Smashing // Shatterskull, the Hammer Pass"
+      ]
+    },
+    {
+      "name": "Shifting Ceratops",
+      "mana_cost": "2 G G",
+      "types": "Creature Dinosaur",
+      "produces": [],
+      "forge_slug": "shifting_ceratops",
+      "aliases": []
+    },
+    {
+      "name": "Shipwreck Marsh",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "U"
+      ],
+      "forge_slug": "shipwreck_marsh",
+      "aliases": []
+    },
+    {
+      "name": "Shivan Reef",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "R",
+        "U"
+      ],
+      "forge_slug": "shivan_reef",
+      "aliases": []
+    },
+    {
+      "name": "Shock",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "shock",
+      "aliases": []
+    },
+    {
+      "name": "Silkwrap",
+      "mana_cost": "1 W",
+      "types": "Enchantment",
+      "produces": [],
+      "forge_slug": "silkwrap",
+      "aliases": []
+    },
+    {
+      "name": "Siphon Insight",
+      "mana_cost": "U B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "siphon_insight",
+      "aliases": []
+    },
+    {
+      "name": "Skyclave Apparition",
+      "mana_cost": "1 W W",
+      "types": "Creature Kor Spirit",
+      "produces": [],
+      "forge_slug": "skyclave_apparition",
+      "aliases": []
+    },
+    {
+      "name": "Skyclave Cleric",
+      "mana_cost": "1 W",
+      "types": "Creature Kor Cleric",
+      "produces": [
+        "W"
+      ],
+      "forge_slug": "skyclave_cleric_skyclave_basilica",
+      "aliases": [
+        "Skyclave Cleric // Skyclave Basilica"
+      ]
+    },
+    {
+      "name": "Snakeskin Veil",
+      "mana_cost": "G",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "snakeskin_veil",
+      "aliases": []
+    },
+    {
+      "name": "Snow-Covered Island",
+      "mana_cost": "no cost",
+      "types": "Basic Snow Land Island",
+      "produces": [
+        "U"
+      ],
+      "forge_slug": "snow_covered_island",
+      "aliases": []
+    },
+    {
+      "name": "Snow-Covered Plains",
+      "mana_cost": "no cost",
+      "types": "Basic Snow Land Plains",
+      "produces": [
+        "W"
+      ],
+      "forge_slug": "snow_covered_plains",
+      "aliases": []
+    },
+    {
+      "name": "Snow-Covered Swamp",
+      "mana_cost": "no cost",
+      "types": "Basic Snow Land Swamp",
+      "produces": [
+        "B"
+      ],
+      "forge_slug": "snow_covered_swamp",
+      "aliases": []
+    },
+    {
+      "name": "Soaring Thought-Thief",
+      "mana_cost": "U B",
+      "types": "Creature Human Rogue",
+      "produces": [],
+      "forge_slug": "soaring_thought_thief",
+      "aliases": []
+    },
+    {
+      "name": "Sokenzan Smelter",
+      "mana_cost": "1 R",
+      "types": "Creature Goblin Artificer",
+      "produces": [],
+      "forge_slug": "sokenzan_smelter",
+      "aliases": []
+    },
+    {
+      "name": "Soul Sear",
+      "mana_cost": "2 R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "soul_sear",
+      "aliases": []
+    },
+    {
+      "name": "Soul-Guide Lantern",
+      "mana_cost": "1",
+      "types": "Artifact",
+      "produces": [],
+      "forge_slug": "soul_guide_lantern",
+      "aliases": []
+    },
+    {
+      "name": "Soul-Scar Mage",
+      "mana_cost": "R",
+      "types": "Creature Human Wizard",
+      "produces": [],
+      "forge_slug": "soul_scar_mage",
+      "aliases": []
+    },
+    {
+      "name": "Spectral Sailor",
+      "mana_cost": "U",
+      "types": "Creature Spirit Pirate",
+      "produces": [],
+      "forge_slug": "spectral_sailor",
+      "aliases": []
+    },
+    {
+      "name": "Spell Pierce",
+      "mana_cost": "U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "spell_pierce",
+      "aliases": []
+    },
+    {
+      "name": "Spell Queller",
+      "mana_cost": "1 W U",
+      "types": "Creature Spirit",
+      "produces": [],
+      "forge_slug": "spell_queller",
+      "aliases": []
+    },
+    {
+      "name": "Spikefield Hazard",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [
+        "R"
+      ],
+      "forge_slug": "spikefield_hazard_spikefield_cave",
+      "aliases": [
+        "Spikefield Hazard // Spikefield Cave"
+      ]
+    },
+    {
+      "name": "Sram, Senior Edificer",
+      "mana_cost": "1 W",
+      "types": "Legendary Creature Dwarf Advisor",
+      "produces": [],
+      "forge_slug": "sram_senior_edificer",
+      "aliases": []
+    },
+    {
+      "name": "Steam Vents",
+      "mana_cost": "no cost",
+      "types": "Land Island Mountain",
+      "produces": [
+        "R",
+        "U"
+      ],
+      "forge_slug": "steam_vents",
+      "aliases": []
+    },
+    {
+      "name": "Stomping Ground",
+      "mana_cost": "no cost",
+      "types": "Land Mountain Forest",
+      "produces": [
+        "G",
+        "R"
+      ],
+      "forge_slug": "stomping_ground",
+      "aliases": []
+    },
+    {
+      "name": "Stonecoil Serpent",
+      "mana_cost": "X",
+      "types": "Artifact Creature Snake",
+      "produces": [],
+      "forge_slug": "stonecoil_serpent",
+      "aliases": []
+    },
+    {
+      "name": "Sulfur Falls",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "R",
+        "U"
+      ],
+      "forge_slug": "sulfur_falls",
+      "aliases": []
+    },
+    {
+      "name": "Sungold Sentinel",
+      "mana_cost": "1 W",
+      "types": "Creature Human Soldier",
+      "produces": [],
+      "forge_slug": "sungold_sentinel",
+      "aliases": []
+    },
+    {
+      "name": "Sunset Revelry",
+      "mana_cost": "1 W",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "sunset_revelry",
+      "aliases": []
+    },
+    {
+      "name": "Supreme Phantom",
+      "mana_cost": "1 U",
+      "types": "Creature Spirit",
+      "produces": [],
+      "forge_slug": "supreme_phantom",
+      "aliases": []
+    },
+    {
+      "name": "Swamp",
+      "mana_cost": "no cost",
+      "types": "Basic Land Swamp",
+      "produces": [
+        "B"
+      ],
+      "forge_slug": "swamp",
+      "aliases": []
+    },
+    {
+      "name": "Swarm Shambler",
+      "mana_cost": "G",
+      "types": "Creature Fungus Beast",
+      "produces": [],
+      "forge_slug": "swarm_shambler",
+      "aliases": []
+    },
+    {
+      "name": "Sweltering Suns",
+      "mana_cost": "1 R R",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "sweltering_suns",
+      "aliases": []
+    },
+    {
+      "name": "Syr Faren, the Hengehammer",
+      "mana_cost": "G G",
+      "types": "Legendary Creature Human Knight",
+      "produces": [],
+      "forge_slug": "syr_faren_the_hengehammer",
+      "aliases": []
+    },
+    {
+      "name": "Temple of Deceit",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "U"
+      ],
+      "forge_slug": "temple_of_deceit",
+      "aliases": []
+    },
+    {
+      "name": "Temple of Enlightenment",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "U",
+        "W"
+      ],
+      "forge_slug": "temple_of_enlightenment",
+      "aliases": []
+    },
+    {
+      "name": "Temple of Epiphany",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "R",
+        "U"
+      ],
+      "forge_slug": "temple_of_epiphany",
+      "aliases": []
+    },
+    {
+      "name": "Thalia's Lieutenant",
+      "mana_cost": "1 W",
+      "types": "Creature Human Soldier",
+      "produces": [],
+      "forge_slug": "thalias_lieutenant",
+      "aliases": []
+    },
+    {
+      "name": "Thalia, Guardian of Thraben",
+      "mana_cost": "1 W",
+      "types": "Legendary Creature Human Soldier",
+      "produces": [],
+      "forge_slug": "thalia_guardian_of_thraben",
+      "aliases": []
+    },
+    {
+      "name": "The Birth of Meletis",
+      "mana_cost": "1 W",
+      "types": "Enchantment Saga",
+      "produces": [],
+      "forge_slug": "the_birth_of_meletis",
+      "aliases": []
+    },
+    {
+      "name": "Thieves' Guild Enforcer",
+      "mana_cost": "B",
+      "types": "Creature Human Rogue",
+      "produces": [],
+      "forge_slug": "thieves_guild_enforcer",
+      "aliases": []
+    },
+    {
+      "name": "Thing in the Ice",
+      "mana_cost": "1 U",
+      "types": "Creature Horror",
+      "produces": [],
+      "forge_slug": "thing_in_the_ice_awoken_horror",
+      "aliases": [
+        "Thing in the Ice // Awoken Horror"
+      ]
+    },
+    {
+      "name": "Thirst for Discovery",
+      "mana_cost": "2 U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "thirst_for_discovery",
+      "aliases": []
+    },
+    {
+      "name": "Thirst for Meaning",
+      "mana_cost": "2 U",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "thirst_for_meaning",
+      "aliases": []
+    },
+    {
+      "name": "Thoughtseize",
+      "mana_cost": "B",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "thoughtseize",
+      "aliases": []
+    },
+    {
+      "name": "Thraben Inspector",
+      "mana_cost": "W",
+      "types": "Creature Human Soldier",
+      "produces": [],
+      "forge_slug": "thraben_inspector",
+      "aliases": []
+    },
+    {
+      "name": "Thrashing Brontodon",
+      "mana_cost": "1 G G",
+      "types": "Creature Dinosaur",
+      "produces": [],
+      "forge_slug": "thrashing_brontodon",
+      "aliases": []
+    },
+    {
+      "name": "Thundering Rebuke",
+      "mana_cost": "1 R",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "thundering_rebuke",
+      "aliases": []
+    },
+    {
+      "name": "Torbran, Thane of Red Fell",
+      "mana_cost": "1 R R R",
+      "types": "Legendary Creature Dwarf Noble",
+      "produces": [],
+      "forge_slug": "torbran_thane_of_red_fell",
+      "aliases": []
+    },
+    {
+      "name": "Tovolar's Huntmaster",
+      "mana_cost": "4 G G",
+      "types": "Creature Human Werewolf",
+      "produces": [],
+      "forge_slug": "tovolars_huntmaster_tovolars_packleader",
+      "aliases": [
+        "Tovolar's Huntmaster // Tovolar's Packleader"
+      ]
+    },
+    {
+      "name": "Tovolar, Dire Overlord",
+      "mana_cost": "1 R G",
+      "types": "Legendary Creature Human Werewolf",
+      "produces": [],
+      "forge_slug": "tovolar_dire_overlord_tovolar_the_midnight_scourge",
+      "aliases": [
+        "Tovolar, Dire Overlord // Tovolar, the Midnight Scourge"
+      ]
+    },
+    {
+      "name": "Tranquil Cove",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "U",
+        "W"
+      ],
+      "forge_slug": "tranquil_cove",
+      "aliases": []
+    },
+    {
+      "name": "Treasure Cruise",
+      "mana_cost": "7 U",
+      "types": "Sorcery",
+      "produces": [],
+      "forge_slug": "treasure_cruise",
+      "aliases": []
+    },
+    {
+      "name": "Turntimber Symbiosis",
+      "mana_cost": "4 G G G",
+      "types": "Sorcery",
+      "produces": [
+        "G"
+      ],
+      "forge_slug": "turntimber_symbiosis_turntimber_serpentine_wood",
+      "aliases": [
+        "Turntimber Symbiosis // Turntimber, Serpentine Wood"
+      ]
+    },
+    {
+      "name": "Twinshot Sniper",
+      "mana_cost": "3 R",
+      "types": "Artifact Creature Goblin Archer",
+      "produces": [],
+      "forge_slug": "twinshot_sniper",
+      "aliases": []
+    },
+    {
+      "name": "Ulvenwald Oddity",
+      "mana_cost": "2 G G",
+      "types": "Creature Beast",
+      "produces": [],
+      "forge_slug": "ulvenwald_oddity_ulvenwald_behemoth",
+      "aliases": [
+        "Ulvenwald Oddity // Ulvenwald Behemoth"
+      ]
+    },
+    {
+      "name": "Unclaimed Territory",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "forge_slug": "unclaimed_territory",
+      "aliases": []
+    },
+    {
+      "name": "Usher of the Fallen",
+      "mana_cost": "W",
+      "types": "Creature Spirit Warrior",
+      "produces": [],
+      "forge_slug": "usher_of_the_fallen",
+      "aliases": []
+    },
+    {
+      "name": "Vampire Socialite",
+      "mana_cost": "B R",
+      "types": "Creature Vampire Noble",
+      "produces": [],
+      "forge_slug": "vampire_socialite",
+      "aliases": []
+    },
+    {
+      "name": "Vantress Gargoyle",
+      "mana_cost": "1 U",
+      "types": "Artifact Creature Gargoyle",
+      "produces": [],
+      "forge_slug": "vantress_gargoyle",
+      "aliases": []
+    },
+    {
+      "name": "Viashino Pyromancer",
+      "mana_cost": "1 R",
+      "types": "Creature Lizard Wizard",
+      "produces": [],
+      "forge_slug": "viashino_pyromancer",
+      "aliases": []
+    },
+    {
+      "name": "Village Rites",
+      "mana_cost": "B",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "village_rites",
+      "aliases": []
+    },
+    {
+      "name": "Voldaren Bloodcaster",
+      "mana_cost": "1 B",
+      "types": "Creature Vampire Wizard",
+      "produces": [],
+      "forge_slug": "voldaren_bloodcaster_bloodbat_summoner",
+      "aliases": [
+        "Voldaren Bloodcaster // Bloodbat Summoner"
+      ]
+    },
+    {
+      "name": "Voldaren Epicure",
+      "mana_cost": "R",
+      "types": "Creature Vampire",
+      "produces": [],
+      "forge_slug": "voldaren_epicure",
+      "aliases": []
+    },
+    {
+      "name": "Voldaren Estate",
+      "mana_cost": "no cost",
+      "types": "Land",
+      "produces": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "forge_slug": "voldaren_estate",
+      "aliases": []
+    },
+    {
+      "name": "Voltage Surge",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "voltage_surge",
+      "aliases": []
+    },
+    {
+      "name": "Watcher of the Spheres",
+      "mana_cost": "W U",
+      "types": "Creature Bird Wizard",
+      "produces": [],
+      "forge_slug": "watcher_of_the_spheres",
+      "aliases": []
+    },
+    {
+      "name": "Wild Slash",
+      "mana_cost": "R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "wild_slash",
+      "aliases": []
+    },
+    {
+      "name": "Wildborn Preserver",
+      "mana_cost": "1 G",
+      "types": "Creature Elf Archer",
+      "produces": [],
+      "forge_slug": "wildborn_preserver",
+      "aliases": []
+    },
+    {
+      "name": "Wildwood Tracker",
+      "mana_cost": "G",
+      "types": "Creature Elf Warrior",
+      "produces": [],
+      "forge_slug": "wildwood_tracker",
+      "aliases": []
+    },
+    {
+      "name": "Wizard's Lightning",
+      "mana_cost": "2 R",
+      "types": "Instant",
+      "produces": [],
+      "forge_slug": "wizards_lightning",
+      "aliases": []
+    },
+    {
+      "name": "Yorvo, Lord of Garenbrig",
+      "mana_cost": "G G G",
+      "types": "Legendary Creature Giant Noble",
+      "produces": [],
+      "forge_slug": "yorvo_lord_of_garenbrig",
+      "aliases": []
+    },
+    {
+      "name": "Zareth San, the Trickster",
+      "mana_cost": "3 U B",
+      "types": "Legendary Creature Merfolk Rogue",
+      "produces": [],
+      "forge_slug": "zareth_san_the_trickster",
+      "aliases": []
+    }
+  ]
+}

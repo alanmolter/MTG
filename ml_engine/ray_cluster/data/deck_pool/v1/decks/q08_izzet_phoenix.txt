@@ -1,0 +1,31 @@
+About
+Name Izzet Phoenix
+
+Deck
+2 Arclight Phoenix (GRN) 91
+4 Crackling Drake (GRN) 163
+2 Expressive Iteration (STX) 186
+4 Chart a Course (XLN) 48
+4 Treasure Cruise (KTK) 59
+3 Pieces of the Puzzle (SOI) 78
+3 Izzet Charm (RTR) 172
+3 Lightning Axe (SOI) 170
+2 Fiery Impulse (ORI) 145
+2 Flame-Blessed Bolt (VOW) 158
+4 Consider (MID) 44
+4 Opt (M21) 59
+2 Sulfur Falls (DOM) 247
+4 Temple of Epiphany (M21) 252
+4 Shivan Reef (DMU) 255
+1 Steam Vents (GRN) 257
+6 Island (DMU) 265
+4 Mountain (DMU) 271
+2 Thing in the Ice (SOI) 92
+
+Sideboard
+2 Sweltering Suns (AKH) 149
+3 Abrade (VOW) 139
+2 Lava Coil (GRN) 108
+4 Mystical Dispute (ELD) 58
+1 Invasive Surgery (SOI) 68
+3 Narset, Parter of Veils (WAR) 61

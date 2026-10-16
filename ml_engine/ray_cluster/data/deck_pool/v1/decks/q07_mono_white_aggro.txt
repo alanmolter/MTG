@@ -1,0 +1,28 @@
+About
+Name Mono White Aggro
+
+Deck
+2 Reidane, God of the Worthy (KHM) 21
+4 Monk of the Open Hand (AFR) 25
+4 Usher of the Fallen (KHM) 35
+4 Codespell Cleric (KHM) 7
+4 Clarion Spirit (KHM) 6
+4 Luminarch Aspirant (ZNR) 24
+1 Intrepid Adversary (MID) 25
+2 Thalia, Guardian of Thraben (VOW) 38
+2 Skyclave Apparition (ZNR) 39
+3 Elite Spellbinder (STX) 17
+2 Kabira Takedown (ZNR) 19
+2 Fateful Absence (MID) 18
+3 Paladin Class (AFR) 29
+3 Faceless Haven (KHM) 255
+20 Snow-Covered Plains (KHM) 276
+
+Sideboard
+2 Loyal Warhound (AFR) 23
+3 Cathar Commando (MID) 10
+2 Portable Hole (AFR) 33
+2 Maul of the Skyclaves (ZNR) 27
+2 Selfless Samurai (NEO) 312
+2 Sungold Sentinel (MID) 37
+2 Imperial Recovery Unit (NEO) 18

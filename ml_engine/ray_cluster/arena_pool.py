@@ -17,17 +17,13 @@ Ray orchestrator and smoke envs feed those into `env_config["agent_deck"]`
 / `["opponent_deck"]` so the bridge skips the hardcoded `AggroRed`/`Control`
 fallback when Arena-only is requested.
 
-Resolution order for the deck content (tries each, falls through on failure):
+Deck content, when arena-only training is on:
 
-    1. DATABASE_URL set + cards table populated with `is_arena=1` rows
-       → query the DB and synthesize a 60-card decklist by colour pair.
-    2. No DB or query fails / returns 0 rows
-       → use a hardcoded Arena-legal fallback (Standard 2026 staples).
-
-The fallback exists because:
-  - We never want a smoke test or unit test to silently hit the network.
-  - On a clean checkout (no Postgres yet), `forge:smoke:arena` should still
-    produce *some* sensible Arena-legal pair instead of crashing.
+    The versioned file pool in ``deck_pool`` (official Challenger Deck lists).
+    Training samples the train split. Evaluation samples the holdout split.
+    There is no random ``ORDER BY RANDOM()`` deck. ``_build_decklist_from_rows``
+    remains for tests; nothing in the training path calls it, and
+    ``gated_db_decklist`` drops any list that fails ``deck_quality``.
 
 Usage:
     >>> from ml_engine.ray_cluster.arena_pool import (
@@ -40,9 +36,15 @@ Usage:
 from __future__ import annotations
 
 import os
-import random
 import sys
 from typing import Optional, Sequence, Tuple
+
+from ml_engine.ray_cluster.deck_pool import (
+    accept_deck,
+    deck_by_archetype_id,
+    sample_pair,
+    training_archetype_ids,
+)
 
 # When DB-backed synthesis falls back, emit a single warning per process so
 # the operator sees that the trainers are running on hardcoded decks. Set the
@@ -64,9 +66,8 @@ def _warn_fallback(reason: str) -> None:
         return
     _FALLBACK_WARNED = True
     msg = (
-        f"[arena_pool] WARN: DB synthesis disabled ({reason}). "
-        f"Falling back to hardcoded Aggro Red / Control UW decks. "
-        f"Set DATABASE_URL + `pip install psycopg2-binary` for varied decks."
+        f"[arena_pool] WARN: Arena card query failed ({reason}). "
+        f"Training does not use this query; it samples the versioned deck pool."
     )
     print(msg, file=sys.stderr, flush=True)
 
@@ -96,78 +97,17 @@ def describe_training_pool() -> str:
     return "Arena-only" if is_arena_only_training() else "Full catalog"
 
 
-# ── Hardcoded Arena-legal fallback decks ────────────────────────────────────
-#
-# These are deliberately Arena-legal Standard staples (rotated as of 2026-04).
-# They mirror the *shape* of Forge's `defaultDeckFor("AggroRed")` /
-# `defaultDeckFor("Control")` decks — same archetypes, same ~60-card count —
-# but every card here is on Arena. The bridge's `parseDeck()` strips set codes
-# in parens, so the decklist format is whatever it accepts.
-#
-# If you change a list, keep the total at exactly 60 (mainboard) — Forge's
-# `Match` constructor is fine with smaller decks but RegisteredPlayer will
-# refuse to start a tournament-legal game below the minimum.
-
-ARENA_FALLBACK_AGGRO_RED = """
-4 Monastery Swiftspear
-4 Heartfire Hero
-4 Slickshot Show-Off
-4 Emberheart Challenger
-4 Manifold Mouse
-4 Lightning Strike
-4 Burst Lightning
-4 Play with Fire
-4 Bloodthirsty Conqueror
-4 Screaming Nemesis
-20 Mountain
-""".strip()
-
-
-ARENA_FALLBACK_CONTROL = """
-4 Spell Pierce
-4 Three Steps Ahead
-4 No More Lies
-4 Get Lost
-4 Abrade
-4 Stock Up
-4 Beza, the Bounding Spring
-2 Hostile Investigator
-2 Sheoldred, the Apocalypse
-4 Deduce
-4 Island
-4 Plains
-4 Meticulous Archive
-4 Restless Anchorage
-8 Plains
-""".strip()
+# Public aliases for the two curriculum decks tests and smoke entrypoints
+# already import. They are pool lists, not a second hand-written fallback.
+ARENA_FALLBACK_AGGRO_RED = deck_by_archetype_id("aggro_red").forge_list
+ARENA_FALLBACK_CONTROL = deck_by_archetype_id("control_uw").forge_list
 
 
 # ── DB-backed deck synthesis ────────────────────────────────────────────────
-
-
-# Two-color archetypes we synthesize from the DB. The first two letters of
-# `colors` (like "WU", "BR") are matched against the card's `colors` column,
-# which the seed pipeline stores as concatenated colour identity letters.
-_ARCHETYPE_RECIPES: Tuple[Tuple[str, str, Sequence[str]], ...] = (
-    # (archetype_name, primary_colors, basic_lands)
-    # Mono-color
-    ("aggro_red",       "R",  ("Mountain",)),
-    ("aggro_white",     "W",  ("Plains",)),
-    ("control_blue",    "U",  ("Island",)),
-    ("midrange_black",  "B",  ("Swamp",)),
-    ("ramp_green",      "G",  ("Forest",)),
-    # Two-color (all 10 colour pairs covered)
-    ("control_uw",      "WU", ("Island", "Plains")),
-    ("midrange_wb",     "WB", ("Plains", "Swamp")),
-    ("aggro_rw",        "WR", ("Mountain", "Plains")),
-    ("ramp_gw",         "WG", ("Forest", "Plains")),
-    ("control_ub",      "UB", ("Island", "Swamp")),
-    ("tempo_ur",        "UR", ("Island", "Mountain")),
-    ("ramp_ug",         "UG", ("Island", "Forest")),
-    ("midrange_br",     "BR", ("Swamp", "Mountain")),
-    ("midrange_bg",     "BG", ("Swamp", "Forest")),
-    ("aggro_gr",        "GR", ("Mountain", "Forest")),
-)
+#
+# Not a training source. ``resolve_decks_for_training`` samples the file pool.
+# ``gated_db_decklist`` is the only supported way to turn rows into a deck,
+# and it rejects lists that fail the quality gate.
 
 
 def _build_decklist_from_rows(
@@ -227,6 +167,28 @@ def _build_decklist_from_rows(
         lines.append(f"{count} {b}")
 
     return "\n".join(lines)
+
+
+def gated_db_decklist(
+    rows: Sequence[Tuple[str, Optional[str]]],
+    basics: Sequence[str],
+    *,
+    deck_id: str = "db_synthesis",
+    nonland_count: int = 36,
+    land_count: int = 24,
+) -> Optional[str]:
+    """Build a deck from rows and return it only if the quality gate passes.
+
+    Training does not call this. A random 4-of pile fails the gate and comes
+    back as None, with the reason logged by ``accept_deck``.
+    """
+
+    decklist = _build_decklist_from_rows(
+        rows, basics, nonland_count=nonland_count, land_count=land_count
+    )
+    if accept_deck(deck_id, decklist):
+        return decklist
+    return None
 
 
 def _query_arena_pool(
@@ -327,8 +289,9 @@ _ARCHETYPE_FILTER_ENV_VAR = "TRAINING_ARCHETYPES"
 def _archetype_allowlist() -> Optional[Tuple[str, ...]]:
     """Return the operator-configured archetype subset, or None for all 15.
 
-    Honors `TRAINING_ARCHETYPES=aggro_red,control_uw,midrange_bg`. Unknown
-    names are silently dropped (warned once). Empty / unset → full catalog.
+    Honors `TRAINING_ARCHETYPES=aggro_red,control_uw,combo_ur`. Unknown names
+    are dropped (warned). Empty / unset → the full train split. Holdout ids
+    are not valid here.
     Used for curriculum: shrink the matchup space early, expand later.
     """
     raw = os.environ.get(_ARCHETYPE_FILTER_ENV_VAR)
@@ -337,7 +300,7 @@ def _archetype_allowlist() -> Optional[Tuple[str, ...]]:
     requested = [s.strip().lower() for s in raw.split(",") if s.strip()]
     if not requested:
         return None
-    valid = {r[0] for r in _ARCHETYPE_RECIPES}
+    valid = set(training_archetype_ids())
     # Deduplicate before sampling. Without this, a value such as
     # "aggro_red,aggro_red" has two list entries and random.sample can choose
     # the same deck twice, creating an accidental self-play-only curriculum.
@@ -353,7 +316,7 @@ def _archetype_allowlist() -> Optional[Tuple[str, ...]]:
     if len(kept) < 2:
         print(
             f"[arena_pool] WARN: TRAINING_ARCHETYPES needs >=2 valid names; "
-            f"got {kept!r}, falling back to full 15-archetype catalog.",
+            f"got {kept!r}, falling back to the full training deck pool.",
             file=sys.stderr,
             flush=True,
         )
@@ -361,26 +324,22 @@ def _archetype_allowlist() -> Optional[Tuple[str, ...]]:
     return kept
 
 
+def _training_pair(seed: Optional[int]):
+    """Two distinct train-split decks. Holdout lists are not eligible."""
+
+    return sample_pair("train", seed, archetype_ids=_archetype_allowlist())
+
+
 def _archetype_pair_for_seed(seed: Optional[int]) -> Tuple[str, str]:
-    """Pick two distinct archetypes for the matchup. Deterministic if seed set.
+    """Pick two distinct archetype ids. Deterministic if seed is set.
 
-    When `TRAINING_ARCHETYPES` is set to a comma-separated subset, only those
-    are eligible (curriculum mode). Otherwise the full 15-archetype catalog
-    is sampled, matching the original behavior.
+    ``TRAINING_ARCHETYPES`` restricts the train split (curriculum). The ids
+    are the pool's ``archetype_id`` values, such as ``aggro_red`` and
+    ``control_uw``.
     """
-    rng = random.Random(seed)
-    allowlist = _archetype_allowlist()
-    pool = list(allowlist) if allowlist else [r[0] for r in _ARCHETYPE_RECIPES]
-    pair = rng.sample(pool, k=2)
-    return pair[0], pair[1]
 
-
-def _archetype_to_recipe(name: str) -> Tuple[str, str, Sequence[str]]:
-    for r in _ARCHETYPE_RECIPES:
-        if r[0] == name:
-            return r
-    # Fallback to aggro_red — first recipe.
-    return _ARCHETYPE_RECIPES[0]
+    agent, opponent = _training_pair(seed)
+    return agent.archetype_id, opponent.archetype_id
 
 
 def resolve_training_matchup(
@@ -391,17 +350,19 @@ def resolve_training_matchup(
 ) -> Tuple[Optional[str], Optional[str], str, str]:
     """Return `(agent_deck, opponent_deck, agent_archetype, opponent_archetype)`.
 
-    Archetype ids are the catalog names (``control_uw``, ``aggro_red``, ...).
-    They are empty strings when arena rotation is off. The reward shaper uses
-    the agent id so a control deck is recognized as control.
+    Archetype ids are pool ids (``control_uw``, ``aggro_red``, ...). They are
+    empty strings when arena rotation is off. The reward shaper uses the
+    agent id so a control deck is recognized as control. ``dsn`` is ignored:
+    training does not query Postgres for decks.
     """
-    decks = resolve_decks_for_training(arena_only=arena_only, seed=seed, dsn=dsn)
+
+    del dsn  # training decks come from the file pool, not the database
     if arena_only is None:
         arena_only = is_arena_only_training()
     if not arena_only:
-        return decks[0], decks[1], "", ""
-    agent_archetype, opp_archetype = _archetype_pair_for_seed(seed)
-    return decks[0], decks[1], agent_archetype, opp_archetype
+        return None, None, "", ""
+    agent, opponent = _training_pair(seed)
+    return agent.forge_list, opponent.forge_list, agent.archetype_id, opponent.archetype_id
 
 
 def resolve_decks_for_training(
@@ -416,45 +377,16 @@ def resolve_decks_for_training(
       - `arena_only=False` (or env var unset): returns `(None, None)` so
         Forge's `parseDeck()` falls back to its hardcoded `AggroRed` /
         `Control` paper-Modern decks. Backward compatible.
-      - `arena_only=True`: returns two real decklists — one synthesized from
-        the DB (Arena-legal, colour-balanced) if reachable, else the
-        hardcoded fallback in this module (also Arena-legal).
+      - `arena_only=True`: returns two mainboards from the train split of the
+        versioned deck pool. Both already passed the quality gate.
 
-    Both return values are MTGO-style strings ready for the Java bridge.
+    Both return values are ``<count> <name>`` strings ready for the Java bridge.
     """
-    if arena_only is None:
-        arena_only = is_arena_only_training()
 
-    if not arena_only:
-        return (None, None)
-
-    agent_archetype, opp_archetype = _archetype_pair_for_seed(seed)
-
-    def _build(arche: str) -> str:
-        _name, primary, basics = _archetype_to_recipe(arche)
-        rows = _query_arena_pool(primary, dsn=dsn)
-        if rows:
-            return _build_decklist_from_rows(rows, basics)
-        # DB unreachable / empty — pick the closest hardcoded fallback by
-        # archetype family. Exact matches first; otherwise default to aggro.
-        if "aggro" in arche or "red" in arche:
-            return ARENA_FALLBACK_AGGRO_RED
-        return ARENA_FALLBACK_CONTROL
-
-    agent_deck = _build(agent_archetype)
-    opponent_deck = _build(opp_archetype)
-    # The no-DB fallback has only two representative decklists. Several
-    # non-aggro archetypes intentionally map to the control list, so a valid
-    # pair of different *names* could otherwise become an identical deck-vs-
-    # deck match. Preserve matchup diversity even on a fresh checkout.
-    if agent_deck == opponent_deck:
-        opponent_deck = (
-            ARENA_FALLBACK_AGGRO_RED
-            if agent_deck == ARENA_FALLBACK_CONTROL
-            else ARENA_FALLBACK_CONTROL
-        )
-
-    return agent_deck, opponent_deck
+    agent, opponent, _agent_archetype, _opponent_archetype = resolve_training_matchup(
+        arena_only=arena_only, seed=seed, dsn=dsn
+    )
+    return agent, opponent
 
 
 __all__ = [
@@ -464,4 +396,5 @@ __all__ = [
     "resolve_training_matchup",
     "ARENA_FALLBACK_AGGRO_RED",
     "ARENA_FALLBACK_CONTROL",
+    "gated_db_decklist",
 ]

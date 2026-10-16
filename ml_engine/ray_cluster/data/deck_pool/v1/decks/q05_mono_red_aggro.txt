@@ -1,0 +1,26 @@
+About
+Name Mono-Red Aggro
+
+Deck
+4 Fervent Champion (ELD) 124
+4 Kargan Intimidator (ZNR) 145
+4 Bonecrusher Giant (ELD) 115
+3 Torbran, Thane of Red Fell (ELD) 147
+4 Akoum Hellhound (ZNR) 133
+4 Rimrock Knight (ELD) 137
+4 Anax, Hardened in the Forge (THB) 125
+2 Shatterskull Smashing (ZNR) 161
+4 Roil Eruption (ZNR) 155
+4 Spikefield Hazard (ZNR) 166
+4 Shock (M21) 159
+1 Embercleave (ELD) 120
+2 Castle Embereth (ELD) 239
+16 Mountain (KHM) 397
+
+Sideboard
+2 Relic Robber (ZNR) 153
+2 Roiling Vortex (ZNR) 156
+2 Soul-Guide Lantern (THB) 237
+4 Redcap Melee (ELD) 135
+3 Thundering Rebuke (ZNR) 170
+2 Soul Sear (M21) 160

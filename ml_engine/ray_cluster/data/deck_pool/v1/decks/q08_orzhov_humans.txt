@@ -1,0 +1,30 @@
+About
+Name Orzhov Humans
+
+Deck
+2 Giant Killer (ELD) 14
+4 Luminarch Aspirant (ZNR) 24
+4 Thalia, Guardian of Thraben (VOW) 38
+4 Thalia's Lieutenant (SOI) 43
+4 Bloodsoaked Champion (KTK) 66
+4 Kitesail Freebooter (XLN) 110
+4 Dauntless Bodyguard (DOM) 14
+4 Thraben Inspector (SOI) 44
+2 Bloodchief's Thirst (ZNR) 94
+2 Dire Tactics (IKO) 183
+4 Rally the Ranks (KHM) 20
+4 Caves of Koilos (DMU) 244
+4 Concealed Courtyard (KLD) 245
+1 Godless Shrine (RNA) 248
+2 Mutavault (CLB) 903
+4 Unclaimed Territory (XLN) 258
+4 Secluded Courtyard (NEO) 275
+3 Plains (DMU) 262
+
+Sideboard
+1 Giant Killer (ELD) 14
+2 Containment Priest (M21) 13
+2 Sungold Sentinel (MID) 37
+3 Portable Hole (AFR) 33
+4 Sunset Revelry (MID) 38
+3 Duress (M21) 96

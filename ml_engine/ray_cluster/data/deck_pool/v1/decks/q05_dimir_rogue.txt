@@ -1,0 +1,30 @@
+About
+Name Dimir Rogue
+
+Deck
+2 Blackbloom Rogue (ZNR) 91
+1 Rankle, Master of Pranks (ELD) 101
+4 Thieves' Guild Enforcer (M21) 125
+3 Vantress Gargoyle (ELD) 71
+3 Nighthawk Scavenger (ZNR) 115
+3 Zareth San, the Trickster (ZNR) 242
+4 Merfolk Windrobber (ZNR) 70
+4 Soaring Thought-Thief (ZNR) 236
+2 Bloodchief's Thirst (ZNR) 94
+1 Malakir Rebirth (ZNR) 111
+4 Drown in the Loch (ELD) 188
+2 Eliminate (M21) 97
+2 Heartless Act (IKO) 91
+4 Temple of Deceit (THB) 245
+8 Island (KHM) 395
+9 Swamp (KHM) 396
+4 Dismal Backwater (M21) 245
+
+Sideboard
+1 Bloodchief's Thirst (ZNR) 94
+2 Negate (ZNR) 71
+2 Into the Story (ELD) 50
+2 Pestilent Haze (M21) 118
+2 Agonizing Remorse (THB) 83
+3 Cling to Dust (THB) 87
+3 Duress (M21) 96

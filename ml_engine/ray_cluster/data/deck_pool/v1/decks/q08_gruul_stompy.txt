@@ -1,0 +1,26 @@
+About
+Name Gruul Stompy
+
+Deck
+2 Chandra, Torch of Defiance (KLD) 110
+2 Questing Beast (ELD) 171
+4 Glorybringer (AKH) 134
+4 Scavenging Ooze (M21) 204
+4 Llanowar Elves (M19) 314
+4 Elvish Mystic (M15) 173
+4 Lovestruck Beast (ELD) 165
+4 Mizzium Mortars (RTR) 101
+4 Bonecrusher Giant (ELD) 115
+3 Abrade (VOW) 139
+4 Karplusan Forest (DMU) 250
+1 Stomping Ground (RNA) 259
+4 Rockfall Vale (MID) 266
+7 Mountain (DMU) 271
+9 Forest (DMU) 274
+
+Sideboard
+1 Abrade (VOW) 139
+4 Cindervines (RNA) 161
+3 Shifting Ceratops (M20) 194
+3 Rending Volley (DTK) 150
+4 Flame-Blessed Bolt (VOW) 158

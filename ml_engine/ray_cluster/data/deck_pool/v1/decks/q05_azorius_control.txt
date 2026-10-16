@@ -1,0 +1,34 @@
+About
+Name Azorius Control
+
+Deck
+2 Skyclave Cleric (ZNR) 40
+2 Dream Trawler (THB) 214
+2 Archon of Sun's Grace (THB) 3
+1 Emeria's Call (ZNR) 12
+2 Shatter the Sky (THB) 37
+1 Doomskar (KHM) 9
+3 Neutralize (IKO) 59
+1 Saw It Coming (KHM) 76
+1 Negate (ZNR) 71
+3 Thirst for Meaning (THB) 74
+2 Behold the Multiverse (KHM) 46
+2 Glass Casket (ELD) 15
+1 Shark Typhoon (IKO) 67
+3 Elspeth Conquers Death (THB) 13
+4 The Birth of Meletis (THB) 5
+4 Omen of the Sea (THB) 58
+2 Banishing Light (THB) 4
+4 Temple of Enlightenment (THB) 246
+8 Plains (KHM) 394
+8 Island (KHM) 395
+4 Tranquil Cove (M21) 258
+
+Sideboard
+1 Archon of Sun's Grace (THB) 3
+2 Banishing Light (THB) 4
+2 Glass Casket (ELD) 15
+2 Skyclave Apparition (ZNR) 39
+3 Confounding Conundrum (ZNR) 53
+3 Mystical Dispute (ELD) 58
+2 Essence Scatter (IKO) 49
