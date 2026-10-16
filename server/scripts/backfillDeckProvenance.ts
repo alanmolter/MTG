@@ -6,7 +6,11 @@
  *   npx tsx server/scripts/backfillDeckProvenance.ts --apply --batch-size 5000
  *
  * Idempotent: it only touches rows whose target column is still NULL.
- * Each batch is its own statement, so a lock lasts only that batch.
+ * Each batch is its own statement, so row locks last only that batch.
+ * download_status and raw_name batches are capped at --batch-size ROWS. The
+ * oracle_id step is capped at --batch-size distinct card NAMES, so one batch can
+ * touch every deck line with those names (e.g. 16 names -> 144k lines in a test).
+ * Run it outside the import pipeline, or lower --batch-size if that matters.
  */
 import "dotenv/config";
 import { closeDb, getRawClient } from "../db";

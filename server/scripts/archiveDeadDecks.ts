@@ -6,7 +6,7 @@
  *   npx tsx server/scripts/archiveDeadDecks.ts --apply --expect 333
  *
  * --expect N aborts (no writes) unless exactly N candidates are found.
- * --apply requires migration 20261016233057_competitive_decks_provenance
+ * --apply requires migration 20261016234006_competitive_decks_provenance
  * (download_status / archived_at / archive_reason); it refuses otherwise.
  */
 import "dotenv/config";

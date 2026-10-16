@@ -6,7 +6,7 @@
  * Never deletes. Placeholders are marked is_synthetic = true (the column the
  * schema already documents for fallback rows). Every candidate gets
  * download_status / archived_at / archive_reason, added by migration
- * 20261016233057_competitive_decks_provenance. Without those columns the plan
+ * 20261016234006_competitive_decks_provenance. Without those columns the plan
  * is not applicable (statusColumnsPresent = false) and the script refuses
  * --apply.
  */
@@ -89,7 +89,7 @@ export function planArchive(candidates: ArchiveCandidate[], statusColumns: strin
         params: [ids, reason],
       });
     } else {
-      pending.push(`archive status for ${ids.length} ${reason} decks needs migration 20261016233057_competitive_decks_provenance`);
+      pending.push(`archive status for ${ids.length} ${reason} decks needs migration 20261016234006_competitive_decks_provenance`);
     }
   }
   return { candidates, bySource, byReason, statusColumnsPresent, statements, pending };
