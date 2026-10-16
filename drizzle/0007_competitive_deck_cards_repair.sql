@@ -7,9 +7,11 @@ CREATE TABLE IF NOT EXISTS "competitive_deck_cards" (
   "quantity" integer NOT NULL DEFAULT 1,
   "section" varchar(20) DEFAULT 'mainboard'
 );
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX IF NOT EXISTS "competitive_deck_cards_deck_card_section_unique"
   ON "competitive_deck_cards" ("deck_id", "card_name", "section");
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "competitive_deck_cards_deck_id_idx"
   ON "competitive_deck_cards" ("deck_id");

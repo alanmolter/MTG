@@ -4,13 +4,17 @@
 
 ALTER TABLE competitive_decks
   ADD COLUMN IF NOT EXISTS is_training_eligible boolean NOT NULL DEFAULT false;
+--> statement-breakpoint
 ALTER TABLE competitive_decks
   ADD COLUMN IF NOT EXISTS training_rejection_reason text;
+--> statement-breakpoint
 ALTER TABLE competitive_decks
   ADD COLUMN IF NOT EXISTS training_quality_checked_at timestamp;
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS competitive_decks_training_eligible_idx
   ON competitive_decks (is_training_eligible, format);
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS training_runs (
   id serial PRIMARY KEY,
@@ -28,9 +32,11 @@ CREATE TABLE IF NOT EXISTS training_runs (
   started_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS training_runs_recent_idx
   ON training_runs (started_at DESC);
+--> statement-breakpoint
 
 -- Forge outcomes are the auditable labels used for card/context weight updates.
 -- The table already exists on some installations; this keeps fresh databases
