@@ -4,6 +4,7 @@
 -- 1. Adicionar campo is_synthetic em competitive_decks (se não existir)
 ALTER TABLE "competitive_decks"
   ADD COLUMN IF NOT EXISTS "is_synthetic" boolean NOT NULL DEFAULT false;
+--> statement-breakpoint
 
 -- 2. Criar tabela card_learning (se não existir)
 CREATE TABLE IF NOT EXISTS "card_learning" (
@@ -15,8 +16,10 @@ CREATE TABLE IF NOT EXISTS "card_learning" (
   "avg_score" real NOT NULL DEFAULT 0.0,
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "learning_weight_idx" ON "card_learning" ("weight");
+--> statement-breakpoint
 
 -- 3. Criar tabela rl_decisions (se não existir)
 CREATE TABLE IF NOT EXISTS "rl_decisions" (
@@ -28,15 +31,19 @@ CREATE TABLE IF NOT EXISTS "rl_decisions" (
   "processed" boolean NOT NULL DEFAULT false,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "rl_decisions_processed_idx" ON "rl_decisions" ("processed");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "rl_decisions_card_idx" ON "rl_decisions" ("card_name");
+--> statement-breakpoint
 
 -- 4. Adicionar campos extras em cards (se não existirem)
 ALTER TABLE "cards"
   ADD COLUMN IF NOT EXISTS "oracle_id" varchar(64),
   ADD COLUMN IF NOT EXISTS "is_arena" integer DEFAULT 0,
   ADD COLUMN IF NOT EXISTS "price_usd" real;
+--> statement-breakpoint
 
 -- 5. Adicionar campo deck_shares (se tabela não existir)
 CREATE TABLE IF NOT EXISTS "deck_shares" (
@@ -52,6 +59,7 @@ CREATE TABLE IF NOT EXISTS "deck_shares" (
   "created_at" timestamp NOT NULL DEFAULT now(),
   "expires_at" timestamp
 );
+--> statement-breakpoint
 
 -- 6. Garantir que status enum existe (pode já existir)
 DO $$ BEGIN
@@ -59,12 +67,14 @@ DO $$ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN null;
 END $$;
+--> statement-breakpoint
 
 -- 7. Garantir UNIQUE constraints em competitive_decks e competitive_deck_cards
 -- (necessário para ON CONFLICT funcionar — pode não existir se a tabela foi criada
 -- antes da migration 0003 ou por outra versão do schema)
 CREATE UNIQUE INDEX IF NOT EXISTS "competitive_decks_source_id_unique"
   ON "competitive_decks" ("source_id");
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX IF NOT EXISTS "competitive_deck_cards_deck_card_section_unique"
   ON "competitive_deck_cards" ("deck_id", "card_name", "section");

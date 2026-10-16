@@ -1,5 +1,7 @@
 CREATE TYPE "role" AS ENUM('user', 'admin');
+--> statement-breakpoint
 CREATE TYPE "job_status" AS ENUM('pending', 'running', 'completed', 'failed');
+--> statement-breakpoint
 
 CREATE TABLE "users" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -12,6 +14,7 @@ CREATE TABLE "users" (
 	"updatedAt" timestamp NOT NULL DEFAULT now(),
 	"lastSignedIn" timestamp NOT NULL DEFAULT now()
 );
+--> statement-breakpoint
 
 CREATE TABLE "cards" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -28,6 +31,7 @@ CREATE TABLE "cards" (
 	"created_at" timestamp NOT NULL DEFAULT now(),
 	"updated_at" timestamp NOT NULL DEFAULT now()
 );
+--> statement-breakpoint
 
 CREATE TABLE "decks" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -40,6 +44,7 @@ CREATE TABLE "decks" (
 	"created_at" timestamp NOT NULL DEFAULT now(),
 	"updated_at" timestamp NOT NULL DEFAULT now()
 );
+--> statement-breakpoint
 
 CREATE TABLE "deck_cards" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -48,6 +53,7 @@ CREATE TABLE "deck_cards" (
 	"quantity" integer NOT NULL DEFAULT 1,
 	UNIQUE("deck_id", "card_id")
 );
+--> statement-breakpoint
 
 CREATE TABLE "card_synergies" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -58,6 +64,7 @@ CREATE TABLE "card_synergies" (
 	"updated_at" timestamp NOT NULL DEFAULT now(),
 	UNIQUE("card1_id", "card2_id")
 );
+--> statement-breakpoint
 
 CREATE TABLE "meta_stats" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -70,6 +77,7 @@ CREATE TABLE "meta_stats" (
 	"updated_at" timestamp NOT NULL DEFAULT now(),
 	UNIQUE("card_id", "format", "archetype")
 );
+--> statement-breakpoint
 
 CREATE TABLE "embeddings_cache" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -78,6 +86,7 @@ CREATE TABLE "embeddings_cache" (
 	"model_version" varchar(50) NOT NULL,
 	"created_at" timestamp NOT NULL DEFAULT now()
 );
+--> statement-breakpoint
 
 CREATE TABLE "competitive_decks" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -93,6 +102,7 @@ CREATE TABLE "competitive_decks" (
 	"raw_json" text,
 	"imported_at" timestamp NOT NULL DEFAULT now()
 );
+--> statement-breakpoint
 
 CREATE TABLE "competitive_deck_cards" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -102,6 +112,7 @@ CREATE TABLE "competitive_deck_cards" (
 	"section" varchar(20) DEFAULT 'mainboard',
 	UNIQUE("deck_id", "card_name", "section")
 );
+--> statement-breakpoint
 
 CREATE TABLE "training_jobs" (
 	"id" serial PRIMARY KEY NOT NULL,
