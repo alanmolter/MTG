@@ -1,0 +1,26 @@
+About
+Name Mono Green Aggro
+
+Deck
+4 Badgermole Cub
+14 Forest
+4 Escape Tunnel
+3 Ba Sing Se
+4 Icetill Explorer
+4 Mightform Harmonizer
+4 Sazh's Chocobo
+4 Llanowar Elves
+4 Meltstrider's Resolve
+4 Fabled Passage
+4 Earthbender Ascension
+4 Esper Origins
+2 Sapling Nursery
+1 Promising Vein
+
+Sideboard
+1 Glorious Decay
+4 Mossborn Hydra
+2 Pawpatch Formation
+3 Soul-Guide Lantern
+3 Surrak, Elusive Hunter
+2 Royal Treatment

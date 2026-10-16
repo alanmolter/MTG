@@ -117,6 +117,10 @@ public class ForgeRLBridge {
     private final AtomicBoolean gameFinished = new AtomicBoolean(false);
     private volatile int agentMaxLife = 20;
     private volatile int oppMaxLife = 20;
+    // Names the agent held, and names on the stack, at the previous snapshot.
+    // A card that leaves the hand is the AI decision this snapshot records.
+    private final List<String> previousAgentHand = new ArrayList<>();
+    private final List<String> previousStack = new ArrayList<>();
 
     public static void main(String[] args) {
         ForgeRLBridge bridge = new ForgeRLBridge();
@@ -585,15 +589,20 @@ public class ForgeRLBridge {
         field(sb, "is_active", activeOpp);
         sb.append("},");
 
-        // cards on battlefield
+        // Visible cards, in source-index order: agent hand, then both
+        // battlefields, then the stack. Opponent hand stays hidden.
+        // Cap below the Python observation width (128) so source indices
+        // always point at a card the policy can see.
+        List<Card> visible = new ArrayList<>();
+        List<String> zones = new ArrayList<>();
+        if (you != null) addCards(visible, zones, you.getCardsIn(ZoneType.Hand), "hand");
+        if (g != null) addCards(visible, zones, g.getCardsIn(ZoneType.Battlefield), "battlefield");
+        if (g != null) addCards(visible, zones, g.getCardsIn(ZoneType.Stack), "stack");
+        int limit = Math.min(visible.size(), 120);
         sb.append("\"cards\":[");
-        boolean first = true;
-        if (g != null) {
-            for (Card c : g.getCardsIn(ZoneType.Battlefield)) {
-                if (!first) sb.append(',');
-                first = false;
-                appendCard(sb, c, you);
-            }
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) sb.append(',');
+            appendCard(sb, visible.get(i), you, zones.get(i));
         }
         sb.append("],");
 
@@ -602,19 +611,116 @@ public class ForgeRLBridge {
         sb.append("\"synergy_edges\":[],");
         sb.append("\"attacks_edges\":[],");
 
-        // action_mask — permissive (all legal) until we wire a custom controller
-        sb.append("\"action_mask\":[");
-        for (int i = 0; i < ACTION_MASK_SIZE; i++) {
-            if (i > 0) sb.append(',');
-            sb.append('1');
-        }
-        sb.append(']');
-
+        appendActionContract(sb, visible, zones, limit, you, activeYou);
         sb.append('}');
         return sb.toString();
     }
 
-    private static void appendCard(StringBuilder sb, Card c, Player agent) {
+    private static void addCards(List<Card> cards, List<String> zones, Iterable<Card> source, String zone) {
+        if (source == null) return;
+        for (Card card : source) {
+            cards.add(card);
+            zones.add(zone);
+        }
+    }
+
+    /**
+     * Discrete(512) contract consumed by MtgForgeEnv.
+     * Slot 0 is pass. Slots 1..509 are play/activate for a visible source
+     * card (kind 1). Slots 510 and 511 stay illegal unless a caller pages.
+     * {@code chosen_action} is the slot matching the card that left the
+     * agent's hand since the previous snapshot, or 0 for an inferred pass.
+     * -1 means the AI decision did not map onto a legal slot.
+     */
+    private void appendActionContract(
+            StringBuilder sb, List<Card> visible, List<String> zones, int limit, Player you, boolean activeYou) {
+        int[] mask = new int[ACTION_MASK_SIZE];
+        int[] sources = new int[ACTION_MASK_SIZE];
+        int[] targets = new int[ACTION_MASK_SIZE];
+        int[] kinds = new int[ACTION_MASK_SIZE];
+        String[] sourceNames = new String[ACTION_MASK_SIZE];
+        for (int i = 0; i < ACTION_MASK_SIZE; i++) {
+            sources[i] = -1;
+            targets[i] = -1;
+        }
+        mask[0] = 1;
+        kinds[0] = 0;
+
+        int slot = 1;
+        List<String> handNow = new ArrayList<>();
+        List<String> stackNow = new ArrayList<>();
+        for (int i = 0; i < limit; i++) {
+            Card card = visible.get(i);
+            String zone = zones.get(i);
+            boolean yours = you != null && card.getController() == you;
+            if (yours && "hand".equals(zone)) handNow.add(card.getName());
+            if ("stack".equals(zone)) stackNow.add(card.getName());
+            boolean playable = yours && ("hand".equals(zone) || ("battlefield".equals(zone) && !card.isTapped()));
+            if (playable && slot < ACTION_MASK_SIZE - 2) {
+                mask[slot] = 1;
+                kinds[slot] = 1;
+                sources[slot] = i;
+                targets[slot] = -1;
+                sourceNames[slot] = card.getName();
+                slot++;
+            }
+        }
+
+        String choiceType = "unknown";
+        String choiceCard = "";
+        List<String> leftHand = new ArrayList<>(previousAgentHand);
+        for (String name : handNow) {
+            leftHand.remove(name);
+        }
+        if (!leftHand.isEmpty()) {
+            choiceCard = leftHand.get(0);
+            choiceType = stackNow.contains(choiceCard) ? "cast" : "land";
+        } else if (!previousAgentHand.isEmpty()
+                && previousAgentHand.equals(handNow)
+                && previousStack.equals(stackNow)
+                && !activeYou) {
+            choiceType = "pass";
+        }
+        previousAgentHand.clear();
+        previousAgentHand.addAll(handNow);
+        previousStack.clear();
+        previousStack.addAll(stackNow);
+
+        int chosen = -1;
+        if ("pass".equals(choiceType)) {
+            chosen = 0;
+        } else if (!choiceCard.isEmpty()) {
+            for (int i = 1; i < ACTION_MASK_SIZE - 2; i++) {
+                if (mask[i] == 1 && choiceCard.equals(sourceNames[i])) {
+                    chosen = i;
+                    break;
+                }
+            }
+            if (chosen < 0) choiceType = "unknown";
+        }
+
+        // The AI still plays both sides. Do not claim external policy control
+        // until a PlayerController applies the action in `step`.
+        sb.append("\"policy_controlled\":false,");
+        field(sb, "ai_choice_type", choiceType); sb.append(',');
+        field(sb, "ai_choice_card", choiceCard); sb.append(',');
+        sb.append("\"chosen_action\":").append(chosen).append(',');
+        appendIntArray(sb, "action_mask", mask); sb.append(',');
+        appendIntArray(sb, "action_source_indices", sources); sb.append(',');
+        appendIntArray(sb, "action_target_indices", targets); sb.append(',');
+        appendIntArray(sb, "action_kinds", kinds);
+    }
+
+    private static void appendIntArray(StringBuilder sb, String key, int[] values) {
+        sb.append('"').append(key).append("\":[");
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(values[i]);
+        }
+        sb.append(']');
+    }
+
+    private static void appendCard(StringBuilder sb, Card c, Player agent, String zone) {
         sb.append('{');
         field(sb, "mana_value", c.getCMC()); sb.append(',');
         field(sb, "power", c.isCreature() ? c.getNetPower() : 0); sb.append(',');
@@ -632,7 +738,8 @@ public class ForgeRLBridge {
         Player owner = c.getController();
         if (agent != null && owner == agent) controller = "you";
         field(sb, "controller", controller); sb.append(',');
-        field(sb, "zone", "battlefield");
+        field(sb, "zone", zone); sb.append(',');
+        field(sb, "name", c.getName());
         sb.append('}');
     }
 
@@ -814,6 +921,8 @@ public class ForgeRLBridge {
         opponentPlayer = null;
         gameFinished.set(true);
         snapshotQueue.clear();
+        previousAgentHand.clear();
+        previousStack.clear();
     }
 
     // ── Tiny JSON helpers ──────────────────────────────────────────────────

@@ -202,6 +202,9 @@ def build_impala_config(
     shaping_weight: float = 1.0,
     shaping_weight_final: float = 0.0,
     shaping_anneal_episodes: int = 0,
+    bc_checkpoint: Optional[str] = None,
+    bc_kl_coeff: float = 0.0,
+    bc_kl_iters: int = 0,
 ) -> Dict[str, Any]:
     """Compose an IMPALA config with our custom env + GNN model + PBT-friendly hparams.
 
@@ -297,7 +300,11 @@ def build_impala_config(
             grad_clip=40.0,
             model={
                 "custom_model": "game_state_gnn",
-                "custom_model_config": {},
+                "custom_model_config": {
+                    "bc_checkpoint": bc_checkpoint,
+                    "bc_kl_coeff": bc_kl_coeff,
+                    "bc_kl_iters": bc_kl_iters,
+                },
             },
             vtrace=True,
             vtrace_clip_rho_threshold=1.0,
@@ -544,6 +551,9 @@ def run(
     shaping_weight: float = 1.0,
     shaping_weight_final: float = 0.0,
     shaping_anneal_episodes: int = 0,
+    bc_checkpoint: Optional[str] = None,
+    bc_kl_coeff: float = 0.0,
+    bc_kl_iters: int = 0,
 ):
     """Kick off the PBT + IMPALA job."""
     unsupported = _unsupported_cuda_devices()
@@ -643,6 +653,9 @@ def run(
         shaping_weight=shaping_weight,
         shaping_weight_final=shaping_weight_final,
         shaping_anneal_episodes=shaping_anneal_episodes,
+        bc_checkpoint=bc_checkpoint,
+        bc_kl_coeff=bc_kl_coeff,
+        bc_kl_iters=bc_kl_iters,
     )
 
     if resume:
@@ -849,6 +862,23 @@ def main():
         help="episodes over which shaping_weight decays to 0. 0 keeps it constant.",
     )
     p.add_argument(
+        "--bc-checkpoint",
+        default=None,
+        help="behavior-cloning weights to copy into the GNN before IMPALA starts",
+    )
+    p.add_argument(
+        "--bc-kl-coeff",
+        type=float,
+        default=0.0,
+        help="KL(current || BC) weight during the first --bc-kl-iters updates",
+    )
+    p.add_argument(
+        "--bc-kl-iters",
+        type=int,
+        default=0,
+        help="iterations that keep the BC KL term; it then drops to 0",
+    )
+    p.add_argument(
         "--archetypes",
         type=str,
         default=None,
@@ -876,6 +906,9 @@ def main():
         pbt_metric=args.pbt_metric,
         shaping_weight=args.shaping_weight,
         shaping_anneal_episodes=args.shaping_anneal_episodes,
+        bc_checkpoint=args.bc_checkpoint,
+        bc_kl_coeff=args.bc_kl_coeff,
+        bc_kl_iters=args.bc_kl_iters,
     )
 
 

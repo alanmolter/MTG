@@ -1,0 +1,3902 @@
+{
+  "summary": {
+    "accepted": 228,
+    "rejected": 530,
+    "by_split": {
+      "train": 152,
+      "benchmark": 8,
+      "holdout": 68
+    },
+    "by_format": {
+      "pioneer": 173,
+      "historic": 16,
+      "standard": 39
+    },
+    "by_archetype": {
+      "control": 45,
+      "midrange": 100,
+      "aggro": 78,
+      "combo": 5
+    },
+    "by_source": {
+      "mtgjson": 166,
+      "mtgtop8": 62
+    },
+    "rejection_reasons": {
+      "not_arena_relevant_format": 402,
+      "colored_source_shortage": 104,
+      "color_identity": 4,
+      "early_curve": 5,
+      "forge_name": 5,
+      "unparsed_mana_cost": 1,
+      "download_error": 6,
+      "mainboard_size": 1,
+      "duplicate_mainboard": 2
+    }
+  },
+  "rejected": [
+    {
+      "id": "NutsAndBolts_5DN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SpecialForces_5DN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Sunburst_5DN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Stampede_5DN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AncientArsenal_ACR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "fireworks_afr",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Demilich needs 4 U pip(s): 15 sources give 20.7% by turn 4 (minimum 70%); colored_source_shortage: Meteor Swarm needs 3 R pip(s): 15 sources give 39.9% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "AFR",
+      "release_date": "2021-09-24",
+      "arena_format": "pioneer",
+      "mtgjson_file": "Fireworks_AFR",
+      "colors": "UR"
+    },
+    {
+      "id": "BrotherhoodAgents_ACR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "tezzeretmasterofmetal_aer",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Essence Extraction needs 2 B pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/aether-revolt-planeswalker-deck-lists-2017-01-11",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Planeswalker Deck",
+      "set_code": "AER",
+      "release_date": "2017-01-20",
+      "arena_format": "pioneer",
+      "mtgjson_file": "TezzeretMasterOfMetal_AER",
+      "colors": "UB"
+    },
+    {
+      "id": "roughandtumbleamazon_afr",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Cleaving Reaper needs 2 B pip(s): 11 sources give 65.1% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/2021_Arena_Starter_Kit",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Kit",
+      "set_code": "AFR",
+      "release_date": "2021-08-06",
+      "arena_format": "pioneer",
+      "mtgjson_file": "RoughAndTumbleAmazon_AFR",
+      "colors": "BG"
+    },
+    {
+      "id": "savagelands_afr",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Werewolf Pack Leader needs 2 G pip(s): 14 sources give 60.5% by turn 2 (minimum 70%); colored_source_shortage: Hulking Bugbear needs 2 R pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Kazandu Mammoth // Kazandu Valley needs 2 G pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "AFR",
+      "release_date": "2021-09-24",
+      "arena_format": "pioneer",
+      "mtgjson_file": "SavageLands_AFR",
+      "colors": "RG"
+    },
+    {
+      "id": "sneakattackamazon_afr",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Archmage Emeritus needs 2 U pip(s): 11 sources give 59.1% by turn 4 (minimum 70%); colored_source_shortage: Calamity Bearer needs 2 R pip(s): 12 sources give 64.6% by turn 4 (minimum 70%); colored_source_shortage: Mind Flayer needs 2 U pip(s): 11 sources give 65.1% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/2021_Arena_Starter_Kit",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Kit",
+      "set_code": "AFR",
+      "release_date": "2021-08-06",
+      "arena_format": "pioneer",
+      "mtgjson_file": "SneakAttackAmazon_AFR",
+      "colors": "UR"
+    },
+    {
+      "id": "roughandtumble_afr",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Cleaving Reaper needs 2 B pip(s): 11 sources give 65.1% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/2021_Arena_Starter_Kit",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Kit",
+      "set_code": "AFR",
+      "release_date": "2021-08-06",
+      "arena_format": "pioneer",
+      "mtgjson_file": "RoughAndTumble_AFR",
+      "colors": "BG"
+    },
+    {
+      "id": "sneakattack_afr",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Archmage Emeritus needs 2 U pip(s): 11 sources give 59.1% by turn 4 (minimum 70%); colored_source_shortage: Calamity Bearer needs 2 R pip(s): 12 sources give 64.6% by turn 4 (minimum 70%); colored_source_shortage: Mind Flayer needs 2 U pip(s): 11 sources give 65.1% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/2021_Arena_Starter_Kit",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Kit",
+      "set_code": "AFR",
+      "release_date": "2021-08-06",
+      "arena_format": "pioneer",
+      "mtgjson_file": "SneakAttack_AFR",
+      "colors": "UR"
+    },
+    {
+      "id": "growinghunger_afr",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Exponential Growth needs 2 G pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "AFR",
+      "release_date": "2021-09-24",
+      "arena_format": "pioneer",
+      "mtgjson_file": "GrowingHunger_AFR",
+      "colors": "BG"
+    },
+    {
+      "id": "azureskies_anb",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Mass Manipulation needs 4 U pip(s): 25 sources give 67.5% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "ANB",
+      "release_date": "2019-09-26",
+      "arena_format": "pioneer",
+      "mtgjson_file": "AzureSkies_ANB",
+      "colors": "U"
+    },
+    {
+      "id": "Pandemonium_APC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "azureskies2_anb",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Mass Manipulation needs 4 U pip(s): 25 sources give 67.5% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "ANB",
+      "release_date": "2020-03-12",
+      "arena_format": "pioneer",
+      "mtgjson_file": "AzureSkies2_ANB",
+      "colors": "U"
+    },
+    {
+      "id": "Swoop_APC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DarkAlliance_ATH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DefendersOfTheCause_ATH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BoundByStrength_AVR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "HumanitySVengeance_AVR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Slaughterhouse_AVR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Whirlpool_APC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Burial_APC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "eldraziassault_bfz",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Grip of Desolation needs 2 B pip(s): 10 sources give 64.6% by turn 6 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/battle-zendikar-event-deck-and-intro-packs-2015-09-24",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BFZ",
+      "release_date": "2015-10-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "EldraziAssault_BFZ",
+      "colors": "BR"
+    },
+    {
+      "id": "zendikarsrage_bfz",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Reclaiming Vines needs 2 G pip(s): 12 sources give 64.6% by turn 4 (minimum 70%); colored_source_shortage: Rolling Thunder needs 2 R pip(s): 10 sources give 40.0% by turn 2 (minimum 70%); colored_source_shortage: Stonefury needs 2 R pip(s): 10 sources give 59.1% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/battle-zendikar-event-deck-and-intro-packs-2015-09-24",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BFZ",
+      "release_date": "2015-10-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ZendikarSRage_BFZ",
+      "colors": "RG"
+    },
+    {
+      "id": "callofblood_bfz",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Bloodbond Vampire needs 2 B pip(s): 12 sources give 64.6% by turn 4 (minimum 70%); colored_source_shortage: Roil's Retribution needs 2 W pip(s): 11 sources give 65.1% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/battle-zendikar-event-deck-and-intro-packs-2015-09-24",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BFZ",
+      "release_date": "2015-10-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "CallOfBlood_BFZ",
+      "colors": "WB"
+    },
+    {
+      "id": "deathsbeginning_bng",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Raised by Wolves needs 2 G pip(s): 11 sources give 65.1% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/born-gods-intro-pack-decklists-2014-01-29",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BNG",
+      "release_date": "2014-02-07",
+      "arena_format": "pioneer",
+      "mtgjson_file": "DeathSBeginning_BNG",
+      "colors": "BG"
+    },
+    {
+      "id": "SolitaryFiends_AVR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AngelicMight_AVR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "insatiablehunger_bng",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Cyclops of One-Eyed Pass needs 2 R pip(s): 13 sources give 69.6% by turn 4 (minimum 70%); colored_source_shortage: Swordwise Centaur needs 2 G pip(s): 15 sources give 65.0% by turn 2 (minimum 70%); colored_source_shortage: Searing Blood needs 2 R pip(s): 13 sources give 55.8% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/born-gods-intro-pack-decklists-2014-01-29",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BNG",
+      "release_date": "2014-02-07",
+      "arena_format": "pioneer",
+      "mtgjson_file": "InsatiableHunger_BNG",
+      "colors": "RG"
+    },
+    {
+      "id": "ultimatesacrifice_bfz",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Smothering Abomination needs 2 B pip(s): 11 sources give 59.1% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/battle-zendikar-event-deck-and-intro-packs-2015-09-24",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Event Deck",
+      "set_code": "BFZ",
+      "release_date": "2015-10-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "UltimateSacrifice_BFZ",
+      "colors": "WUBG"
+    },
+    {
+      "id": "underworldherald_bng",
+      "reason": "color_identity",
+      "detail": "color_identity: Rakdos Cackler is BR but the mana base produces B; off-color R; color_identity: Rakdos Shred-Freak is BR but the mana base produces B; off-color R; color_identity: Gift of Orzhova is WB but the mana base produces B; off-color W",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/event-deck-2014-02-06",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Event Deck",
+      "set_code": "BNG",
+      "release_date": "2014-02-28",
+      "arena_format": "pioneer",
+      "mtgjson_file": "UnderworldHerald_BNG",
+      "colors": "WBR"
+    },
+    {
+      "id": "FieryDawn_AVR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RatsNest_BOK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DarkDevotion_BOK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "otterlimits_blb",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Mind Spring needs 2 U pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/news/announcements/bloomburrow-starter-kit-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Starter Kit",
+      "set_code": "BLB",
+      "release_date": "2024-08-02",
+      "arena_format": "standard",
+      "mtgjson_file": "OtterLimits_BLB",
+      "colors": "UR"
+    },
+    {
+      "id": "inspirationstruck_bng",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Insatiable Harpy needs 2 B pip(s): 12 sources give 64.6% by turn 4 (minimum 70%); colored_source_shortage: Curse of the Swine needs 2 U pip(s): 16 sources give 69.1% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/born-gods-intro-pack-decklists-2014-01-29",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BNG",
+      "release_date": "2014-02-07",
+      "arena_format": "pioneer",
+      "mtgjson_file": "InspirationStruck_BNG",
+      "colors": "UB"
+    },
+    {
+      "id": "rallyingcry_bfz",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Ondu Champion needs 2 R pip(s): 10 sources give 53.1% by turn 4 (minimum 70%); colored_source_shortage: Shatterskull Recruit needs 2 R pip(s): 10 sources give 59.1% by turn 5 (minimum 70%); colored_source_shortage: Inspired Charge needs 2 W pip(s): 12 sources give 64.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/battle-zendikar-event-deck-and-intro-packs-2015-09-24",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BFZ",
+      "release_date": "2015-10-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "RallyingCry_BFZ",
+      "colors": "WR"
+    },
+    {
+      "id": "Spiritbane_CHK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DeathSEncroach_AVR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "forgedinbattle_bng",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Phalanx Leader needs 2 W pip(s): 11 sources give 45.4% by turn 2 (minimum 70%); colored_source_shortage: Two-Headed Cerberus needs 2 R pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Wingsteed Rider needs 2 W pip(s): 11 sources give 52.5% by turn 3 (minimum 70%); colored_source_shortage: Searing Blood needs 2 R pip(s): 14 sources give 60.5% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/born-gods-intro-pack-decklists-2014-01-29",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BNG",
+      "release_date": "2014-02-07",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ForgedInBattle_BNG",
+      "colors": "WR"
+    },
+    {
+      "id": "KamiReborn_CHK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Spiritcraft_BOK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SnakeSPath_CHK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AurochsStampede_CSP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "swarminginstinct_bfz",
+      "reason": "early_curve",
+      "detail": "early_curve: Only 5 spells cost 0-2 mana; minimum 8",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/battle-zendikar-event-deck-and-intro-packs-2015-09-24",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "BFZ",
+      "release_date": "2015-10-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "SwarmingInstinct_BFZ",
+      "colors": "UG"
+    },
+    {
+      "id": "Elves_DD1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BeyondTheGrave_CSP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Chandra_DD2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "KjeldoranCunning_CSP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Goblins_DD1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Snowscape_CSP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "JaceJapanese_DD2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WayOfTheWarrior_CHK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Ninjutsu_BOK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Liliana_DDD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ChandraJapanese_DD2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Garruk_DDD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Phyrexia_DDE",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AjaniGoldmane_DDH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Koth_DDI",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheCoalition_DDE",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "NicolBolas_DDH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Divine_DDC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Sorin_DDK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Tezzeret_DDF",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Demonic_DDC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Heroes_DDL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Golgari_DDJ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Venser_DDI",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Dragons_DDG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Jace_DDM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Monsters_DDL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Jace_DD2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Zendikar_DDP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Blessed_DDQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Eldrazi_DDP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Speed_DDN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Elspeth_DDF",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Vraska_DDM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Cursed_DDQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Mind_DDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Izzet_DDJ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Elspeth_DDO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Kiora_DDO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Knights_DDG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "IngeniousMachinists_DDU",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Merfolk_DDT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Goblins_DDT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Cunning_DDN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ObNixilis_DDR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Might_DDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WoodlandWarriors_DDU",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Tibalt_DDK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SimicMutology_DIS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AzoriusAscendant_DIS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RakdosBloodsport_DIS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DarkSacrifice_DKA",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "StrengthOfSelesnya_DGM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "gruulsiege_dgm",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Volcanic Geyser needs 2 R pip(s): 16 sources give 69.1% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/content/intro-pack-decklists-dragons-maze-card-set-archive",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "DGM",
+      "release_date": "2013-05-03",
+      "arena_format": "pioneer",
+      "mtgjson_file": "GruulSiege_DGM",
+      "colors": "RG"
+    },
+    {
+      "id": "Nissa_DDR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AzoriusAuthority_DGM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GleefulFlames_DKA",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GravePower_DKA",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SwiftJustice_DKA",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SpiralingDoom_DKA",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "dimirmanipulation_dom",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Walk the Plank needs 2 B pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "DOM",
+      "release_date": "2018-03-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "DimirManipulation_DOM",
+      "colors": "UB"
+    },
+    {
+      "id": "borosassault_dom",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Angel of Condemnation needs 2 W pip(s): 13 sources give 69.6% by turn 4 (minimum 70%); colored_source_shortage: Puncturing Blow needs 2 R pip(s): 12 sources give 64.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "DOM",
+      "release_date": "2018-03-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "BorosAssault_DOM",
+      "colors": "WR"
+    },
+    {
+      "id": "MonstrousSurprise_DKA",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RelentlessDead_DKA",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MindSwarm_DST",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "golgariexploration_dom",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Golden Demise needs 2 B pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Walk the Plank needs 2 B pip(s): 14 sources give 60.5% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "DOM",
+      "release_date": "2018-03-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "GolgariExploration_DOM",
+      "colors": "BG"
+    },
+    {
+      "id": "Transference_DST",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "thelegionofdusk_dom",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Sanctum Seeker needs 2 B pip(s): 13 sources give 69.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "DOM",
+      "release_date": "2018-03-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "TheLegionOfDusk_DOM",
+      "colors": "WB"
+    },
+    {
+      "id": "thebrazencoalition_dom",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Walk the Plank needs 2 B pip(s): 12 sources give 50.7% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "DOM",
+      "release_date": "2018-03-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "TheBrazenCoalition_DOM",
+      "colors": "BR"
+    },
+    {
+      "id": "sneaksquad_dmu",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Murder needs 2 B pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Dominaria_United/Welcome_booster#Sneak_Squad_deck",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Promotional Deck",
+      "set_code": "DMU",
+      "release_date": "2022-09-09",
+      "arena_format": "pioneer",
+      "mtgjson_file": "SneakSquad_DMU",
+      "colors": "UB"
+    },
+    {
+      "id": "massedranks_dtk",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Scaleguard Sentinels needs 2 G pip(s): 13 sources give 55.8% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/dragons-tarkir-intro-pack-decklists-2015-03-19",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "DTK",
+      "release_date": "2015-03-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "MassedRanks_DTK",
+      "colors": "WG"
+    },
+    {
+      "id": "Demonic_DVD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SwarmSlam_DST",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "selesnyapride_dom",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Thrashing Brontodon needs 2 G pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "DOM",
+      "release_date": "2018-03-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "SelesnyaPride_DOM",
+      "colors": "WG"
+    },
+    {
+      "id": "RiverHeralds_E02",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "cruelplots_dtk",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Silumgar's Scorn needs 2 U pip(s): 12 sources give 50.7% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/dragons-tarkir-intro-pack-decklists-2015-03-19",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "DTK",
+      "release_date": "2015-03-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "CruelPlots_DTK",
+      "colors": "UB"
+    },
+    {
+      "id": "MasterBlaster_DST",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SunEmpire_E02",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BrazenCoalition_E02",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "theriverheralds_dom",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Kopala, Warden of Waves needs 2 U pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Swift Warden needs 2 G pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "DOM",
+      "release_date": "2018-03-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "TheRiverHeralds_DOM",
+      "colors": "UG"
+    },
+    {
+      "id": "Divine_DVD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "dangerousknowledge_emn",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Niblis of Frost needs 2 U pip(s): 13 sources give 69.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/eldritch-moon-intro-pack-decklists-2016-07-13",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "EMN",
+      "release_date": "2016-07-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "DangerousKnowledge_EMN",
+      "colors": "UR"
+    },
+    {
+      "id": "LegionOfDusk_E02",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Elves_EVG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BattleBlitz_EVE",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Sidestep_EVE",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Goblins_EVG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DeathMarch_EVE",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "shallowgraves_emn",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Succumb to Temptation needs 2 B pip(s): 13 sources give 63.1% by turn 3 (minimum 70%); colored_source_shortage: Murder needs 2 B pip(s): 13 sources give 63.1% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/eldritch-moon-intro-pack-decklists-2016-07-13",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "EMN",
+      "release_date": "2016-07-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ShallowGraves_EMN",
+      "colors": "UB"
+    },
+    {
+      "id": "landslidecharge_dtk",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Savage Knuckleblade needs 1 U pip(s): 5 sources give 57.0% by turn 3 (minimum 70%); colored_source_shortage: Thunderbreak Regent needs 2 R pip(s): 10 sources give 53.1% by turn 4 (minimum 70%); colored_source_shortage: Stubborn Denial needs 1 U pip(s): 5 sources give 47.5% by turn 1 (minimum 70%); colored_source_shortage: Temur Charm needs 1 U pip(s): 5 sources give 57.0% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/dragons-tarkir-event-deck-2015-03-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Event Deck",
+      "set_code": "DTK",
+      "release_date": "2015-03-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "LandslideCharge_DTK",
+      "colors": "URG"
+    },
+    {
+      "id": "Superabundance_EVE",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GroundbreakerAdvancedDeck_EXO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "LifeDrain_EVE",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WhiteHeatBasicDeck_EXO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "profit_frf",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Nighthowler needs 2 B pip(s): 13 sources give 63.1% by turn 3 (minimum 70%); colored_source_shortage: Courser of Kruphix needs 2 G pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Whip of Erebos needs 2 B pip(s): 13 sources give 69.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Fate_Reforged/Clash_pack",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Clash Pack",
+      "set_code": "FRF",
+      "release_date": "2015-01-23",
+      "arena_format": "pioneer",
+      "mtgjson_file": "Profit_FRF",
+      "colors": "BG"
+    },
+    {
+      "id": "WidowmakerAdvancedDeck_EXO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DominatorAdvancedDeck_EXO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WidowmakerBasicDeck_EXO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "power_frf",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Herald of Torment needs 2 B pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Hero's Downfall needs 2 B pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Fate_Reforged/Clash_pack",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Clash Pack",
+      "set_code": "FRF",
+      "release_date": "2015-01-23",
+      "arena_format": "pioneer",
+      "mtgjson_file": "Power_FRF",
+      "colors": "UBG"
+    },
+    {
+      "id": "RebelsUnite_FUT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "FutureShock_FUT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GroundbreakerBasicDeck_EXO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "powerandprofit_frf",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Nighthowler needs 2 B pip(s): 11 sources give 52.5% by turn 3 (minimum 70%); colored_source_shortage: Courser of Kruphix needs 2 G pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Herald of Torment needs 2 B pip(s): 11 sources give 52.5% by turn 3 (minimum 70%); colored_source_shortage: Hero's Downfall needs 2 B pip(s): 11 sources give 52.5% by turn 3 (minimum 70%); colored_source_shortage: Whip of Erebos needs 2 B pip(s): 11 sources give 59.1% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Fate_Reforged/Clash_pack",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Clash Pack",
+      "set_code": "FRF",
+      "release_date": "2015-01-23",
+      "arena_format": "pioneer",
+      "mtgjson_file": "PowerAndProfit_FRF",
+      "colors": "UBG"
+    },
+    {
+      "id": "WhiteHeatAdvancedDeck_EXO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "graveadvantage_frf",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Hornet Queen needs 3 G pip(s): 13 sources give 57.8% by turn 7 (minimum 70%); early_curve: Only 6 spells cost 0-2 mana; minimum 8",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/fate-reforged-intro-pack-decklists-2015-01-15",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "FRF",
+      "release_date": "2015-01-23",
+      "arena_format": "pioneer",
+      "mtgjson_file": "GraveAdvantage_FRF",
+      "colors": "BG"
+    },
+    {
+      "id": "Dimir_GK1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DominatorBasicDeck_EXO",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Izzet_GK1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Boros_GK1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Golgari_GK1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "stampedinghordes_frf",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Geist of the Moors needs 2 W pip(s): 12 sources give 58.0% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/fate-reforged-intro-pack-decklists-2015-01-15",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "FRF",
+      "release_date": "2015-01-23",
+      "arena_format": "pioneer",
+      "mtgjson_file": "StampedingHordes_FRF",
+      "colors": "WR"
+    },
+    {
+      "id": "Selesnya_GK1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "CodeOfTheOrzhov_GPT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "cunningplan_frf",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Hordeling Outburst needs 2 R pip(s): 13 sources give 63.1% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/fate-reforged-intro-pack-decklists-2015-01-15",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "FRF",
+      "release_date": "2015-01-23",
+      "arena_format": "pioneer",
+      "mtgjson_file": "CunningPlan_FRF",
+      "colors": "UR"
+    },
+    {
+      "id": "Orzhov_GK2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Simic_GK2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MuYanling_GS1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ralcallerofstorms_grn",
+      "reason": "early_curve",
+      "detail": "early_curve: Only 7 spells cost 0-2 mana; minimum 8",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/guilds-ravnica-planeswalker-decklists-2018-09-20",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Planeswalker Deck",
+      "set_code": "GRN",
+      "release_date": "2018-10-05",
+      "arena_format": "pioneer",
+      "mtgjson_file": "RalCallerOfStorms_GRN",
+      "colors": "UR"
+    },
+    {
+      "id": "FateBlaster_FUT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BorosBattalion_GTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GruulWilding_GPT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Azorius_GK2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Rakdos_GK2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Garruk_GVL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SuspendedSentence_FUT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "JiangYanggu_GS1",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GruulGoliaths_GTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Blowout_INV",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RallyAndRout_GTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "HeavyDuty_INV",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Liliana_GVL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Deathfed_ISD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SimicSynthesis_GTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ThriveAndThrash_GTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Gruul_GK2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Spectrum_INV",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "IzzetGizmometry_GPT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Dismissal_INV",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DeathlyDominion_ISD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "fatesforeseen_jou",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Pull from the Deep needs 2 U pip(s): 13 sources give 69.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/journey-nyx-intro-pack-decklists-2014-04-25-0",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "JOU",
+      "release_date": "2014-05-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "FatesForeseen_JOU",
+      "colors": "UR"
+    },
+    {
+      "id": "SpectralLegions_ISD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DimirDementia_GTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "EldritchOnslaught_ISD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "pantheonspower_jou",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Archetype of Courage needs 2 W pip(s): 11 sources give 52.5% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/journey-nyx-intro-pack-decklists-2014-04-25-0",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "JOU",
+      "release_date": "2014-05-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "PantheonSPower_JOU",
+      "colors": "WB"
+    },
+    {
+      "id": "Painflow_JUD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "mortalsofmyth_jou",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Phalanx Leader needs 2 W pip(s): 15 sources give 65.0% by turn 2 (minimum 70%); colored_source_shortage: Vanguard of Brimaz needs 2 W pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/journey-nyx-intro-pack-decklists-2014-04-25-0",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "JOU",
+      "release_date": "2014-05-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "MortalsOfMyth_JOU",
+      "colors": "WG"
+    },
+    {
+      "id": "SpectralSlam_JUD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "OrzhovOppression_GTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RepelTheDark_ISD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "CarnivalOfBlood_ISD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "voraciousrage_jou",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Rageblood Shaman needs 2 R pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Insatiable Harpy needs 2 B pip(s): 11 sources give 59.1% by turn 4 (minimum 70%); colored_source_shortage: Warchanter of Mogis needs 2 B pip(s): 11 sources give 65.1% by turn 5 (minimum 70%); colored_source_shortage: Searing Blood needs 2 R pip(s): 14 sources give 60.5% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/journey-nyx-intro-pack-decklists-2014-04-25-0",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "JOU",
+      "release_date": "2014-05-02",
+      "arena_format": "pioneer",
+      "mtgjson_file": "VoraciousRage_JOU",
+      "colors": "BR"
+    },
+    {
+      "id": "conqueringhordes_ktk",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Herald of Torment needs 2 B pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Bile Blight needs 2 B pip(s): 14 sources give 60.5% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/game-info/products/card-set-archive/khans-of-tarkir/event-deck",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Event Deck",
+      "set_code": "KTK",
+      "release_date": "2014-09-26",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ConqueringHordes_KTK",
+      "colors": "WB"
+    },
+    {
+      "id": "HoldTheLine_ISD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Inundation_JUD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Jace_JVC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "wrathofthemortals_jou",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Searing Blood needs 2 R pip(s): 16 sources give 69.1% by turn 2 (minimum 70%); colored_source_shortage: Fated Conflagration needs 3 R pip(s): 16 sources give 53.5% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/journey-nyx-event-deck-2014-05-01-0",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Event Deck",
+      "set_code": "JOU",
+      "release_date": "2014-05-23",
+      "arena_format": "pioneer",
+      "mtgjson_file": "WrathOfTheMortals_JOU",
+      "colors": "UR"
+    },
+    {
+      "id": "BoggartFeast_LRW",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "temuravalanche_ktk",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Summit Prowler needs 2 R pip(s): 13 sources give 69.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arc/khans-tarkir-intro-pack-decklists-2014-09-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "KTK",
+      "release_date": "2014-09-26",
+      "arena_format": "pioneer",
+      "mtgjson_file": "TemurAvalanche_KTK",
+      "colors": "URG"
+    },
+    {
+      "id": "MorphMayhem_LGN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Chandra_JVC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ZombiesUnleashed_LGN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SliverShivers_LGN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ElementalsPath_LRW",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ElvishRage_LGN",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "gravesecrets_ltr",
+      "reason": "forge_name",
+      "detail": "Fallaji Archaeologist",
+      "source_kind": "mtgjson",
+      "source_url": "MTG Arena",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "LTR",
+      "release_date": "2023-06-20",
+      "arena_format": "historic",
+      "mtgjson_file": "GraveSecrets_LTR",
+      "colors": "UB"
+    },
+    {
+      "id": "ElvishPredation_LRW",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AirRazers_JUD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GondorGreenWhite_LTR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "KithkinMilitia_LRW",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MerrowRiverways_LRW",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "scrapyardsacrifice_ltr",
+      "reason": "forge_name",
+      "detail": "Phyrexian Dragon Engine // Mishra, Lost to Phyrexia",
+      "source_kind": "mtgjson",
+      "source_url": "MTG Arena",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "LTR",
+      "release_date": "2023-06-20",
+      "arena_format": "historic",
+      "mtgjson_file": "ScrapyardSacrifice_LTR",
+      "colors": "BR"
+    },
+    {
+      "id": "chandrapyrogenius_kld",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Aerial Responder needs 2 W pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/planeswalker-decklists-2016-09-21",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Planeswalker Deck",
+      "set_code": "KLD",
+      "release_date": "2016-09-30",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ChandraPyrogenius_KLD",
+      "colors": "WR"
+    },
+    {
+      "id": "EntanglingWebs_M12",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "PowerOfProphecy_M11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BladesOfVictory_M11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "StampedeOfBeasts_M11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MysticalMight_M12",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ReignOfVampirism_M11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "VampireOnslaught_M12",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BreathOfFire_M11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DepthsOfPower_M13",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "IllusionaryMight_M12",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MobRule_M13",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GrabForPower_M12",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "deathreaper_m14",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Smelt needs 1 R pip(s): 8 sources give 65.4% by turn 1 (minimum 70%); colored_source_shortage: Barrage of Expendables needs 1 R pip(s): 8 sources give 65.4% by turn 1 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/magic-2014-intro-pack-decklists-2013-07-09",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "M14",
+      "release_date": "2013-07-19",
+      "arena_format": "pioneer",
+      "mtgjson_file": "DeathReaper_M14",
+      "colors": "BR"
+    },
+    {
+      "id": "sylvanwisdom_ltr",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Tribute to the World Tree needs 3 G pip(s): 21 sources give 68.0% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "MTG Arena",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "LTR",
+      "release_date": "2023-06-20",
+      "arena_format": "historic",
+      "mtgjson_file": "SylvanWisdom_LTR",
+      "colors": "UG"
+    },
+    {
+      "id": "SoleDomination_M13",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SweetRevenge_M13",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RepeatPerformance_M13",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WildRush_M13",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SacredAssault_M12",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "fateandfury_m15",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Prognostic Sphinx needs 2 U pip(s): 9 sources give 52.5% by turn 5 (minimum 70%); colored_source_shortage: Aetherspouts needs 2 U pip(s): 9 sources give 52.5% by turn 5 (minimum 70%); colored_source_shortage: Jace's Ingenuity needs 2 U pip(s): 9 sources give 52.5% by turn 5 (minimum 70%); colored_source_shortage: Curse of the Swine needs 2 U pip(s): 9 sources give 34.4% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic_2015/Clash_pack",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Clash Pack",
+      "set_code": "M15",
+      "release_date": "2014-07-18",
+      "arena_format": "pioneer",
+      "mtgjson_file": "FateAndFury_M15",
+      "colors": "UG"
+    },
+    {
+      "id": "rushofthewild_m14",
+      "reason": "color_identity",
+      "detail": "color_identity: Rakdos Cackler is BR but the mana base produces RG; off-color B; color_identity: Dryad Militant is WG but the mana base produces RG; off-color W; colored_source_shortage: Ogre Battledriver needs 2 R pip(s): 13 sources give 69.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/magic-2014-event-deck-decklist-2013-07-24",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Event Deck",
+      "set_code": "M14",
+      "release_date": "2013-08-09",
+      "arena_format": "pioneer",
+      "mtgjson_file": "RushOfTheWild_M14",
+      "colors": "WBRG"
+    },
+    {
+      "id": "flamesofthedragon_m15",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Krenko's Enforcer needs 2 R pip(s): 12 sources give 58.0% by turn 3 (minimum 70%); colored_source_shortage: Wall of Frost needs 2 U pip(s): 12 sources give 58.0% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/game-info/products/card-set-archive/magic-2015-core-set-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "M15",
+      "release_date": "2014-07-18",
+      "arena_format": "pioneer",
+      "mtgjson_file": "FlamesOfTheDragon_M15",
+      "colors": "UR"
+    },
+    {
+      "id": "PathToVictory_M13",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BloodAndFire_M12",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "infernalintervention_m15",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Wall of Fire needs 2 R pip(s): 13 sources give 63.1% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/game-info/products/card-set-archive/magic-2015-core-set-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "M15",
+      "release_date": "2014-07-18",
+      "arena_format": "pioneer",
+      "mtgjson_file": "InfernalIntervention_M15",
+      "colors": "BR"
+    },
+    {
+      "id": "fury_m15",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Boulderfall needs 2 R pip(s): 9 sources give 67.8% by turn 8 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/magic-2015-clash-pack-2014-07-07",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Clash Pack",
+      "set_code": "M15",
+      "release_date": "2014-07-18",
+      "arena_format": "pioneer",
+      "mtgjson_file": "Fury_M15",
+      "colors": "RG"
+    },
+    {
+      "id": "firesurge_m14",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Phantom Warrior needs 2 U pip(s): 10 sources give 46.7% by turn 3 (minimum 70%); colored_source_shortage: Opportunity needs 2 U pip(s): 10 sources give 64.6% by turn 6 (minimum 70%); colored_source_shortage: Volcanic Geyser needs 2 R pip(s): 16 sources give 69.1% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/magic-2014-intro-pack-decklists-2013-07-09",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "M14",
+      "release_date": "2013-07-19",
+      "arena_format": "pioneer",
+      "mtgjson_file": "FireSurge_M14",
+      "colors": "UR"
+    },
+    {
+      "id": "hitthegroundrunning_m15",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Stormtide Leviathan needs 3 U pip(s): 14 sources give 70.0% by turn 8 (minimum 70%); colored_source_shortage: Encrust needs 2 U pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/game-info/products/card-set-archive/magic-2015-core-set-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "M15",
+      "release_date": "2014-07-18",
+      "arena_format": "pioneer",
+      "mtgjson_file": "HitTheGroundRunning_M15",
+      "colors": "UG"
+    },
+    {
+      "id": "willofthemasses_m15",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Hornet Queen needs 3 G pip(s): 13 sources give 57.8% by turn 7 (minimum 70%); colored_source_shortage: Devouring Light needs 2 W pip(s): 12 sources give 58.0% by turn 3 (minimum 70%); top_heavy_curve: 13 spells cost 6+ mana; maximum 12",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/game-info/products/card-set-archive/magic-2015-core-set-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "M15",
+      "release_date": "2014-07-18",
+      "arena_format": "pioneer",
+      "mtgjson_file": "WillOfTheMasses_M15",
+      "colors": "WG"
+    },
+    {
+      "id": "priceofglory_m15",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Geist of the Moors needs 2 W pip(s): 12 sources give 58.0% by turn 3 (minimum 70%); colored_source_shortage: Sign in Blood needs 2 B pip(s): 13 sources give 55.8% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/game-info/products/card-set-archive/magic-2015-core-set-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "M15",
+      "release_date": "2014-07-18",
+      "arena_format": "pioneer",
+      "mtgjson_file": "PriceOfGlory_M15",
+      "colors": "WB"
+    },
+    {
+      "id": "strengthinnumbers_m19",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Burning Sun's Avatar needs 3 R pip(s): 14 sources give 57.4% by turn 6 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "M19",
+      "release_date": "2018-09-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "StrengthInNumbers_M19",
+      "colors": "WR"
+    },
+    {
+      "id": "housedimir_m20",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Mission Briefing needs 2 U pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "M20",
+      "release_date": "2019-05-03",
+      "arena_format": "pioneer",
+      "mtgjson_file": "HouseDimir_M20",
+      "colors": "UB"
+    },
+    {
+      "id": "izzetleague_m20",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Niv-Mizzet, Parun needs 3 U pip(s): 15 sources give 63.1% by turn 6 (minimum 70%); colored_source_shortage: Niv-Mizzet, Parun needs 3 R pip(s): 16 sources give 68.4% by turn 6 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "M20",
+      "release_date": "2019-05-03",
+      "arena_format": "pioneer",
+      "mtgjson_file": "IzzetLeague_M20",
+      "colors": "UR"
+    },
+    {
+      "id": "companyofknights_m21",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Ardenvale Tactician // Dizzying Swoop needs 2 W pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "M21",
+      "release_date": "2021-07-03",
+      "arena_format": "pioneer",
+      "mtgjson_file": "CompanyOfKnights_M21",
+      "colors": "WR"
+    },
+    {
+      "id": "wrathofmages_m19",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Entrancing Melody needs 2 U pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "M19",
+      "release_date": "2018-09-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "WrathOfMages_M19",
+      "colors": "UR"
+    },
+    {
+      "id": "mutationstation_m21",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Massacre Wurm needs 3 B pip(s): 16 sources give 68.4% by turn 6 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "M21",
+      "release_date": "2021-07-03",
+      "arena_format": "pioneer",
+      "mtgjson_file": "MutationStation_M21",
+      "colors": "UB"
+    },
+    {
+      "id": "spellpower_m21",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Stolen by the Fae needs 2 U pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "M21",
+      "release_date": "2021-07-03",
+      "arena_format": "pioneer",
+      "mtgjson_file": "Spellpower_M21",
+      "colors": "UR"
+    },
+    {
+      "id": "InfectDefile_MBS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DoomInevitable_MBS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "IntoTheBreach_MBS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Deathbreed_ME2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Mirromancy_MBS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BattleCries_MBS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "OrcAttack_ME2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "JungleJam_MIR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BandTogether_ME2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DeepwoodMenace_MMQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DeepwoodMenaceEnhancedDeck_MMQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DisrupterEnhancedDeck_MMQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Disrupter_MMQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "NightTerrors_MIR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "HazeOfSpores_ME2",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WarriorSCode_MOR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RebelSCallEnhancedDeck_MMQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TidalMastery_MMQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TidalMasteryEnhancedDeck_MMQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RebelSCall_MMQ",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RideLikeTheWind_MIR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SacrificialBam_MRD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Eruption_NEM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "PathOfBlight_MBS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "LittleBashers_MRD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BaitAndBludgeon_MRD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "EruptionEnhancedDeck_NEM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Mercenaries_NEM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DevouringSkies_NPH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GoingRogue_MOR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ReplicatorEnhancedDeck_NEM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WickedBig_MRD",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Battalion_MOR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Replicator_NEM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Breakdown_NEM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "OneTwoPunch_ODY",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "LifeForDeath_NPH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Shamanism_MOR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Liftoff_ODY",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ArtfulDestruction_NPH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WarOfAttrition_NPH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "PressureCooker_ODY",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MercenariesEnhancedDeck_NEM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TrounceOMatic_ODY",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BurningSky_MIR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RavagingSwarm_NPH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BreakdownEnhancedDeck_NEM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Devastation_ONS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "viciouscycle_ogw",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Smothering Abomination needs 2 B pip(s): 8 sources give 40.0% by turn 4 (minimum 70%); colored_source_shortage: Seed Guardian needs 2 G pip(s): 11 sources give 59.1% by turn 4 (minimum 70%); colored_source_shortage: Bone Splinters needs 1 B pip(s): 8 sources give 65.4% by turn 1 (minimum 70%); colored_source_shortage: Grasp of Darkness needs 2 B pip(s): 8 sources give 28.8% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/daily-magic-update/january-13-2016-update-2016-01-13",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "OGW",
+      "release_date": "2016-01-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ViciousCycle_OGW",
+      "colors": "BG"
+    },
+    {
+      "id": "IvoryDoom_ONS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "CelestialAssault_ONS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "demonicdeals_ori",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Chandra's Ignition needs 2 R pip(s): 10 sources give 59.1% by turn 5 (minimum 70%); colored_source_shortage: Ravaging Blaze needs 2 R pip(s): 10 sources give 40.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/content/magic-origins-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "ORI",
+      "release_date": "2015-07-17",
+      "arena_format": "pioneer",
+      "mtgjson_file": "DemonicDeals_ORI",
+      "colors": "BR"
+    },
+    {
+      "id": "dangerous_ori",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Anafenza, Kin-Tree Spirit needs 2 W pip(s): 12 sources give 50.7% by turn 2 (minimum 70%); colored_source_shortage: Avatar of the Resolute needs 2 G pip(s): 11 sources give 45.4% by turn 2 (minimum 70%); colored_source_shortage: Incremental Growth needs 2 G pip(s): 11 sources give 65.1% by turn 5 (minimum 70%); colored_source_shortage: Ancestral Vengeance needs 2 B pip(s): 11 sources give 45.4% by turn 2 (minimum 70%); colored_source_shortage: Citadel Siege needs 2 W pip(s): 12 sources give 64.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/magic-origins-clash-pack-and-intro-pack-decklists-2015-07-09",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Clash Pack",
+      "set_code": "ORI",
+      "release_date": "2015-07-17",
+      "arena_format": "pioneer",
+      "mtgjson_file": "Dangerous_ORI",
+      "colors": "WBG"
+    },
+    {
+      "id": "FeastOfFlesh_NPH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "concertedeffort_ogw",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Gladehart Cavalry needs 2 G pip(s): 8 sources give 55.8% by turn 7 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/daily-magic-update/january-13-2016-update-2016-01-13",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "OGW",
+      "release_date": "2016-01-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ConcertedEffort_OGW",
+      "colors": "WG"
+    },
+    {
+      "id": "RotFromWithin_NPH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "taketothesky_ori",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Celestial Flare needs 2 W pip(s): 10 sources give 40.0% by turn 2 (minimum 70%); colored_source_shortage: Claustrophobia needs 2 U pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/content/magic-origins-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "ORI",
+      "release_date": "2015-07-17",
+      "arena_format": "pioneer",
+      "mtgjson_file": "TakeToTheSky_ORI",
+      "colors": "WU"
+    },
+    {
+      "id": "bravethebattle_ori",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Outland Colossus needs 2 G pip(s): 10 sources give 59.1% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/content/magic-origins-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "ORI",
+      "release_date": "2015-07-17",
+      "arena_format": "pioneer",
+      "mtgjson_file": "BraveTheBattle_ORI",
+      "colors": "WG"
+    },
+    {
+      "id": "BaitSwitch_ONS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Armed_ORI",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "dinomight_otj",
+      "reason": "forge_name",
+      "detail": "Fanatical Strength",
+      "source_kind": "mtgjson",
+      "source_url": "MTG Arena",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "OTJ",
+      "release_date": "2024-07-08",
+      "arena_format": "standard",
+      "mtgjson_file": "DinoMight_OTJ",
+      "colors": "RG"
+    },
+    {
+      "id": "desertoasis_otj",
+      "reason": "forge_name",
+      "detail": "Pathfinding Axejaw",
+      "source_kind": "mtgjson",
+      "source_url": "MTG Arena",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "OTJ",
+      "release_date": "2024-07-08",
+      "arena_format": "standard",
+      "mtgjson_file": "DesertOasis_OTJ",
+      "colors": "UG"
+    },
+    {
+      "id": "twistedreality_ogw",
+      "reason": "unparsed_mana_cost",
+      "detail": "unparsed_mana_cost: Cannot safely parse mana cost of Walker of the Wastes: '4 C'; unparsed_mana_cost: Cannot safely parse mana cost of Spatial Contortion: '1 C'",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/daily-magic-update/january-13-2016-update-2016-01-13",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "OGW",
+      "release_date": "2016-01-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "TwistedReality_OGW",
+      "colors": "U"
+    },
+    {
+      "id": "huntingpack_ori",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Dwynen, Gilt-Leaf Daen needs 2 G pip(s): 13 sources give 69.6% by turn 4 (minimum 70%); colored_source_shortage: Eyeblight Massacre needs 2 B pip(s): 12 sources give 64.6% by turn 4 (minimum 70%); colored_source_shortage: Consecrated by Blood needs 2 B pip(s): 12 sources give 64.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/content/magic-origins-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "ORI",
+      "release_date": "2015-07-17",
+      "arena_format": "pioneer",
+      "mtgjson_file": "HuntingPack_ORI",
+      "colors": "BG"
+    },
+    {
+      "id": "outlawposse_otj",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Scorching Shot needs 2 R pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "MTG Arena",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "OTJ",
+      "release_date": "2024-07-08",
+      "arena_format": "standard",
+      "mtgjson_file": "OutlawPosse_OTJ",
+      "colors": "BR"
+    },
+    {
+      "id": "assemblevictory_ori",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Whirler Rogue needs 2 U pip(s): 11 sources give 59.1% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/content/magic-origins-intro-pack-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "ORI",
+      "release_date": "2015-07-17",
+      "arena_format": "pioneer",
+      "mtgjson_file": "AssembleVictory_ORI",
+      "colors": "UR"
+    },
+    {
+      "id": "ArmedAndDangerous_ORI",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "surgeofresistance_ogw",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Windrider Patrol needs 2 U pip(s): 11 sources give 65.1% by turn 5 (minimum 70%); colored_source_shortage: Ugin's Insight needs 2 U pip(s): 11 sources give 65.1% by turn 5 (minimum 70%); colored_source_shortage: Rolling Thunder needs 2 R pip(s): 12 sources give 50.7% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/daily-magic-update/january-13-2016-update-2016-01-13",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "OGW",
+      "release_date": "2016-01-22",
+      "arena_format": "pioneer",
+      "mtgjson_file": "SurgeOfResistance_OGW",
+      "colors": "UR"
+    },
+    {
+      "id": "Turnaround_PCY",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Distress_PCY",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "EndlessMarch_PLC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Pummel_PCY",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "UnravelingMind_PLC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ancientdiscovery_otj",
+      "reason": "early_curve",
+      "detail": "early_curve: Only 7 spells cost 0-2 mana; minimum 8",
+      "source_kind": "mtgjson",
+      "source_url": "MTG Arena",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "OTJ",
+      "release_date": "2024-07-08",
+      "arena_format": "standard",
+      "mtgjson_file": "AncientDiscovery_OTJ",
+      "colors": "WR"
+    },
+    {
+      "id": "Scout_PLS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Domain_PLS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Comeback_PLS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "IxidorSLegacy_PLC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "EonsOfEvil_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RitualsOfRebirth_PLC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Slither_PCY",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ClawsOfVengeance_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RelicsOfDoom_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MindOfTheVoid_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "FangsOfThePredator_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "HandsOfFire_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "CriesOfRage_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "EarsOfTheElves_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Barrage_PLS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Angels_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ScalesOfFury_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ThoughtsOfTheWind_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Thallids_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "snacktime_otj",
+      "reason": "forge_name",
+      "detail": "Mintstrosity",
+      "source_kind": "mtgjson",
+      "source_url": "MTG Arena",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "OTJ",
+      "release_date": "2024-07-08",
+      "arena_format": "standard",
+      "mtgjson_file": "SnackTime_OTJ",
+      "colors": "BG"
+    },
+    {
+      "id": "Slivers_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WingsOfLight_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Spirits_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BertrandLestreeFinalist_PTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "EyesOfShadow_PS11",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Beasts_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Elves_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Ninjas_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "LeonLindbackSemifinalist_PTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Berserk_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Zombies_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "EricTamQuarterfinalist_PTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MarkJusticeQuarterfinalist_PTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RavenousRats_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ShawnHammerRegnierQuarterfinalist_PTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "PrestonPoulterSemifinalist_PTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "secondsuncontrol_q01",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Settle the Wreckage needs 2 W pip(s): 12 sources give 64.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-lists-2018-02-23",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Challenger Deck",
+      "set_code": "Q01",
+      "release_date": "2018-04-06",
+      "arena_format": "pioneer",
+      "mtgjson_file": "SecondSunControl_Q01",
+      "colors": "WU"
+    },
+    {
+      "id": "GeorgeBaxterQuarterfinalist_PTC",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "CounterSurge_Q01",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Cats_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Wizards_PSAL",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "alliedfires_q04",
+      "reason": "early_curve",
+      "detail": "early_curve: Only 6 spells cost 0-2 mana; minimum 8",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-2020-02-15",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Challenger Deck",
+      "set_code": "Q04",
+      "release_date": "2020-03-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "AlliedFires_Q04",
+      "colors": "WUBRG"
+    },
+    {
+      "id": "arcanetempo_q02",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Niv-Mizzet, Parun needs 3 U pip(s): 15 sources give 63.1% by turn 6 (minimum 70%); colored_source_shortage: Niv-Mizzet, Parun needs 3 R pip(s): 14 sources give 57.4% by turn 6 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-2019-03-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Challenger Deck",
+      "set_code": "Q02",
+      "release_date": "2019-04-12",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ArcaneTempo_Q02",
+      "colors": "UR"
+    },
+    {
+      "id": "flashofferocity_q04",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Nightpack Ambusher needs 2 G pip(s): 13 sources give 69.6% by turn 4 (minimum 70%); colored_source_shortage: Frilled Mystic needs 2 G pip(s): 13 sources give 69.6% by turn 4 (minimum 70%); colored_source_shortage: Thassa's Intervention needs 2 U pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-2020-02-15",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Challenger Deck",
+      "set_code": "Q04",
+      "release_date": "2020-03-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "FlashOfFerocity_Q04",
+      "colors": "UG"
+    },
+    {
+      "id": "lotusfieldcombo_q06",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Mastermind's Acquisition needs 2 B pip(s): 4 sources give 12.6% by turn 4 (minimum 70%); colored_source_shortage: Peer into the Abyss needs 3 B pip(s): 4 sources give 2.9% by turn 7 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2021-08-24",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Pioneer Challenger Deck",
+      "set_code": "Q06",
+      "release_date": "2021-10-15",
+      "arena_format": "pioneer",
+      "mtgjson_file": "LotusFieldCombo_Q06",
+      "colors": "UBG"
+    },
+    {
+      "id": "DimirIntrigues_RAV",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "vraskascheminggorgon_rix",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Exultant Skymarcher needs 2 W pip(s): 13 sources give 63.1% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/rivals-ixalan-planeswalker-deck-lists-2018-01-11",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Planeswalker Deck",
+      "set_code": "RIX",
+      "release_date": "2018-01-19",
+      "arena_format": "pioneer",
+      "mtgjson_file": "VraskaSchemingGorgon_RIX",
+      "colors": "WB"
+    },
+    {
+      "id": "angrathminotaurpirate_rix",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Impale needs 2 B pip(s): 13 sources give 69.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/rivals-ixalan-planeswalker-deck-lists-2018-01-11",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Planeswalker Deck",
+      "set_code": "RIX",
+      "release_date": "2018-01-19",
+      "arena_format": "pioneer",
+      "mtgjson_file": "AngrathMinotaurPirate_RIX",
+      "colors": "BR"
+    },
+    {
+      "id": "GolgariDeathcreep_RAV",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AzoriusAdvance_RTR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ChargeOfTheBoros_RAV",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "dimircontrol_q08",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Narset, Parter of Veils needs 2 U pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Sinister Sabotage needs 2 U pip(s): 14 sources give 67.8% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2022-decklists-2022-09-29",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Pioneer Challenger Deck",
+      "set_code": "Q08",
+      "release_date": "2022-11-04",
+      "arena_format": "pioneer",
+      "mtgjson_file": "DimirControl_Q08",
+      "colors": "UB"
+    },
+    {
+      "id": "WrackAndRage_RTR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "CreepAndConquer_RTR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "IzzetIngenuity_RTR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SelesnyaSurge_RTR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GoblinMob_SCG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SelesnyaUnited_RAV",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GolgariGrowth_RTR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ArmyOfEntropy_SHM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Turnabout_SHM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Overkill_SHM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MaxAttax_SCG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AuraMastery_SHM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Pulverize_SCG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "stealthysubterfuge_snc",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Nashi, Moon Sage's Scion needs 2 B pip(s): 11 sources give 52.5% by turn 3 (minimum 70%); colored_source_shortage: Hero's Downfall needs 2 B pip(s): 11 sources give 52.5% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "SNC",
+      "release_date": "2022-09-09",
+      "arena_format": "pioneer",
+      "mtgjson_file": "StealthySubterfuge_SNC",
+      "colors": "UB"
+    },
+    {
+      "id": "balanceinallthings_snc",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Banishing Slash needs 2 W pip(s): 14 sources give 60.5% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Magic:_The_Gathering_Arena/Preconstructed_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Arena Starter Deck",
+      "set_code": "SNC",
+      "release_date": "2022-09-09",
+      "arena_format": "pioneer",
+      "mtgjson_file": "BalanceInAllThings_SNC",
+      "colors": "WB"
+    },
+    {
+      "id": "RakdosRaid_RTR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MortalCoil_SHM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "StormSurge_SCG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MyrOfMirrodin_SOM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SpiritFlames_SOK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "unearthedsecrets_soi",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Pack Guardian needs 2 G pip(s): 12 sources give 64.6% by turn 4 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/shadows-over-innistrad-intro-pack-decklists-2016-03-30",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "SOI",
+      "release_date": "2016-04-08",
+      "arena_format": "pioneer",
+      "mtgjson_file": "UnearthedSecrets_SOI",
+      "colors": "UG"
+    },
+    {
+      "id": "eerie_sos",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Lost in the Maze needs 2 U pip(s): 15 sources give 65.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/news/feature/secrets-of-strixhaven-60-card-theme-deck-contents-and-guide",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Theme Deck",
+      "set_code": "SOS",
+      "release_date": "2026-04-24",
+      "arena_format": "standard",
+      "mtgjson_file": "Eerie_SOS",
+      "colors": "WU"
+    },
+    {
+      "id": "CriticalMass_SOK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "PhyrexianPoison_SOM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TruthSeekers_SOK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "CallOfTheKor_STH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Migraine_STH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SoratamiSWisdom_SOK",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "vampiricthirst_soi",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Fiery Temper needs 2 R pip(s): 12 sources give 58.0% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/shadows-over-innistrad-intro-pack-decklists-2016-03-30",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "SOI",
+      "release_date": "2016-04-08",
+      "arena_format": "pioneer",
+      "mtgjson_file": "VampiricThirst_SOI",
+      "colors": "BR"
+    },
+    {
+      "id": "RelicBreaker_SOM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Metalcraft_SOM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Exiler_TD0",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MigraineAdvancedDeck_STH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheSparkler_STH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Boltslinger_TD0",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "anthousasarmy_ths",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Phalanx Leader needs 2 W pip(s): 12 sources give 50.7% by turn 2 (minimum 70%); colored_source_shortage: Wingsteed Rider needs 2 W pip(s): 12 sources give 58.0% by turn 3 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/theros-intro-pack-decklists-2013-09-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "THS",
+      "release_date": "2013-09-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "AnthousaSArmy_THS",
+      "colors": "WG"
+    },
+    {
+      "id": "Deadspread_SOM",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheSpikes_STH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheSpikesAdvancedDeck_STH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DeepFreeze_TMP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "manipulativemonstrosities_ths",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Stoneshock Giant needs 2 R pip(s): 10 sources give 59.1% by turn 5 (minimum 70%); colored_source_shortage: Curse of the Swine needs 2 U pip(s): 16 sources give 69.1% by turn 2 (minimum 70%); colored_source_shortage: Volcanic Geyser needs 2 R pip(s): 10 sources give 40.0% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/theros-intro-pack-decklists-2013-09-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "THS",
+      "release_date": "2013-09-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "ManipulativeMonstrosities_THS",
+      "colors": "UR"
+    },
+    {
+      "id": "TheSparklerAdvancedDeck_STH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheFlamesOfRath_TMP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheSwarm_TMP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DeepFreezeAdvancedDeck_TMP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ashiok_thb",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Tymaret, Chosen from Death needs 2 B pip(s): 14 sources give 60.5% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://mtg.wiki/wiki/Theros_Beyond_Death/Planeswalker_decks",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Planeswalker Deck",
+      "set_code": "THB",
+      "release_date": "2020-01-24",
+      "arena_format": "pioneer",
+      "mtgjson_file": "Ashiok_THB",
+      "colors": "UB"
+    },
+    {
+      "id": "CallOfTheKorAdvancedDeck_STH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheSliversAdvancedDeck_TMP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "FlamesOfRathAdvancedDeck_TMP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheSwarmAdvancedDeck_TMP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Michealangelo_TMT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Donatello_TMT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "devotiontodarkness_ths",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Pharika's Cure needs 2 B pip(s): 16 sources give 69.1% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/theros-intro-pack-decklists-2013-09-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "THS",
+      "release_date": "2013-09-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "DevotionToDarkness_THS",
+      "colors": "UB"
+    },
+    {
+      "id": "HopeSCrusaders_TSP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "inspiringheroics_ths",
+      "reason": "color_identity",
+      "detail": "color_identity: Dryad Militant is WG but the mana base produces WU; off-color G",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/theros-event-deck-decklist-2013-09-26",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Event Deck",
+      "set_code": "THS",
+      "release_date": "2013-10-18",
+      "arena_format": "pioneer",
+      "mtgjson_file": "InspiringHeroics_THS",
+      "colors": "WUG"
+    },
+    {
+      "id": "Leonardo_TMT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Raphael_TMT",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "blazingbeastsofmyth_ths",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Volcanic Geyser needs 2 R pip(s): 16 sources give 69.1% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/theros-intro-pack-decklists-2013-09-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "THS",
+      "release_date": "2013-09-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "BlazingBeastsOfMyth_THS",
+      "colors": "RG"
+    },
+    {
+      "id": "WakingNightmares_TOR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "FunWithFungus_TSP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Enchanter_UDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BattleSurge_UDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Assassin_UDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "EnchanterEnhancedDeck_UDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GraveDanger_TOR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SliverEvolution_TSP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BattleSurgeEnhancedDeck_UDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TheSlivers_TMP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "favorsfromnyx_ths",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Minotaur Abomination needs 2 B pip(s): 9 sources give 58.0% by turn 6 (minimum 70%); colored_source_shortage: Pharika's Cure needs 2 B pip(s): 9 sources give 34.4% by turn 2 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/arcana/theros-intro-pack-decklists-2013-09-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Intro Pack",
+      "set_code": "THS",
+      "release_date": "2013-09-27",
+      "arena_format": "pioneer",
+      "mtgjson_file": "FavorsFromNyx_THS",
+      "colors": "WB"
+    },
+    {
+      "id": "CrusherEnhancedDeck_ULG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Crusher_ULG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TimeDrainEnhancedDeck_ULG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Sleeper_USG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "PhyrexianAssaultEnhancedDeck_ULG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RealityFracture_TSP",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RadiantSRevengeEnhancedDeck_ULG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "FiendishNatureEnhancedDeck_UDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Sacrilege_TOR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AssassinEnhancedDeck_UDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SpecialDeliveryEnhancedDeck_USG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Tombstone_USG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SpecialDelivery_USG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ThePlagueEnhancedDeck_USG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ThePlague_USG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SleeperEnhancedDeck_USG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RadiantSRevenge_ULG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TimeDrain_ULG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SavageStompdown_VIS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "FiendishNature_UDS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Insanity_TOR",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AlexBortehMerfolkOpposition_WC01",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WildEyedFrenzy_VIS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "NicolasLabarreChimera_WC00",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "LegionOfGlory_VIS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "jacearcanestrategist_war",
+      "reason": "early_curve",
+      "detail": "early_curve: Only 5 spells cost 0-2 mana; minimum 8",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/card-preview/war-spark-planeswalker-deck-lists-2019-04-18",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Planeswalker Deck",
+      "set_code": "WAR",
+      "release_date": "2019-05-03",
+      "arena_format": "pioneer",
+      "mtgjson_file": "JaceArcaneStrategist_WAR",
+      "colors": "UG"
+    },
+    {
+      "id": "PhyrexianAssault_ULG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AntoineRuelBlueBlackRedNetherGo_WC01",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BrianKiblerRedZone2K2_WC02",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "UnnaturalForces_VIS",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TombstoneEnhancedDeck_USG",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "JonFinkelMonoBlueTinker_WC00",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TomVanDeLogtMachineHead_WC01",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "TomVanDeLogtReplenish_WC00",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AeoPaquetteAffinity_WC04",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DaveHumpherysBlueGreenMadness_WC03",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "WolfgangEderGoblinBidding_WC03",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "JanTomcaniDarkFires_WC01",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RaphaelLevyLeWonderGoose_WC02",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "PaulMccabeRedBlueAggroControl_WC97",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SvendGeertsenGreenStompy_WC97",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BenRubinSligh_WC98",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BrianHackerWhiteWeenie_WC98",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "BrianSeldenCaliNightmare_WC98",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "RandyBuehlerDrawGo_WC98",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "GabrielNassifBlueWhiteAntiAffinityControl_WC04",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "SimHanHowSquirrelOpposition_WC02",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "JulienNuijtenGreenWhiteAstralSlide_WC04",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MattLindeMonoGreenStompy_WC99",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "backupbeatdown_woe",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: In the Trenches needs 2 W pip(s): 14 sources give 67.8% by turn 3 (minimum 70%); colored_source_shortage: Silverback Elder needs 3 G pip(s): 16 sources give 61.4% by turn 5 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/news/announcements/starter-kit-2023-decklists",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Starter Kit",
+      "set_code": "WOE",
+      "release_date": "2023-09-08",
+      "arena_format": "pioneer",
+      "mtgjson_file": "BackupBeatdown_WOE",
+      "colors": "WG"
+    },
+    {
+      "id": "JanoschK\u00fchnAngryNonHermit_WC00: 'ascii' codec can't encode character '\\xfc' in position 26: ordinal not in range(128)",
+      "reason": "download_error",
+      "detail": "JanoschK\u00fchnAngryNonHermit_WC00: 'ascii' codec can't encode character '\\xfc' in position 26: ordinal not in range(128)"
+    },
+    {
+      "id": "KaiBuddeRedArtifactWildfire_WC99",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "DanielZinkWhiteBlueGreenWake_WC03",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Gatecrasher_WTH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "FieryFury_WTH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "MarkLePineSpedRed_WC99",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "AirForces_WTH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "ManuelBevandMyrIncubatorCombo_WC04",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "Jakub\u0160lemrMonoBlackControl_WC99: 'ascii' codec can't encode character '\\u0160' in position 23: ordinal not in range(128)",
+      "reason": "download_error",
+      "detail": "Jakub\u0160lemrMonoBlackControl_WC99: 'ascii' codec can't encode character '\\u0160' in position 23: ordinal not in range(128)"
+    },
+    {
+      "id": "CarlosRom\u00e3oPsychatog_WC02: 'ascii' codec can't encode character '\\xe3' in position 27: ordinal not in range(128)",
+      "reason": "download_error",
+      "detail": "CarlosRom\u00e3oPsychatog_WC02: 'ascii' codec can't encode character '\\xe3' in position 27: ordinal not in range(128)"
+    },
+    {
+      "id": "JanoschK\u00fchnRedWhiteBlueSpeedControl_WC97: 'ascii' codec can't encode character '\\xfc' in position 26: ordinal not in range(128)",
+      "reason": "download_error",
+      "detail": "JanoschK\u00fchnRedWhiteBlueSpeedControl_WC97: 'ascii' codec can't encode character '\\xfc' in position 26: ordinal not in range(128)"
+    },
+    {
+      "id": "PeerKr\u00f6gerReanimator_WC03: 'ascii' codec can't encode character '\\xf6' in position 24: ordinal not in range(128)",
+      "reason": "download_error",
+      "detail": "PeerKr\u00f6gerReanimator_WC03: 'ascii' codec can't encode character '\\xf6' in position 24: ordinal not in range(128)"
+    },
+    {
+      "id": "Jakub\u0160lemrPrismaticBlackAggro_WC97: 'ascii' codec can't encode character '\\u0160' in position 23: ordinal not in range(128)",
+      "reason": "download_error",
+      "detail": "Jakub\u0160lemrPrismaticBlackAggro_WC97: 'ascii' codec can't encode character '\\u0160' in position 23: ordinal not in range(128)"
+    },
+    {
+      "id": "huatlidinosaurknight_xln",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Burning Sun's Avatar needs 3 R pip(s): 15 sources give 63.1% by turn 6 (minimum 70%)",
+      "source_kind": "mtgjson",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/ixalan-planeswalker-deck-lists-2017-09-20",
+      "license": "MIT",
+      "license_url": "https://mtgjson.com/license/",
+      "product": "Planeswalker Deck",
+      "set_code": "XLN",
+      "release_date": "2017-09-29",
+      "arena_format": "pioneer",
+      "mtgjson_file": "HuatliDinosaurKnight_XLN",
+      "colors": "WR"
+    },
+    {
+      "id": "DeadAndAlive_WTH",
+      "reason": "not_arena_relevant_format",
+      "detail": "not_arena_relevant_format"
+    },
+    {
+      "id": "top8_5719",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Wan Shi Tong, Librarian needs 2 U pip(s): 16 sources give 69.1% by turn 2 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=83949&d=837694",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-04",
+      "release_date": "2026-04-28",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "WUB",
+      "tournament_source_id": "top8-e=83949&d=837694"
+    },
+    {
+      "id": "top8_5720",
+      "reason": "mainboard_size",
+      "detail": "61",
+      "source_kind": "mtgtop8"
+    },
+    {
+      "id": "top8_5724",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Bloodghast needs 2 B pip(s): 14 sources give 60.5% by turn 2 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=84022&d=838202",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-04",
+      "release_date": "2026-04-28",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "UBR",
+      "tournament_source_id": "top8-e=84022&d=838202"
+    },
+    {
+      "id": "top8_5726",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Callous Sell-Sword needs 1 B pip(s): 5 sources give 52.4% by turn 2 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=84029&d=838275",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-04",
+      "release_date": "2026-04-28",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "BR",
+      "tournament_source_id": "top8-e=84029&d=838275"
+    },
+    {
+      "id": "top8_5839",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Erode needs 1 W pip(s): 8 sources give 65.4% by turn 1 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=84598&d=842729",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-05",
+      "release_date": "2026-05-07",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "WG",
+      "tournament_source_id": "top8-e=84598&d=842729"
+    },
+    {
+      "id": "top8_5957",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Erode needs 1 W pip(s): 8 sources give 65.4% by turn 1 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=84801&d=844289",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-05",
+      "release_date": "2026-05-14",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "WG",
+      "tournament_source_id": "top8-e=84801&d=844289"
+    },
+    {
+      "id": "top8_5962",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Bloodghast needs 2 B pip(s): 14 sources give 60.5% by turn 2 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=84889&d=844976",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-05",
+      "release_date": "2026-05-14",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "WBR",
+      "tournament_source_id": "top8-e=84889&d=844976"
+    },
+    {
+      "id": "top8_5964",
+      "reason": "color_identity",
+      "detail": "color_identity: Skyward Spider is WU but the mana base produces W; off-color U",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=84771&d=844024",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-05",
+      "release_date": "2026-05-14",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "WU",
+      "tournament_source_id": "top8-e=84771&d=844024"
+    },
+    {
+      "id": "top8_6081",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Bloodghast needs 2 B pip(s): 16 sources give 69.1% by turn 2 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=85856&d=852102",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-05",
+      "release_date": "2026-05-30",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "WBR",
+      "tournament_source_id": "top8-e=85856&d=852102"
+    },
+    {
+      "id": "top8_6086",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Bounce Off needs 1 U pip(s): 7 sources give 60.1% by turn 1 (minimum 70%); colored_source_shortage: Quantum Riddler needs 2 U pip(s): 7 sources give 37.9% by turn 5 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=85607&d=850261",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-05",
+      "release_date": "2026-05-30",
+      "arena_format": "standard",
+      "mtgjson_file": "",
+      "colors": "UG",
+      "tournament_source_id": "top8-e=85607&d=850261"
+    },
+    {
+      "id": "top8_6113",
+      "reason": "colored_source_shortage",
+      "detail": "colored_source_shortage: Invoke Despair needs 4 B pip(s): 19 sources give 48.4% by turn 5 (minimum 70%)",
+      "source_kind": "mtgtop8",
+      "source_url": "https://mtgtop8.com/event?e=85854&d=852084",
+      "license": "tournament-facts",
+      "license_url": "https://mtgtop8.com/",
+      "license_note": "Public MTGTop8 event decklist imported by the user into Postgres and exported for this pool. Card names and quantities are tournament facts; MTGTop8 does not grant a separate bulk-content license. Source URL is the event page the importer used.",
+      "product": "MTGTop8 event decklist",
+      "set_code": "top8-2026-05",
+      "release_date": "2026-05-30",
+      "arena_format": "pioneer",
+      "mtgjson_file": "",
+      "colors": "BR",
+      "tournament_source_id": "top8-e=85854&d=852084"
+    },
+    {
+      "id": "monoblackamazon_m21",
+      "reason": "duplicate_mainboard",
+      "detail": "Mono Black Amazon",
+      "source_kind": "mtgjson"
+    },
+    {
+      "id": "monogreenamazon_m21",
+      "reason": "duplicate_mainboard",
+      "detail": "Mono Green Amazon",
+      "source_kind": "mtgjson"
+    }
+  ]
+}

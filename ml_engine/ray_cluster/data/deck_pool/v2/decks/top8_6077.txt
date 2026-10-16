@@ -1,0 +1,33 @@
+About
+Name Azorius Aggro
+
+Deck
+4 Daydream
+1 Abandoned Air Temple
+1 Aang, Swift Savior
+4 Multiversal Passage
+4 Quantum Riddler
+3 Seam Rip
+1 Haliya, Guided by Light
+4 Sage of the Skies
+3 Cosmogrand Zenith
+3 Nurturing Pixie
+2 Emeritus of Ideation
+8 Plains
+4 Starfield Shepherd
+4 Momo, Friendly Flier
+4 Springleaf Drum
+4 Floodfarm Verge
+4 Hallowed Fountain
+2 Erode
+
+Sideboard
+2 Erode
+1 Seam Rip
+1 Spider-Sense
+1 Parting Gust
+1 Disdainful Stroke
+1 Negate
+2 Spell Pierce
+4 Rest in Peace
+2 Clarion Conqueror

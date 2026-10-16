@@ -1,4 +1,5 @@
 import { getRawClient } from "../db";
+import { parseDeckExport, saveCompetitiveDeck } from "./competitiveDeckStore";
 
 const MTGGOLDFISH_BASE_URL = "https://www.mtggoldfish.com";
 const USER_AGENT =
@@ -200,8 +201,19 @@ async function isCloudflareBlockingDownloads(): Promise<boolean> {
 
     // 3) Probe the actual download endpoint. CF returns 403 with a JS-challenge
     //    HTML body. A real deck download returns 200 + text/plain.
+    const deckId = dlMatch[1];
+    const arenaProbe = await fetchWithTimeout(
+      `${MTGGOLDFISH_BASE_URL}/deck/arena_download/${deckId}`,
+      { headers: { "User-Agent": USER_AGENT } }
+    );
+    const arenaBody = arenaProbe.ok ? await arenaProbe.text() : "";
+    if (parseDeckExport(arenaBody)) {
+      _cloudflareBlocked = false;
+      _cloudflareCheckedAt = now;
+      return false;
+    }
     const probeDeck = await fetchWithTimeout(
-      `${MTGGOLDFISH_BASE_URL}/deck/download/${dlMatch[1]}`,
+      `${MTGGOLDFISH_BASE_URL}/deck/download/${deckId}`,
       { headers: { "User-Agent": USER_AGENT } }
     );
     const ct = probeDeck.headers.get("content-type") || "";
@@ -224,38 +236,22 @@ async function downloadDeck(
   summary: MTGGoldfishDeckSummary
 ): Promise<MTGGoldfishDeckDetail | null> {
   try {
-    const deckUrl = `${MTGGOLDFISH_BASE_URL}/deck/download/${summary.id}`;
-    const response = await fetchWithTimeout(deckUrl, {
-      headers: { "User-Agent": USER_AGENT },
-    });
-    if (!response.ok) return null;
-
-    const text = await response.text();
-    const lines = text.split("\n");
-    const mainboard: { cardName: string; quantity: number }[] = [];
-    const sideboard: { cardName: string; quantity: number }[] = [];
-    let isSideboard = false;
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        isSideboard = true;
-        continue;
-      }
-      const m = /^(\d+)\s+(.+)$/.exec(trimmed);
-      if (m) {
-        const entry = { quantity: parseInt(m[1]), cardName: m[2].trim() };
-        isSideboard ? sideboard.push(entry) : mainboard.push(entry);
-      }
+    // `/deck/download/{id}` is behind Cloudflare. The Arena export page is
+    // the same list inside a textarea and is what we persist.
+    const urls = [
+      `${MTGGOLDFISH_BASE_URL}/deck/arena_download/${summary.id}`,
+      `${MTGGOLDFISH_BASE_URL}/deck/download/${summary.id}`,
+    ];
+    for (const deckUrl of urls) {
+      const response = await fetchWithTimeout(deckUrl, {
+        headers: { "User-Agent": USER_AGENT },
+      });
+      if (!response.ok) continue;
+      const parsed = parseDeckExport(await response.text());
+      if (!parsed) continue;
+      return { ...summary, ...parsed };
     }
-
-    if (mainboard.length === 0) return null;
-
-    return {
-      ...summary,
-      mainboard,
-      sideboard,
-    };
+    return null;
   } catch {
     return null;
   }
@@ -272,39 +268,16 @@ async function saveDeckToDb(
   const pgClient = await getRawClient();
   if (!pgClient) return { imported: false, cards: 0 };
 
-  const sourceId  = `goldfish-${detail.id}`;
-  const name      = detail.name || `Deck ${detail.id}`;
-  const archetype = detail.archetype ?? null;
-
-  // INSERT usando postgres.js tagged template literal (sem Drizzle)
-  const rows = await pgClient`
-    INSERT INTO competitive_decks
-      (source_id, source, name, format, archetype, author)
-    VALUES
-      (${sourceId}, ${'mtggoldfish'}, ${name}, ${format}, ${archetype}, ${'MTGGoldfish'})
-    ON CONFLICT (source_id)
-      DO UPDATE SET name = EXCLUDED.name
-    RETURNING id
-  `;
-
-  const deckId = rows[0]?.id as number | undefined;
-  if (!deckId) return { imported: false, cards: 0 };
-
-  const allCards = [
-    ...detail.mainboard.map((c) => ({ ...c, section: "mainboard" as const })),
-    ...detail.sideboard.map((c) => ({ ...c, section: "sideboard" as const })),
-  ];
-
-  for (const card of allCards) {
-    await pgClient`
-      INSERT INTO competitive_deck_cards (deck_id, card_name, quantity, section)
-      VALUES (${deckId}, ${card.cardName}, ${card.quantity}, ${card.section})
-      ON CONFLICT (deck_id, card_name, section)
-        DO UPDATE SET quantity = EXCLUDED.quantity
-    `;
-  }
-
-  return { imported: true, cards: allCards.length };
+  return saveCompetitiveDeck(pgClient, {
+    sourceId: `goldfish-${detail.id}`,
+    source: "mtggoldfish",
+    name: detail.name || `Deck ${detail.id}`,
+    format,
+    archetype: detail.archetype ?? null,
+    author: "MTGGoldfish",
+    mainboard: detail.mainboard,
+    sideboard: detail.sideboard,
+  });
 }
 
 // ─── Importação por formato ───────────────────────────────────────────────────

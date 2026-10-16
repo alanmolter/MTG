@@ -474,6 +474,11 @@ def register_with_rllib():
             cfg = GNNConfig(num_actions=num_outputs)
             self.gnn = GameStateGNN(cfg)
             self._value_out = None
+            custom = (model_config or {}).get("custom_model_config") or {}
+            bc_checkpoint = custom.get("bc_checkpoint")
+            if bc_checkpoint:
+                from ml_engine.bc.train import load_bc_weights
+                load_bc_weights(self.gnn, bc_checkpoint)
 
         def forward(self, input_dict, state, seq_lens):
             obs = input_dict["obs"]

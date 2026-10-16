@@ -29,6 +29,30 @@ rlbridge_src/  →  forge/rlbridge/   (cópia automática no setup)
 - `test.cmd` — compila + roda os testes.
 - `run.cmd` — lança o bridge em modo interativo pra debug.
 
+## Rebuild after a Java change
+
+`rlbridge.jar` is not produced in this repo. On the Windows machine, from
+the repo root:
+
+```powershell
+New-Item -ItemType Directory -Force forge\rlbridge | Out-Null
+Copy-Item -Recurse -Force rlbridge_src\src\* forge\rlbridge\src\
+Copy-Item -Force rlbridge_src\build.cmd forge\rlbridge\build.cmd
+cmd /c forge\rlbridge\build.cmd
+```
+
+`build.cmd` compiles against
+`forge\forge-gui-desktop\target\forge-gui-desktop-2.0.12-SNAPSHOT-jar-with-dependencies.jar`.
+`scripts\e2e-preflight.ps1` does this copy and build and FAILs the rlbridge
+stage when the Forge jar is absent.
+
+Snapshots now include the Discrete(512) contract (`action_mask`,
+`action_source_indices`, `action_target_indices`, `action_kinds`) and
+`chosen_action`. `chosen_action` is the slot of the card that left the
+agent's hand since the previous snapshot, `0` for an inferred pass, or `-1`
+when the AI decision does not map. `policy_controlled` stays false until a
+controller actually applies `step`.
+
 ## Atualizar os fontes
 
 Depois de editar `forge/rlbridge/...` na sua máquina:

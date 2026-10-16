@@ -1,0 +1,33 @@
+About
+Name Boros Aggro
+
+Deck
+4 Aang's Iceberg
+4 Weapons Manufacturing
+4 Dusk Rose Reliquary
+4 Legion Extruder
+4 Saheeli's Lattice
+4 Pinnacle Starcage
+4 Inspiring Vantage
+4 United Battlefront
+4 Sacred Foundry
+4 Sunbillow Verge
+4 Sundown Pass
+4 Melded Moxite
+2 Petrified Hamlet
+2 Mountain
+3 Spring-Loaded Sawblades
+3 Plains
+1 Cori Mountain Monastery
+1 Fomori Vault
+
+Sideboard
+1 Spring-Loaded Sawblades
+2 Rest in Peace
+2 High Noon
+2 Torch the Tower
+1 Ghost Vacuum
+1 Feldon's Cane
+2 Torpor Orb
+1 Day of Judgment
+3 Tezzeret, Cruel Captain

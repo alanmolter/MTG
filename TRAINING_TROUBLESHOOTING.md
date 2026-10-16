@@ -550,3 +550,23 @@ powershell -ExecutionPolicy Bypass -File .\train.ps1 `
 
 Expected: all 2 trials alive after 30 min, at least 3 training iters each,
 `check_learning_progress` reports `ALIVE` with non-zero rewards.
+
+---
+
+## End-to-end preflight
+
+Before a long run, `scripts/e2e-preflight.ps1` checks Postgres, rebuilds
+`rlbridge.jar`, loads deck pools v1 and v2, counts Arena decks that have
+card rows, records a short Forge-AI game, trains the behavior-cloning head,
+builds the IMPALA config with `--bc-checkpoint`, and evals holdout accuracy.
+Each stage prints PASS or FAIL.
+
+A stopped container named `mtg-pgvector` from the old compose service `db`
+blocks `docker compose up postgres` because both use that container name.
+The script removes the stopped container and starts the current service. If
+`mtg-pgvector` is already running, it is reused.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e-preflight.ps1
+python -m ml_engine.ray_cluster.orchestrator --bc-checkpoint <path-to-bc.pt> --bc-kl-coeff 0.5 --bc-kl-iters 50
+```

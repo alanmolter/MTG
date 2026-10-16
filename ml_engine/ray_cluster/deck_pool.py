@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import re
 from dataclasses import dataclass
@@ -21,13 +22,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
-from ml_engine.ray_cluster.deck_quality import canonical_deck_hash, deck_rejection_reason
+from ml_engine.ray_cluster.deck_quality import canonical_deck_hash, card_index_from_file, deck_rejection_reason
 
 
 logger = logging.getLogger(__name__)
 
 POOL_ROOT = Path(__file__).resolve().parent / "data" / "deck_pool" / "v1"
 POOL_VERSION = "1"
+POOL_VERSION_ENV = "DECK_POOL_VERSION"
+_V1_SPLITS = {"train", "holdout"}
+_V2_SPLITS = {"train", "holdout", "benchmark"}
 
 _SET_SUFFIX = re.compile(r"\s+\([A-Za-z0-9]+\)\s+\S+\s*$")
 _COUNT_LINE = re.compile(r"^(\d+)\s+(.+)$")
@@ -47,6 +51,10 @@ class PoolDeck:
     mtgjson_file: str
     arena_format: str
     forge_list: str
+    release_date: str = ""
+    set_code: str = ""
+    license: str = ""
+    source_kind: str = ""
 
     @property
     def sha256(self) -> str:
@@ -88,21 +96,43 @@ def arena_mainboard(arena_export: str) -> str:
     return "\n".join(f"{counts[name]} {name}" for name in order)
 
 
-def accept_deck(deck_id: str, decklist: str) -> bool:
+def accept_deck(deck_id: str, decklist: str, *, extra_index=None) -> bool:
     """False when the list fails the quality gate. The reason is logged."""
 
-    reason = deck_rejection_reason(deck_id, decklist)
+    reason = deck_rejection_reason(deck_id, decklist, extra_index=extra_index)
     if reason is None:
         return True
     logger.warning("rejected deck %s: %s", deck_id, reason)
     return False
 
 
-def _load_deck(entry: dict, root: Path) -> PoolDeck:
+def pool_root(version: str) -> Path:
+    return Path(__file__).resolve().parent / "data" / "deck_pool" / f"v{version}"
+
+
+def active_pool_version() -> str:
+    raw = os.environ.get(POOL_VERSION_ENV, "").strip()
+    return raw or POOL_VERSION
+
+
+def _allowed_splits(version: str) -> set[str]:
+    return _V2_SPLITS if version != "1" else _V1_SPLITS
+
+
+@lru_cache(maxsize=4)
+def _version_card_index(version: str):
+    path = pool_root(version) / "forge_cards.json"
+    if not path.is_file():
+        return None
+    return card_index_from_file(path)
+
+
+def _load_deck(entry: dict, root: Path, *, version: str) -> PoolDeck:
     deck_id = str(entry["id"]).strip()
     split = str(entry["split"]).strip().lower()
-    if split not in {"train", "holdout"}:
-        raise ValueError(f"{deck_id} split must be train or holdout, got {split!r}")
+    allowed = _allowed_splits(version)
+    if split not in allowed:
+        raise ValueError(f"{deck_id} split must be one of {sorted(allowed)}, got {split!r}")
     relative = str(entry["file"])
     path = root / relative
     forge_list = arena_mainboard(path.read_text(encoding="utf-8"))
@@ -118,37 +148,54 @@ def _load_deck(entry: dict, root: Path) -> PoolDeck:
         mtgjson_file=str(entry.get("mtgjson_file", "")),
         arena_format=str(entry.get("arena_format", "")),
         forge_list=forge_list,
+        release_date=str(entry.get("release_date", "")),
+        set_code=str(entry.get("set_code", "")),
+        license=str(entry.get("license", "")),
+        source_kind=str(entry.get("source_kind", "")),
     )
-    if not accept_deck(deck.deck_id, deck.forge_list):
-        reason = deck_rejection_reason(deck.deck_id, deck.forge_list)
+    card_index = _version_card_index(version)
+    if not accept_deck(deck.deck_id, deck.forge_list, extra_index=card_index):
+        reason = deck_rejection_reason(deck.deck_id, deck.forge_list, extra_index=card_index)
         raise RuntimeError(f"deck pool rejected {deck.deck_id}: {reason}")
     return deck
 
 
-@lru_cache(maxsize=1)
-def load_pool() -> tuple[PoolDeck, ...]:
-    manifest_path = POOL_ROOT / "manifest.json"
+@lru_cache(maxsize=4)
+def _load_pool(version: str) -> tuple[PoolDeck, ...]:
+    root = pool_root(version)
+    manifest_path = root / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    version = str(manifest.get("version", ""))
-    if version != POOL_VERSION:
-        raise RuntimeError(f"deck pool version {version!r} != {POOL_VERSION!r}")
-    decks = tuple(_load_deck(entry, POOL_ROOT) for entry in manifest["decks"])
+    found = str(manifest.get("version", ""))
+    if found != version:
+        raise RuntimeError(f"deck pool version {found!r} != {version!r}")
+    decks = tuple(_load_deck(entry, root, version=version) for entry in manifest["decks"])
     ids = [deck.deck_id for deck in decks]
     if len(ids) != len(set(ids)):
         raise RuntimeError("deck pool has duplicate ids")
     train = [deck for deck in decks if deck.split == "train"]
-    holdout = [deck for deck in decks if deck.split == "holdout"]
-    if len(train) < 2 or len(holdout) < 2:
-        raise RuntimeError("deck pool needs at least two train and two holdout decks")
+    held = [deck for deck in decks if deck.split != "train"]
+    if len(train) < 2 or len(held) < 2:
+        raise RuntimeError("deck pool needs at least two train and two non-train decks")
+    if version != "1":
+        if not any(deck.split == "holdout" for deck in decks):
+            raise RuntimeError("deck pool v2 needs a holdout split")
+        if not any(deck.split == "benchmark" for deck in decks):
+            raise RuntimeError("deck pool v2 needs a fixed benchmark split")
     train_hashes = {deck.sha256 for deck in train}
-    overlap = [deck.deck_id for deck in holdout if deck.sha256 in train_hashes]
+    overlap = [deck.deck_id for deck in held if deck.sha256 in train_hashes]
     if overlap:
         raise RuntimeError(f"holdout decks repeat a training list: {overlap}")
     return decks
 
 
-def decks_for_split(split: str) -> tuple[PoolDeck, ...]:
-    return tuple(deck for deck in load_pool() if deck.split == split)
+def load_pool(version: Optional[str] = None) -> tuple[PoolDeck, ...]:
+    """Load a versioned pool. Default is v1 unless ``DECK_POOL_VERSION`` is set."""
+
+    return _load_pool(version or active_pool_version())
+
+
+def decks_for_split(split: str, version: Optional[str] = None) -> tuple[PoolDeck, ...]:
+    return tuple(deck for deck in load_pool(version) if deck.split == split)
 
 
 def training_archetype_ids() -> tuple[str, ...]:
@@ -196,6 +243,75 @@ def sample_pair(
         raise RuntimeError(f"deck pool split {split!r} does not have two decks")
     left, right = random.Random(seed).sample(pool, k=2)
     return left, right
+
+
+def assign_ood_splits(
+    rows: Sequence[dict],
+    *,
+    benchmark_per_archetype: int = 2,
+    benchmark_cap: int = 24,
+    recent_year: int = 2024,
+) -> list[dict]:
+    """Assign train / holdout / benchmark without splitting a group.
+
+    A group is ``(archetype, colors, set_code)``. Holdout is the newest set
+    inside each ``(archetype, colors)`` family when that family spans more
+    than one set. A family that exists in only one set is holdout when its
+    release year is ``recent_year`` or later, and train otherwise. Benchmark
+    is a stable slice of the holdout rows (sorted by id, up to
+    ``benchmark_per_archetype`` per archetype, capped), so repeated evals
+    use the same lists. No group key is shared with train.
+    """
+
+    if benchmark_per_archetype < 1 or benchmark_cap < 1:
+        raise ValueError("benchmark selection needs a positive size")
+    grouped: dict[tuple[str, str, str], list[dict]] = {}
+    for row in rows:
+        key = (
+            str(row["archetype"]),
+            str(row["colors"]),
+            str(row.get("set_code") or row.get("code") or ""),
+        )
+        grouped.setdefault(key, []).append(dict(row))
+    families: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for archetype, colors, set_code in grouped:
+        dated = max(str(item.get("release_date") or "") for item in grouped[(archetype, colors, set_code)])
+        families.setdefault((archetype, colors), []).append((dated, set_code))
+    holdout_groups: set[tuple[str, str, str]] = set()
+    for (archetype, colors), members in families.items():
+        members.sort()
+        if len(members) >= 2:
+            holdout_groups.add((archetype, colors, members[-1][1]))
+            continue
+        year = int(members[0][0][:4] or "0") if members[0][0][:4].isdigit() else 0
+        if year >= recent_year:
+            holdout_groups.add((archetype, colors, members[0][1]))
+    assigned: list[dict] = []
+    for key, items in grouped.items():
+        split = "holdout" if key in holdout_groups else "train"
+        for item in items:
+            item["split"] = split
+            assigned.append(item)
+    holdout = sorted(
+        (item for item in assigned if item["split"] == "holdout"),
+        key=lambda item: str(item["id"]),
+    )
+    picked = 0
+    per_archetype: dict[str, int] = {}
+    benchmark_ids: set[str] = set()
+    for item in holdout:
+        archetype = str(item["archetype"])
+        if per_archetype.get(archetype, 0) >= benchmark_per_archetype:
+            continue
+        if picked >= benchmark_cap:
+            break
+        benchmark_ids.add(str(item["id"]))
+        per_archetype[archetype] = per_archetype.get(archetype, 0) + 1
+        picked += 1
+    for item in assigned:
+        if str(item["id"]) in benchmark_ids:
+            item["split"] = "benchmark"
+    return assigned
 
 
 def iter_mainboard_names(decks: Iterable[PoolDeck]) -> list[str]:

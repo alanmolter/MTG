@@ -1,0 +1,34 @@
+About
+Name Rakdos Aggro
+
+Deck
+3 Graveyard Trespasser
+4 Fable of the Mirror-Breaker
+4 Fatal Push
+2 Abrade
+2 Go for the Throat
+2 Torch the Tower
+4 Thoughtseize
+4 Blackcleave Cliffs
+4 Blightstep Pathway
+4 Blood Crypt
+4 Mutavault
+3 Blazemire Verge
+3 Swamp
+1 Sulfurous Springs
+1 Takenuma, Abandoned Mire
+1 Urborg, Tomb of Yawgmoth
+4 Bloodtithe Harvester
+3 Fear of Missing Out
+4 Unholy Annex/Ritual Chamber
+3 Sheoldred, the Apocalypse
+
+Sideboard
+2 Anoint with Affliction
+2 Ashiok, Dream Render
+2 Duress
+2 Extinction Event
+2 Hidetsugu Consumes All
+2 Invoke Despair
+2 Unlicensed Hearse
+1 The Meathook Massacre

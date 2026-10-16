@@ -1,0 +1,27 @@
+About
+Name Mono Green Aggro
+
+Deck
+3 Ba Sing Se
+4 Badgermole Cub
+1 Bushwhack
+4 Earthbender Ascension
+4 Fabled Passage
+4 Icetill Explorer
+3 Keen-Eyed Curator
+4 Meltstrider's Resolve
+4 Mightform Harmonizer
+1 Promising Vein
+4 Sazh's Chocobo
+14 Forest
+4 Llanowar Elves
+4 Escape Tunnel
+2 Surrak, Elusive Hunter
+
+Sideboard
+4 Sapling Nursery
+4 Mossborn Hydra
+2 Origin of Metalbending
+1 Sandman, Shifting Scoundrel
+3 Torpor Orb
+1 Pawpatch Formation

@@ -1,0 +1,37 @@
+About
+Name Selesnya Aggro
+
+Deck
+3 Llanowar Elves
+3 Elvish Mystic
+4 Badgermole Cub
+2 Thalia, Guardian of Thraben
+4 Skyclave Apparition
+4 Archon of Emeria
+4 Enduring Innocence
+4 Aven Interrupter
+3 Ouroboroid
+4 Collected Company
+1 The Wandering Emperor
+2 Elspeth, Storm Slayer
+2 Abandoned Air Temple
+1 Boseiju, Who Endures
+3 Razorverge Thicket
+1 Eiganjo, Seat of the Empire
+1 Forest
+4 Temple Garden
+4 Brushland
+4 Plains
+1 Restless Prairie
+1 Branchloft Pathway
+
+Sideboard
+1 Surrak, Elusive Hunter
+2 Beza, the Bounding Spring
+1 The Wandering Emperor
+2 Erode
+2 March of Otherworldly Light
+1 Dromoka's Command
+2 Scavenging Ooze
+2 Knight of Autumn
+2 Split Up

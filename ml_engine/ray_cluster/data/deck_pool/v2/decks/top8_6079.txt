@@ -1,0 +1,30 @@
+About
+Name Mono Green Aggro
+
+Deck
+2 Sapling Nursery
+4 Icetill Explorer
+4 Escape Tunnel
+4 Llanowar Elves
+4 Sazh's Chocobo
+4 Earthbender Ascension
+4 Mightform Harmonizer
+2 Edge Rover
+13 Forest
+4 Fabled Passage
+1 Promising Vein
+1 Lumbering Worldwagon
+1 Demolition Field
+3 Ba Sing Se
+4 Badgermole Cub
+2 Keen-Eyed Curator
+3 Meltstrider's Resolve
+
+Sideboard
+2 Leatherhead, Swamp Stalker
+2 Pawpatch Formation
+2 Soul-Guide Lantern
+2 Sapling Nursery
+3 Torpor Orb
+1 Royal Treatment
+3 Mossborn Hydra

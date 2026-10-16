@@ -1,0 +1,36 @@
+About
+Name Rakdos Aggro
+
+Deck
+4 Thoughtseize
+3 Swamp
+3 Blazemire Verge
+4 Blightstep Pathway
+1 Sulfurous Springs
+4 Bloodtithe Harvester
+4 Mutavault
+1 Go for the Throat
+3 Fear of Missing Out
+4 Fatal Push
+4 Unholy Annex/Ritual Chamber
+2 Graveyard Trespasser
+1 Kroxa, Titan of Death's Hunger
+2 Duress
+3 Sheoldred, the Apocalypse
+1 Sokenzan, Crucible of Defiance
+4 Blood Crypt
+4 Blackcleave Cliffs
+1 Torch the Tower
+2 Abrade
+1 Urborg, Tomb of Yawgmoth
+4 Fable of the Mirror-Breaker
+
+Sideboard
+3 Unlicensed Hearse
+2 Duress
+1 Torch the Tower
+2 Abrade
+1 Go Blank
+3 Hidetsugu Consumes All
+2 Invoke Despair
+1 Shadows' Verdict
