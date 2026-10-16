@@ -87,6 +87,34 @@ async function main() {
     resolver = new CardNameResolver(catalog.map((c) => ({ name: c.name, oracleId: c.oracle_id })));
   }
 
+  // download_status / last_fetch_error exist only after migration
+  // 20261016234006_competitive_decks_provenance. Without them: skip, warn once.
+  const statusCols = new Set(
+    ((await pg.unsafe(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = current_schema() AND table_name = 'competitive_decks'
+         AND column_name IN ('download_status', 'last_fetch_error')`,
+    )) as Array<{ column_name: string }>).map((c) => c.column_name),
+  );
+  const canMarkStatus = statusCols.has("download_status");
+  if (!dryRun && !canMarkStatus) {
+    console.warn("[reimport] download_status column missing (migration not applied): fetch status will not be recorded");
+  }
+  const markStatus = async (row: EmptyDeckRow, status: "ok" | "failed", error: string | null) => {
+    if (!canMarkStatus) return;
+    if (statusCols.has("last_fetch_error")) {
+      await pg.unsafe(
+        "UPDATE competitive_decks SET download_status = $2::deck_download_status, last_fetch_error = $3 WHERE id = $1",
+        [row.id, status, error ? error.slice(0, 2000) : null],
+      );
+    } else {
+      await pg.unsafe(
+        "UPDATE competitive_decks SET download_status = $2::deck_download_status WHERE id = $1",
+        [row.id, status],
+      );
+    }
+  };
+
   if (reportFile) writeFileSync(reportFile, "");
   console.log(`[reimport] mode=${dryRun ? "DRY-RUN" : "APPLY"} source=${source ?? "all"} batch=${batchSize} maxBatches=${maxBatches ?? "all"}`);
 
@@ -113,6 +141,7 @@ async function main() {
         )) as unknown[];
         return rows.length === 0;
       },
+      markStatus,
       save: (deck) =>
         saveCompetitiveDeck(pg as unknown as object, deck, {
           resolveName: resolver ? (n) => resolver!.canonicalName(n) : undefined,

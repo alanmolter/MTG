@@ -159,6 +159,12 @@ export async function reimportEmptyDecks(deps: {
   save: (deck: CompetitiveDeckWrite) => Promise<{ imported: boolean; cards: number }>;
   /** Re-checked right before writing so a deck filled meanwhile is not touched. */
   isStillEmpty?: (row: EmptyDeckRow) => Promise<boolean>;
+  /**
+   * Record the fetch outcome (download_status / last_fetch_error). Optional;
+   * a no-op when the provenance columns are missing. Errors here never
+   * change the deck outcome.
+   */
+  markStatus?: (row: EmptyDeckRow, status: "ok" | "failed", error: string | null) => Promise<void>;
 }, options: ReimportOptions = {}): Promise<ReimportReport> {
   const batchSize = Math.max(1, Math.floor(options.batchSize ?? 50));
   const wanted = options.source?.toLowerCase();
@@ -179,6 +185,15 @@ export async function reimportEmptyDecks(deps: {
     const entries: DeckLogEntry[] = [];
     for (const row of rows.slice(start, start + batchSize)) {
       const entry = await processRow(row, deps, report, Boolean(options.dryRun));
+      if (!options.dryRun && deps.markStatus && (entry.outcome === "reimported" || entry.outcome === "failed")) {
+        try {
+          await deps.markStatus(row, entry.outcome === "reimported" ? "ok" : "failed",
+            entry.outcome === "failed" ? (entry.detail ?? "unknown error") : null);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          entry.detail = `${entry.detail ? entry.detail + "; " : ""}status not recorded: ${message}`;
+        }
+      }
       entries.push(entry);
       report.log.push(entry);
     }
