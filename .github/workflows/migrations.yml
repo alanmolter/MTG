@@ -1,5 +1,9 @@
 name: Migrações (PostgreSQL + pgvector)
 
+# O job só faz checkout e roda os testes. Não escreve no repositório.
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
@@ -14,8 +18,11 @@ on:
     branches: [main, develop, wip/local-sync-2026-10-16]
     paths:
       - "drizzle/**"
+      - "drizzle.config.ts"
       - "server/scripts/applyMigration.ts"
+      - "server/scripts/checkMigrations.ts"
       - "server/scripts/migrationBaseline*.ts"
+      - "server/scripts/migrations.integration.test.ts"
       - ".github/workflows/migrations.yml"
 
 env:
@@ -55,3 +62,11 @@ jobs:
         run: npx vitest run server/scripts/migrations.integration.test.ts
       - name: db:check offline (journal)
         run: npx tsx server/scripts/checkMigrations.ts
+      - name: Migrar o banco do serviço
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: npm run db:migrate
+      - name: db:check contra o banco migrado
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: npm run db:check
