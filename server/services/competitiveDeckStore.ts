@@ -27,6 +27,11 @@ export interface CompetitiveDeckWrite {
 
 type Sql = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Array<{ id?: number }>>;
 
+/** postgres.js client, or a test double with the same tagged-template call. */
+type DeckWriter = Sql & {
+  begin?: (fn: (sql: Sql) => Promise<{ imported: boolean; cards: number }>) => Promise<{ imported: boolean; cards: number }>;
+};
+
 export function parseDeckExport(text: string): {
   mainboard: Array<{ cardName: string; quantity: number }>;
   sideboard: Array<{ cardName: string; quantity: number }>;
@@ -86,21 +91,40 @@ function decodeHtml(value: string): string {
     .replace(/&#39;/g, "'");
 }
 
+/** Sum quantities of the same card inside one section.
+ *
+ * The unique index is (deck_id, card_name, section). A second line for the
+ * same card used to abort the transaction and leave the deck with no cards.
+ */
+export function aggregateCardLines(
+  cards: Array<{ cardName: string; quantity: number }>,
+): Array<{ cardName: string; quantity: number }> {
+  const totals = new Map<string, { cardName: string; quantity: number }>();
+  for (const card of cards) {
+    const name = card.cardName.trim();
+    if (!name || card.quantity <= 0) continue;
+    const prev = totals.get(name);
+    if (prev) prev.quantity += card.quantity;
+    else totals.set(name, { cardName: name, quantity: card.quantity });
+  }
+  return Array.from(totals.values());
+}
+
 export async function saveCompetitiveDeck(
-  pgClient: Sql & { begin?: (fn: (sql: Sql) => Promise<{ imported: boolean; cards: number }>) => Promise<{ imported: boolean; cards: number }> },
+  pgClient: DeckWriter | object,
   deck: CompetitiveDeckWrite
 ): Promise<{ imported: boolean; cards: number }> {
+  const client = pgClient as DeckWriter;
+  const mainboard = aggregateCardLines(deck.mainboard);
+  const sideboard = aggregateCardLines(deck.sideboard);
   const cards: DeckCardEntry[] = [
-    ...deck.mainboard.map((card) => ({ ...card, section: "mainboard" as const })),
-    ...deck.sideboard.map((card) => ({ ...card, section: "sideboard" as const })),
+    ...mainboard.map((card) => ({ ...card, section: "mainboard" as const })),
+    ...sideboard.map((card) => ({ ...card, section: "sideboard" as const })),
   ];
-  if (deck.mainboard.length === 0 || deck.mainboard.every((card) => card.quantity <= 0)) {
+  if (mainboard.length === 0 || mainboard.every((card) => card.quantity <= 0)) {
     return { imported: false, cards: 0 };
   }
-  const rawJson = JSON.stringify({
-    mainboard: deck.mainboard,
-    sideboard: deck.sideboard,
-  });
+  const rawJson = JSON.stringify({ mainboard, sideboard });
   const write = async (sql: Sql) => {
     const rows = await sql`
       INSERT INTO competitive_decks
@@ -126,8 +150,10 @@ export async function saveCompetitiveDeck(
     }
     return { imported: true, cards: cards.length };
   };
-  if (typeof pgClient.begin === "function") {
-    return pgClient.begin(write);
+  if (typeof client.begin !== "function") {
+    throw new Error(
+      "saveCompetitiveDeck requires pg.begin; refusing a non-transactional write",
+    );
   }
-  return write(pgClient);
+  return client.begin(write);
 }

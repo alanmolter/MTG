@@ -46,9 +46,13 @@ def holdout_action_accuracy(model: GameStateGNN, rows: list[dict]) -> dict:
 
 
 def evaluate_checkpoint(checkpoint: Path, shard_root: Path, *, config: GNNConfig | None = None) -> dict:
-    rows = [row for row in load_rows(shard_root) if row.get("split") == "holdout"]
+    rows = load_rows(shard_root, split="holdout")
     if not rows:
-        rows = load_rows(shard_root)
+        raise RuntimeError(
+            f"BC eval {shard_root} has no holdout rows; refusing to score the training split"
+        )
     model = GameStateGNN(config or GNNConfig())
     load_bc_weights(model, checkpoint)
-    return holdout_action_accuracy(model, rows)
+    report = holdout_action_accuracy(model, rows)
+    report["game_ids"] = [str(row.get("game_id") or "") for row in rows]
+    return report

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -161,6 +162,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--turn-limit", type=int, default=50)
     parser.add_argument("--step-timeout", type=float, default=20.0)
     parser.add_argument(
+        "--deck-pool-version",
+        choices=("1", "2"),
+        default=None,
+        help="set DECK_POOL_VERSION before sampling the holdout (default: env or v1)",
+    )
+    parser.add_argument(
         "--arena-only",
         action="store_true",
         default=None,
@@ -210,6 +217,8 @@ def _thresholds_from_args(args: argparse.Namespace) -> EvaluationThresholds:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _parser().parse_args(argv)
+    if args.deck_pool_version:
+        os.environ["DECK_POOL_VERSION"] = args.deck_pool_version
     output = args.output or default_output_path()
     checkpoint = str(args.checkpoint)
     try:

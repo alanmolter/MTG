@@ -12,9 +12,10 @@ Strategy — three-layered:
      `loop_threshold` times within a window, we flag the last action as toxic.
      Priority passes and other no-op decisions are not evidence of a loop.
 
-  2. Toxic action ledger: persist (card_id, action_type, context_hash) →
-     `toxic_actions` table so future PBT generations inherit the aversion
-     without relearning it.
+  2. Toxic action ledger: persist the state hash and the action that
+     repeated it into `toxic_actions` (`action_hash`, `deck_snap`,
+     `trigger_reason`, `trigger_count`) so future PBT generations inherit
+     the aversion without relearning it.
 
   3. Policy decorator: `wrap_policy_with_guard` adds a sanity-check that
      refuses any action whose toxic score exceeds a threshold.
@@ -265,37 +266,48 @@ class LoopGuard:
         self._toxic_pending.clear()
 
     def flush_to_db(self, conn) -> int:
-        """UPSERT all pending toxic actions to the `toxic_actions` table.
+        """UPSERT pending loops into ``toxic_actions``.
 
-        Schema (from 0005_endgame_pgvector.sql):
+        The live table (``drizzle/0005_endgame_pgvector.sql``) is::
+
             toxic_actions (
-                id BIGSERIAL PK,
-                card_id INT, action_type TEXT, context_hash TEXT,
-                turn_detected INT, detected_count INT,
-                first_seen_at TIMESTAMP, last_seen_at TIMESTAMP,
-                UNIQUE(card_id, action_type, context_hash)
+                action_hash VARCHAR(64) UNIQUE,
+                deck_snap JSONB NOT NULL,
+                trigger_reason VARCHAR(64) NOT NULL,
+                trigger_count INTEGER NOT NULL DEFAULT 1,
+                first_seen_at / last_seen_at TIMESTAMPTZ
             )
+
+        ``action_hash`` is the canonical state hash. The action that was
+        repeating lives in ``deck_snap``. ``trigger_reason`` is
+        ``STATE_REPEATED`` because that is the loop this guard detects.
 
         Returns number of rows written.
         """
         if not self._toxic_pending:
             return 0
 
-        rows = [
-            (t.card_id, t.action_type, t.context_hash, t.turn, t.detected_count)
-            for t in self._toxic_pending
-        ]
+        rows = []
+        for toxic in self._toxic_pending:
+            snap = json.dumps({
+                "card_id": toxic.card_id,
+                "action_type": toxic.action_type,
+                "turn": toxic.turn,
+                "context_hash": toxic.context_hash,
+            })
+            rows.append((toxic.context_hash, snap, "STATE_REPEATED", toxic.detected_count))
         with conn.cursor() as cur:
             cur.executemany(
                 """
                 INSERT INTO toxic_actions (
-                    card_id, action_type, context_hash, turn_detected,
-                    detected_count, first_seen_at, last_seen_at
+                    action_hash, deck_snap, trigger_reason, trigger_count,
+                    first_seen_at, last_seen_at
                 )
-                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-                ON CONFLICT (card_id, action_type, context_hash) DO UPDATE SET
-                    detected_count = toxic_actions.detected_count + EXCLUDED.detected_count,
-                    last_seen_at   = NOW()
+                VALUES (%s, %s::jsonb, %s, %s, NOW(), NOW())
+                ON CONFLICT (action_hash) DO UPDATE SET
+                    trigger_count = toxic_actions.trigger_count + EXCLUDED.trigger_count,
+                    deck_snap = EXCLUDED.deck_snap,
+                    last_seen_at = NOW()
                 """,
                 rows,
             )

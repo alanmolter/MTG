@@ -205,6 +205,7 @@ def build_impala_config(
     bc_checkpoint: Optional[str] = None,
     bc_kl_coeff: float = 0.0,
     bc_kl_iters: int = 0,
+    deck_pool_version: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Compose an IMPALA config with our custom env + GNN model + PBT-friendly hparams.
 
@@ -239,11 +240,16 @@ def build_impala_config(
 
     if arena_only is None:
         arena_only = is_arena_only_training()
+    if deck_pool_version:
+        os.environ["DECK_POOL_VERSION"] = str(deck_pool_version)
 
     env_config: Dict[str, Any] = {
         "opponent_pool_path": opponent_pool_path,
         "turn_limit": turn_limit,
-        "step_timeout": 10.0,
+        "step_timeout": 12.0,
+        # Java must emit truncated before Python kills the JVM. See
+        # env.java_step_timeout_seconds.
+        "java_step_timeout_seconds": 8,
         # Cap obs size to avoid the 40 MiB×N_workers dummy-batch
         # allocation storm on memory-constrained systems. See
         # TRAINING_TROUBLESHOOTING.md → "Unable to allocate 40 MiB".
@@ -554,6 +560,7 @@ def run(
     bc_checkpoint: Optional[str] = None,
     bc_kl_coeff: float = 0.0,
     bc_kl_iters: int = 0,
+    deck_pool_version: Optional[str] = None,
 ):
     """Kick off the PBT + IMPALA job."""
     unsupported = _unsupported_cuda_devices()
@@ -579,6 +586,12 @@ def run(
 
     # Curriculum: --archetypes feeds the env var that arena_pool reads.
     # Done here (not in main()) so programmatic callers benefit too.
+    if deck_pool_version:
+        os.environ["DECK_POOL_VERSION"] = str(deck_pool_version)
+        print(
+            f"[orchestrator] deck pool version: {deck_pool_version}",
+            file=sys.stderr,
+        )
     if archetypes:
         os.environ["TRAINING_ARCHETYPES"] = archetypes
         print(
@@ -656,6 +669,7 @@ def run(
         bc_checkpoint=bc_checkpoint,
         bc_kl_coeff=bc_kl_coeff,
         bc_kl_iters=bc_kl_iters,
+        deck_pool_version=deck_pool_version,
     )
 
     if resume:
@@ -696,7 +710,21 @@ def run(
     if resume:
         tune_kwargs["resume"] = "AUTO"
 
-    analysis = tune.run("IMPALA", **tune_kwargs)
+    algorithm: Any = "IMPALA"
+    if bc_kl_coeff > 0:
+        if not bc_checkpoint:
+            raise SystemExit(
+                "[orchestrator] --bc-kl-coeff requires --bc-checkpoint; "
+                "the KL term anchors the learner to those weights."
+            )
+        from ml_engine.ray_cluster.bc_kl_policy import load_bc_anchored_impala
+        algorithm = load_bc_anchored_impala()
+        print(
+            "[orchestrator] IMPALA loss includes KL(current || BC) "
+            f"coeff={bc_kl_coeff} for {bc_kl_iters} updates",
+            file=sys.stderr,
+        )
+    analysis = tune.run(algorithm, **tune_kwargs)
 
     metric_keys = list(selected_metric.history_keys)
     best, stable_score, trial_summaries = _select_stable_trial(list(analysis.trials), metric_keys)
@@ -867,10 +895,18 @@ def main():
         help="behavior-cloning weights to copy into the GNN before IMPALA starts",
     )
     p.add_argument(
+        "--deck-pool-version",
+        choices=("1", "2"),
+        default=None,
+        help="deck pool manifest version. Sets DECK_POOL_VERSION for this process "
+             "and the Ray workers. Default is v1 unless the env var is already set.",
+    )
+    p.add_argument(
         "--bc-kl-coeff",
         type=float,
         default=0.0,
-        help="KL(current || BC) weight during the first --bc-kl-iters updates",
+        help="KL(current || BC) weight added to the IMPALA loss for the first "
+             "--bc-kl-iters updates, then linearly decayed to 0. Requires --bc-checkpoint.",
     )
     p.add_argument(
         "--bc-kl-iters",
@@ -909,6 +945,7 @@ def main():
         bc_checkpoint=args.bc_checkpoint,
         bc_kl_coeff=args.bc_kl_coeff,
         bc_kl_iters=args.bc_kl_iters,
+        deck_pool_version=args.deck_pool_version,
     )
 
 

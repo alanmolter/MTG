@@ -17,6 +17,9 @@
 
     A missing Forge checkout fails rlbridge and bc. It does not skip them.
 
+    Python stages use the project .venv (Python 3.12). System Python is not
+    a fallback: 3.14 does not have the torch_geometric build this tree needs.
+
 .USAGE
     powershell -ExecutionPolicy Bypass -File .\scripts\e2e-preflight.ps1
 #>
@@ -51,6 +54,36 @@ if ($DatabaseUrl) { $env:DATABASE_URL = $DatabaseUrl }
 if (-not $env:DATABASE_URL) {
     $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5434/mtg"
 }
+
+function Resolve-ProjectPython {
+    $candidates = @(
+        (Join-Path (Get-Location) ".venv\Scripts\python.exe"),
+        (Join-Path (Get-Location) ".venv\bin\python")
+    )
+    $found = $null
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) { $found = $candidate; break }
+    }
+    if (-not $found) {
+        Write-Host "e2e-preflight: no project .venv found." -ForegroundColor Red
+        Write-Host "Create it with Python 3.12, then install ml_engine requirements:"
+        Write-Host "  py -3.12 -m venv .venv"
+        Write-Host "  .\.venv\Scripts\python.exe -m pip install -r ml_engine\requirements.txt"
+        exit 1
+    }
+    $version = (& $found -c "import sys; print('%d.%d' % (sys.version_info[0], sys.version_info[1]))" | Out-String).Trim()
+    if ($version -ne "3.12") {
+        Write-Host "e2e-preflight: $found is Python $version. This project needs 3.12." -ForegroundColor Red
+        Write-Host "Recreate the venv (do not fall back to system Python):"
+        Write-Host "  py -3.12 -m venv .venv"
+        Write-Host "  .\.venv\Scripts\python.exe -m pip install -r ml_engine\requirements.txt"
+        exit 1
+    }
+    return $found
+}
+
+$python = Resolve-ProjectPython
+Write-Host "e2e-preflight: python $python"
 
 # --- postgres --------------------------------------------------------------
 $compose = docker compose up -d postgres 2>&1 | Out-String
@@ -92,7 +125,7 @@ if (-not $forgeJar) {
 }
 
 # --- deck pools ------------------------------------------------------------
-python -m ml_engine.scripts.e2e_preflight --stage decks
+& $python -m ml_engine.scripts.e2e_preflight --stage decks
 Report "decks" ($LASTEXITCODE -eq 0) "v1 + v2 manifest"
 
 # --- database lists that actually have cards -------------------------------
@@ -114,11 +147,11 @@ Report "db" $dbOk $dbDetail.Trim()
 
 # --- record, train, one regularized step, eval, rllib config --------------
 $work = Join-Path (Get-Location) "bc_smoke"
-python -m ml_engine.scripts.e2e_preflight --stage bc --work $work
+& $python -m ml_engine.scripts.e2e_preflight --stage bc --work $work
 Report "bc" ($LASTEXITCODE -eq 0) "record + train + KL step"
-python -m ml_engine.scripts.e2e_preflight --stage rllib --work $work
+& $python -m ml_engine.scripts.e2e_preflight --stage rllib --work $work
 Report "rllib" ($LASTEXITCODE -eq 0) "IMPALA bc_checkpoint flag"
-python -m ml_engine.scripts.e2e_preflight --stage eval --work $work
+& $python -m ml_engine.scripts.e2e_preflight --stage eval --work $work
 Report "eval" ($LASTEXITCODE -eq 0) "holdout action accuracy"
 
 Write-Host ""

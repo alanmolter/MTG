@@ -33,6 +33,31 @@ def entropy(logits: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     return -(pi * log_pi).sum(dim=-1).mean()
 
 
+def bc_kl_penalty(
+    logits: torch.Tensor,
+    anchor_logits: torch.Tensor,
+    mask: torch.Tensor,
+    *,
+    iteration: int,
+    bc_kl_coeff: float,
+    bc_kl_iters: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """Weighted KL(current || BC anchor). The weight is ``kl_coeff_for_iter``.
+
+    ``bc_kl`` is the term added to the learner loss, so it falls to 0 as the
+    schedule decays. ``bc_kl_divergence`` is the unweighted KL.
+    """
+
+    coeff = kl_coeff_for_iter(iteration, bc_kl_coeff=bc_kl_coeff, bc_kl_iters=bc_kl_iters)
+    divergence = kl_to_anchor(logits, anchor_logits, mask)
+    penalty = logits.new_tensor(coeff) * divergence
+    return penalty, {
+        "bc_kl": float(penalty.detach()),
+        "bc_kl_divergence": float(divergence.detach()),
+        "bc_kl_coeff": float(coeff),
+    }
+
+
 def kl_coeff_for_iter(iteration: int, *, bc_kl_coeff: float, bc_kl_iters: int) -> float:
     if bc_kl_coeff <= 0 or bc_kl_iters <= 0 or iteration >= bc_kl_iters:
         return 0.0

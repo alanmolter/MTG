@@ -25,6 +25,7 @@ import forge.gui.GuiBase;
 import forge.item.PaperCard;
 import forge.localinstance.properties.ForgePreferences.FPref;
 import forge.model.FModel;
+import forge.util.MyRandom;
 
 import com.google.common.eventbus.Subscribe;
 
@@ -34,6 +35,7 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -47,9 +49,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * Protocol (one JSON object per line):
  *   IN:  {"cmd":"ping"}                          → OUT: {"pong":true,"cards_loaded":N}
- *   IN:  {"cmd":"new_game","agent_deck":"...","opponent_deck":"...","seed":42}
+ *   IN:  {"cmd":"new_game","agent_deck":"...","opponent_deck":"...","seed":42,
+ *         "request_id":1,"step_timeout_seconds":8}
  *                                                → OUT: first state snapshot
- *   IN:  {"cmd":"step","action":<int>}           → OUT: next snapshot (blocks ≤ 10s)
+ *   IN:  {"cmd":"step","action":<int>,"request_id":2}
+ *                                                → OUT: next snapshot (blocks ≤ step_timeout_seconds)
  *   IN:  {"cmd":"step_autoregressive",           → OUT: next snapshot (blocks ≤ 10s)
  *         "action_base":<0..3>,                      action_base semantics:
  *         "source_id":<0..127>,                        0 → Cast/Play hand[source_id] targeting target_id
@@ -97,7 +101,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ForgeRLBridge {
 
     private static final int ACTION_MASK_SIZE = 512;
-    private static final int STEP_TIMEOUT_SECONDS = 20;
+    /** Default decision wait. Python's read timeout must be strictly longer. */
+    private static final int DEFAULT_STEP_TIMEOUT_SECONDS = 8;
+    static final String BRIDGE_VERSION = "rlbridge-fase0";
 
     // Phase 3 — autoregressive action space bounds. Must match
     // ml_engine/ray_cluster/env.py's AR_NUM_TYPES / AR_NUM_SOURCES /
@@ -121,6 +127,7 @@ public class ForgeRLBridge {
     // A card that leaves the hand is the AI decision this snapshot records.
     private final List<String> previousAgentHand = new ArrayList<>();
     private final List<String> previousStack = new ArrayList<>();
+    private int stepTimeoutSeconds = defaultStepTimeoutSeconds();
 
     public static void main(String[] args) {
         ForgeRLBridge bridge = new ForgeRLBridge();
@@ -145,12 +152,14 @@ public class ForgeRLBridge {
             while ((line = in.readLine()) != null) {
                 line = line.trim();
                 if (line.isEmpty()) continue;
+                Json parsed = null;
                 try {
-                    handleCommand(line, protocolOut);
+                    parsed = Json.parse(line);
+                    handleCommand(parsed, protocolOut);
                 } catch (Throwable t) {
                     String msg = escape(t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()));
-                    protocolOut.println("{\"error\":\"" + msg + "\",\"terminal\":true,\"outcome\":0,\"illegal_action\":true}");
-                    protocolOut.flush();
+                    writeResponse(protocolOut, parsed,
+                        "{\"error\":\"" + msg + "\",\"terminal\":true,\"outcome\":0,\"illegal_action\":true}");
                 }
             }
         } catch (Exception e) {
@@ -228,25 +237,21 @@ public class ForgeRLBridge {
 
     // ── Command dispatch ───────────────────────────────────────────────────
 
-    private void handleCommand(String line, PrintStream out) throws Exception {
+    private void handleCommand(Json j, PrintStream out) throws Exception {
         // Minimal JSON parsing — we only care about a handful of top-level keys
         // and we accept simple string/int/null scalars. This avoids pulling in
         // a JSON library in the bridge jar.
-        Json j = Json.parse(line);
         String cmd = j.str("cmd");
         if (cmd == null) {
-            out.println("{\"error\":\"missing cmd\"}");
-            out.flush();
+            writeResponse(out, j, "{\"error\":\"missing cmd\"}");
             return;
         }
         switch (cmd) {
             case "ping":
-                out.println("{\"pong\":true}");
-                out.flush();
+                writeResponse(out, j, "{\"pong\":true,\"bridge_version\":\"" + BRIDGE_VERSION + "\"}");
                 break;
             case "quit":
-                out.println("{\"bye\":true}");
-                out.flush();
+                writeResponse(out, j, "{\"bye\":true}");
                 System.exit(0);
                 break;
             case "new_game":
@@ -259,15 +264,79 @@ public class ForgeRLBridge {
                 stepAutoregressive(j, out);
                 break;
             default:
-                out.println("{\"error\":\"unknown cmd: " + escape(cmd) + "\"}");
-                out.flush();
+                writeResponse(out, j, "{\"error\":\"unknown cmd: " + escape(cmd) + "\"}");
         }
+    }
+
+    /**
+     * Append the caller's request_id so Python can drop a reply that belongs
+     * to an earlier command. The snapshot itself is built before the request
+     * arrives, so the id is injected here rather than inside the game thread.
+     */
+    private static void writeResponse(PrintStream out, Json request, String jsonObject) {
+        String body = jsonObject == null ? "{}" : jsonObject.trim();
+        if (body.endsWith("}")) {
+            StringBuilder extra = new StringBuilder();
+            if (request != null) {
+                Long requestId = request.longOrNull("request_id");
+                if (requestId != null) {
+                    extra.append(",\"request_id\":").append(requestId);
+                }
+            }
+            if (!body.contains("\"bridge_version\"")) {
+                extra.append(",\"bridge_version\":\"").append(BRIDGE_VERSION).append('"');
+            }
+            if (extra.length() > 0) {
+                body = body.substring(0, body.length() - 1) + extra + "}";
+            }
+        }
+        out.println(body);
+        out.flush();
+    }
+
+    private static int defaultStepTimeoutSeconds() {
+        String raw = System.getProperty("forge.rlbridge.stepTimeoutSeconds");
+        if (raw == null || raw.isEmpty()) raw = System.getenv("FORGE_STEP_TIMEOUT_SECONDS");
+        if (raw == null || raw.isEmpty()) return DEFAULT_STEP_TIMEOUT_SECONDS;
+        try {
+            return Math.max(1, Integer.parseInt(raw.trim()));
+        } catch (NumberFormatException e) {
+            return DEFAULT_STEP_TIMEOUT_SECONDS;
+        }
+    }
+
+    /**
+     * Replace Forge's process-wide RNG before the libraries are shuffled.
+     *
+     * {@code MyRandom} starts as a {@code SecureRandom}. {@code setSeed} on
+     * that instance is not a portable replay. {@code setRandom(new Random(seed))}
+     * is the hook Forge documents for deterministic simulation. It covers
+     * shuffles and coin flips that call {@code MyRandom.getRandom()} after
+     * this point. It does not cover {@code new Random()} / {@code new SecureRandom()}
+     * inside AI heuristics, wall-clock timeouts, or thread scheduling. The
+     * bridge still lets Forge AI play both sides, so a repeated seed repeats
+     * the opening hands only when those shuffles go through MyRandom.
+     */
+    private static void applyMatchSeed(Json j) {
+        Long seed = j.longOrNull("seed");
+        if (seed == null) {
+            System.err.println("[forge-rlbridge] new_game has no seed; Forge SecureRandom stays in place");
+            return;
+        }
+        MyRandom.setRandom(new Random(seed));
+        System.err.println("[forge-rlbridge] MyRandom.setRandom(new Random(" + seed + "))");
     }
 
     // ── new_game ───────────────────────────────────────────────────────────
 
     private void startNewGame(Json j, PrintStream out) throws Exception {
         killExistingGame();
+
+        Integer requestedTimeout = j.intOrNull("step_timeout_seconds");
+        if (requestedTimeout != null && requestedTimeout > 0) {
+            this.stepTimeoutSeconds = requestedTimeout;
+        }
+        applyMatchSeed(j);
 
         Deck deckA = parseDeck(j.str("agent_deck"), "AgentDeck");
         Deck deckB = parseDeck(j.str("opponent_deck"), "OpponentDeck");
@@ -319,12 +388,12 @@ public class ForgeRLBridge {
         });
 
         // Emit initial snapshot or await first turn event.
-        String snap = snapshotQueue.poll(STEP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        if (snap == null) {
-            snap = buildSnapshot(false);
+        String snap = snapshotQueue.poll(stepTimeoutSeconds, TimeUnit.SECONDS);
+        boolean timedOut = snap == null;
+        if (timedOut) {
+            snap = buildSnapshot(false, false, true);
         }
-        out.println(snap);
-        out.flush();
+        writeResponse(out, j, snap);
     }
 
     // ── step ───────────────────────────────────────────────────────────────
@@ -333,23 +402,20 @@ public class ForgeRLBridge {
         // The `action` param is currently observational — Forge's AI drives
         // both sides. We simply await the next game-state snapshot.
         if (currentGame == null) {
-            out.println("{\"error\":\"no game in progress\",\"terminal\":true,\"outcome\":0}");
-            out.flush();
+            writeResponse(out, j, "{\"error\":\"no game in progress\",\"terminal\":true,\"outcome\":0}");
             return;
         }
         if (gameFinished.get() && snapshotQueue.isEmpty()) {
-            String snap = buildSnapshot(true);
-            out.println(snap);
-            out.flush();
+            writeResponse(out, j, buildSnapshot(true));
             return;
         }
-        String snap = snapshotQueue.poll(STEP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        String snap = snapshotQueue.poll(stepTimeoutSeconds, TimeUnit.SECONDS);
         if (snap == null) {
-            // Timeout — emit current state with truncated flag
-            snap = buildSnapshot(gameFinished.get());
+            // Java gave up before Python's read timeout. The flag tells the
+            // env this reply is a truncation, not the next decision.
+            snap = buildSnapshot(gameFinished.get(), false, true);
         }
-        out.println(snap);
-        out.flush();
+        writeResponse(out, j, snap);
     }
 
     // ── step_autoregressive ─────────────────────────────────────────────────
@@ -382,8 +448,7 @@ public class ForgeRLBridge {
      */
     private void stepAutoregressive(Json j, PrintStream out) throws Exception {
         if (currentGame == null) {
-            out.println("{\"error\":\"no game in progress\",\"terminal\":true,\"outcome\":0}");
-            out.flush();
+            writeResponse(out, j, "{\"error\":\"no game in progress\",\"terminal\":true,\"outcome\":0}");
             return;
         }
 
@@ -400,9 +465,7 @@ public class ForgeRLBridge {
             // Consume the action without advancing Forge. Return the current
             // snapshot with illegal_action=true → negative reward on the
             // Python side via shaper.penalty_illegal_action.
-            String snap = buildSnapshot(gameFinished.get(), true);
-            out.println(snap);
-            out.flush();
+            writeResponse(out, j, buildSnapshot(gameFinished.get(), true, false));
             return;
         }
 
@@ -411,17 +474,14 @@ public class ForgeRLBridge {
         // drives both sides) but the event-driven snapshot stream still
         // advances turn-by-turn, giving the RL loop a real win/loss signal.
         if (gameFinished.get() && snapshotQueue.isEmpty()) {
-            String snap = buildSnapshot(true, false);
-            out.println(snap);
-            out.flush();
+            writeResponse(out, j, buildSnapshot(true, false, false));
             return;
         }
-        String snap = snapshotQueue.poll(STEP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        String snap = snapshotQueue.poll(stepTimeoutSeconds, TimeUnit.SECONDS);
         if (snap == null) {
-            snap = buildSnapshot(gameFinished.get(), false);
+            snap = buildSnapshot(gameFinished.get(), false, true);
         }
-        out.println(snap);
-        out.flush();
+        writeResponse(out, j, snap);
     }
 
     // ── Event listener (subscribed via Guava EventBus) ─────────────────────
@@ -451,10 +511,14 @@ public class ForgeRLBridge {
     // ── Snapshot builder ───────────────────────────────────────────────────
 
     private String buildSnapshot(boolean forcedTerminal) {
-        return buildSnapshot(forcedTerminal, false);
+        return buildSnapshot(forcedTerminal, false, false);
     }
 
     private String buildSnapshot(boolean forcedTerminal, boolean illegalAction) {
+        return buildSnapshot(forcedTerminal, illegalAction, false);
+    }
+
+    private String buildSnapshot(boolean forcedTerminal, boolean illegalAction, boolean truncated) {
         StringBuilder sb = new StringBuilder(2048);
         sb.append('{');
 
@@ -503,6 +567,10 @@ public class ForgeRLBridge {
                              g.getPhaseHandler().getPlayerTurn() == opp);
 
         field(sb, "terminal", terminal); sb.append(',');
+        field(sb, "truncated", truncated); sb.append(',');
+        if (truncated) {
+            field(sb, "truncation_reason", "step_timeout"); sb.append(',');
+        }
         sb.append("\"outcome\":").append(outcome == null ? "null" : outcome.toString()).append(',');
         field(sb, "illegal_action", illegalAction); sb.append(',');
         field(sb, "turn", turn); sb.append(',');
@@ -971,6 +1039,31 @@ public class ForgeRLBridge {
             if (src.charAt(pos) == '"') return readString();
             // non-string value (shouldn't happen for our cmd/string fields)
             return null;
+        }
+
+        /** Top-level int, or null when the key is absent. */
+        Integer intOrNull(String key) {
+            int p = findKey(key);
+            if (p < 0) return null;
+            return intVal(key, 0);
+        }
+
+        /** Top-level long, or null when the key is absent. Seed 0 is valid. */
+        Long longOrNull(String key) {
+            int p = findKey(key);
+            if (p < 0) return null;
+            skipWs(p + key.length() + 2);
+            if (pos >= src.length() || src.charAt(pos) != ':') return null;
+            pos++;
+            skipWs(pos);
+            int start = pos;
+            if (pos < src.length() && (src.charAt(pos) == '-' || src.charAt(pos) == '+')) pos++;
+            while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
+            if (pos == start || (pos == start + 1 && (src.charAt(start) == '-' || src.charAt(start) == '+'))) {
+                return null;
+            }
+            try { return Long.parseLong(src.substring(start, pos)); }
+            catch (NumberFormatException e) { return null; }
         }
 
         /** Return top-level int value for `key` or defaultValue. */

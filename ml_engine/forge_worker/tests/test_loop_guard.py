@@ -232,6 +232,56 @@ class TestLoopGuard:
         guard.clear_pending()
         assert guard.pending_toxic() == []
 
+    def test_flush_matches_toxic_actions_columns(self):
+        class _Cursor:
+            def __init__(self):
+                self.sql = ""
+                self.rows = []
+
+            def executemany(self, sql, rows):
+                self.sql = sql
+                self.rows = list(rows)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        class _Conn:
+            def __init__(self):
+                self.cur = _Cursor()
+
+            def cursor(self):
+                return self.cur
+
+            def commit(self):
+                return None
+
+        guard = LoopGuard()
+        guard._toxic_pending.append(ToxicAction(
+            card_id="Lightning Bolt",
+            action_type="cast",
+            context_hash="abc123",
+            turn=4,
+            detected_count=3,
+        ))
+        conn = _Conn()
+        written = guard.flush_to_db(conn)
+        assert written == 1
+        assert "action_hash" in conn.cur.sql
+        assert "deck_snap" in conn.cur.sql
+        assert "trigger_reason" in conn.cur.sql
+        assert "ON CONFLICT (action_hash)" in conn.cur.sql
+        insert_list = conn.cur.sql.split("VALUES")[0]
+        assert "card_id" not in insert_list
+        assert "action_type" not in insert_list
+        action_hash, snap, reason, count = conn.cur.rows[0]
+        assert action_hash == "abc123"
+        assert "Lightning Bolt" in snap
+        assert reason == "STATE_REPEATED"
+        assert count == 3
+
     def test_non_terminal_loops_flagged_with_context_hash(self):
         guard = LoopGuard(LoopGuardConfig(loop_threshold=3))
         s = _state(life_you=17, turn=5)

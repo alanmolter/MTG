@@ -108,8 +108,21 @@ def stage_bc(work: Path, *, epochs: int = 1, max_steps: int = 12) -> dict:
             return _line("bc", False, error="no mapped AI decisions", **report.as_dict())
         trained = train_behavior_clone(
             work / "shards", work / "bc.pt", epochs=epochs, max_rows=8, config=SMOKE_GNN,
+            pool_version=version,
         )
-        rows = load_rows(work / "shards")
+        train_rows = load_rows(work / "shards", split="train")
+        hold_rows = load_rows(work / "shards", split="holdout")
+        train_games = {str(row.get("game_id") or "") for row in train_rows}
+        hold_games = {str(row.get("game_id") or "") for row in hold_rows}
+        if not train_games or not hold_games or not train_games.isdisjoint(hold_games):
+            return _line(
+                "bc",
+                False,
+                error="train and holdout game_ids overlap or a split is empty",
+                train_games=sorted(train_games),
+                hold_games=sorted(hold_games),
+            )
+        rows = train_rows
         from ml_engine.models.game_state_gnn import GameStateGNN
         from ml_engine.bc.train import load_bc_weights
 

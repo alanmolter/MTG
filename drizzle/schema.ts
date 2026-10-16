@@ -1,4 +1,4 @@
-import { boolean, bigserial, customType, index, integer, jsonb, numeric, pgEnum, pgTable, serial, text, timestamp, varchar, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, bigserial, customType, index, integer, jsonb, numeric, pgEnum, pgTable, serial, text, timestamp, varchar, real, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
  * Custom pgvector type for Drizzle.
@@ -262,6 +262,18 @@ export const forgeMatches = pgTable("forge_matches", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   rawJson: text("raw_json"),
   comboSummaryJson: text("combo_summary_json"),
+  /** Pool or competitive-deck id that sat in the agent seat. */
+  agentDeckId: text("agent_deck_id"),
+  /** Pool or competitive-deck id that sat in the opponent seat. */
+  opponentDeckId: text("opponent_deck_id"),
+  /** Seed passed to Forge's MyRandom before the libraries were shuffled. */
+  seed: bigint("seed", { mode: "number" }),
+  /** Checkpoint path or policy label that chose the actions, when one did. */
+  policyVersion: text("policy_version"),
+  /** Deck-pool manifest version (DECK_POOL_VERSION), when the match used one. */
+  poolVersion: text("pool_version"),
+  /** rlbridge build that produced the match. */
+  bridgeVersion: text("bridge_version"),
 });
 
 export type ForgeMatch = typeof forgeMatches.$inferSelect;

@@ -1,26 +1,61 @@
 {
   "version": "7",
-  "dialect": "mysql",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1774493363627,
-      "tag": "0000_cute_captain_flint",
+      "version": "7",
+      "when": 1775000000000,
+      "tag": "0003_postgres_init",
       "breakpoints": true
     },
     {
       "idx": 1,
-      "version": "5",
-      "when": 1774493532998,
-      "tag": "0001_dazzling_shiva",
+      "version": "7",
+      "when": 1775000001000,
+      "tag": "0004_mtg_ai_updates",
       "breakpoints": true
     },
     {
       "idx": 2,
-      "version": "5",
-      "when": 1774494764580,
-      "tag": "0002_rich_gabe_jones",
+      "version": "7",
+      "when": 1775000002000,
+      "tag": "0005_endgame_pgvector",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775000003000,
+      "tag": "0006_archetype_weights",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775000004000,
+      "tag": "0007_competitive_deck_cards_repair",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775000005000,
+      "tag": "0008_training_quality_gates",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775000006000,
+      "tag": "0009_competitive_deck_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775000007000,
+      "tag": "0010_forge_match_provenance",
       "breakpoints": true
     }
   ]

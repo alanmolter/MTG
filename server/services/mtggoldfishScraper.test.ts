@@ -11,11 +11,13 @@ global.fetch = vi.fn();
 // inserts to resolve.
 function makeFakePg() {
   // Tagged templates are called as pg`SELECT ...` → pg(strings, ...values).
-  // Every call returns a Promise resolving to an array.
+  // Every call returns a Promise resolving to an array. Writes go through begin.
   const pg = vi.fn(async (_strings: TemplateStringsArray, ..._values: any[]) => {
     return [{ id: 1 }];
   });
-  return pg;
+  return Object.assign(pg, {
+    begin: async (fn: (tx: typeof pg) => Promise<unknown>) => fn(pg),
+  });
 }
 
 vi.mock("../db", () => ({
@@ -117,5 +119,47 @@ describe("competitive deck import contract", () => {
     expect(result).toEqual({ imported: true, cards: 1 });
     expect(statements.some((sqlText) => sqlText.includes("raw_json"))).toBe(true);
     expect(statements.some((sqlText) => sqlText.includes("DELETE FROM competitive_deck_cards"))).toBe(true);
+  });
+
+  it("sums duplicate lines in a section instead of aborting the deck", async () => {
+    const inserted: unknown[][] = [];
+    const sql = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      if (strings.join(" ").includes("INSERT INTO competitive_deck_cards")) inserted.push(values);
+      return [{ id: 3 }];
+    });
+    const pg = Object.assign(sql, {
+      begin: async (fn: (tx: typeof sql) => Promise<unknown>) => fn(sql),
+    });
+    const result = await saveCompetitiveDeck(pg as any, {
+      sourceId: "goldfish-9",
+      source: "mtggoldfish",
+      name: "Burn",
+      format: "modern",
+      mainboard: [
+        { cardName: "Lightning Bolt", quantity: 2 },
+        { cardName: "Lightning Bolt", quantity: 2 },
+        { cardName: "Mountain", quantity: 20 },
+      ],
+      sideboard: [{ cardName: "Lightning Bolt", quantity: 1 }],
+    });
+    expect(result).toEqual({ imported: true, cards: 3 });
+    const bolts = inserted.filter((values) => values[1] === "Lightning Bolt");
+    expect(bolts).toEqual([
+      [3, "Lightning Bolt", 4, "mainboard"],
+      [3, "Lightning Bolt", 1, "sideboard"],
+    ]);
+  });
+
+  it("refuses to write when the client has no transaction", async () => {
+    const pg = vi.fn(async () => [{ id: 1 }]);
+    await expect(saveCompetitiveDeck(pg as any, {
+      sourceId: "goldfish-2",
+      source: "mtggoldfish",
+      name: "Burn",
+      format: "modern",
+      mainboard: [{ cardName: "Mountain", quantity: 20 }],
+      sideboard: [],
+    })).rejects.toThrow(/non-transactional/);
+    expect(pg).not.toHaveBeenCalled();
   });
 });

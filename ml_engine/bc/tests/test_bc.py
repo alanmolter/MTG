@@ -7,11 +7,12 @@ from pathlib import Path
 import torch
 
 from ml_engine.bc.actions import decision_counts, mapped_action, unmappable_rate
-from ml_engine.bc.dataset import load_rows
+from ml_engine.bc.dataset import load_rows, manifest_blocked_deck_ids, training_rows
 from ml_engine.bc.eval import evaluate_checkpoint
 from ml_engine.bc.record import record_games
-from ml_engine.bc.regularize import anchored_rl_step, kl_coeff_for_iter, kl_to_anchor, load_anchor
+from ml_engine.bc.regularize import anchored_rl_step, bc_kl_penalty, kl_coeff_for_iter, kl_to_anchor, load_anchor
 from ml_engine.bc.train import load_bc_weights, masked_cross_entropy, train_behavior_clone
+from ml_engine.ray_cluster.bc_kl_policy import apply_bc_kl_to_loss
 from ml_engine.models.game_state_gnn import GNNConfig, GameStateGNN
 from ml_engine.ray_cluster.env import MtgForgeEnv
 from ml_engine.ray_cluster.tests.test_env_autoregressive import _minimal_state
@@ -117,7 +118,8 @@ def test_masked_loss_ignores_illegal_slots_and_trains(tmp_path: Path):
         tmp_path / "rows.jsonl",
     )
     trained = train_behavior_clone(tmp_path, tmp_path / "bc.pt", epochs=1, config=TINY)
-    assert trained["rows"] == 2
+    assert trained["rows"] == 1
+    assert trained["excluded_rows"] == 1
     model = GameStateGNN(TINY)
     load_bc_weights(model, tmp_path / "bc.pt")
     anchor = load_anchor(tmp_path / "bc.pt", TINY)
@@ -130,6 +132,112 @@ def test_masked_loss_ignores_illegal_slots_and_trains(tmp_path: Path):
     assert report["rows"] == 1
     assert 0.0 <= report["accuracy"] <= 1.0
     assert report["win_rate"] is None
+    assert set(trained["game_ids"]).isdisjoint(report["game_ids"])
+    assert trained["game_ids"] and report["game_ids"]
+    (tmp_path / "holdout.jsonl").unlink()
+    try:
+        evaluate_checkpoint(tmp_path / "bc.pt", tmp_path, config=TINY)
+        raise AssertionError("eval fell back to the training split")
+    except RuntimeError as exc:
+        assert "no holdout" in str(exc)
     same = torch.zeros(2, 4)
     mask = torch.ones(2, 4)
     assert float(kl_to_anchor(same, same.clone(), mask)) == 0.0
+
+
+def test_train_and_holdout_game_ids_stay_disjoint_and_manifest_holdout_is_dropped():
+    blocked = manifest_blocked_deck_ids("2")
+    assert "azoriuscontrol_q05" in blocked
+    kept, excluded = training_rows(
+        [
+            {"split": "train", "deck_id": "not-in-pool", "opponent_id": "also-not", "game_id": "keep"},
+            {"split": "train", "deck_id": "azoriuscontrol_q05", "opponent_id": "not-in-pool", "game_id": "leak"},
+            {"split": "holdout", "deck_id": "not-in-pool", "opponent_id": "not-in-pool", "game_id": "held"},
+        ],
+        blocked,
+    )
+    assert [row["game_id"] for row in kept] == ["keep"]
+    assert excluded == 2
+    assert {row["game_id"] for row in kept}.isdisjoint({"leak", "held"})
+
+
+def test_bc_kl_penalty_decays_to_zero():
+    logits = torch.zeros(2, 4)
+    anchor = torch.tensor([[2.0, 0.0, 0.0, 0.0], [0.0, 2.0, 0.0, 0.0]])
+    mask = torch.ones(2, 4)
+    penalty0, metrics0 = bc_kl_penalty(
+        logits, anchor, mask, iteration=0, bc_kl_coeff=1.0, bc_kl_iters=10,
+    )
+    _penalty5, metrics5 = bc_kl_penalty(
+        logits, anchor, mask, iteration=5, bc_kl_coeff=1.0, bc_kl_iters=10,
+    )
+    penalty10, metrics10 = bc_kl_penalty(
+        logits, anchor, mask, iteration=10, bc_kl_coeff=1.0, bc_kl_iters=10,
+    )
+    assert metrics0["bc_kl_coeff"] == 1.0
+    assert metrics5["bc_kl_coeff"] < metrics0["bc_kl_coeff"]
+    assert metrics5["bc_kl"] < metrics0["bc_kl"]
+    assert metrics10["bc_kl_coeff"] == 0.0
+    assert float(penalty10) == 0.0
+    assert metrics10["bc_kl"] == 0.0
+    base = torch.tensor(3.0)
+    assert float(apply_bc_kl_to_loss(base, penalty0)) == float(base + penalty0)
+    assert apply_bc_kl_to_loss([base, base], penalty0)[0].item() == float(base + penalty0)
+
+
+def test_record_bridge_discards_stale_replies_and_times_out(monkeypatch, tmp_path: Path):
+    import json
+    import subprocess
+    import time
+
+    from ml_engine.bc.record import SubprocessBridge
+
+    class _Stdin:
+        def write(self, _text: str) -> None:
+            return None
+
+        def flush(self) -> None:
+            return None
+
+    class _Stdout:
+        def __init__(self, lines: list[str], delay: float = 0.0):
+            self._lines = list(lines)
+            self._delay = delay
+
+        def readline(self) -> str:
+            if self._delay:
+                time.sleep(self._delay)
+            return self._lines.pop(0) if self._lines else ""
+
+    class _Proc:
+        def __init__(self, stdout: _Stdout):
+            self.stdin = _Stdin()
+            self.stdout = stdout
+
+        def poll(self):
+            return None
+
+    hanging = {}
+
+    def _popen(*_args, **_kwargs):
+        stdout = hanging["stdout"]
+        return _Proc(stdout)
+
+    monkeypatch.setattr(subprocess, "Popen", _popen)
+    hanging["stdout"] = _Stdout([
+        json.dumps({"request_id": 0, "turn": -1}) + "\n",
+        json.dumps({"request_id": 1, "ok": True, "turn": 1}) + "\n",
+    ])
+    bridge = SubprocessBridge(tmp_path / "forge.jar", tmp_path / "bridge.jar", step_timeout=2.0)
+    parsed = bridge.command({"cmd": "ping"}, timeout=2.0)
+    assert parsed["turn"] == 1
+    assert bridge.stale_replies_discarded == 1
+    assert bridge.java_step_timeout_seconds < bridge.step_timeout
+
+    hanging["stdout"] = _Stdout([], delay=1.0)
+    slow = SubprocessBridge(tmp_path / "forge.jar", tmp_path / "bridge.jar", step_timeout=2.0)
+    try:
+        slow.command({"cmd": "ping"}, timeout=0.2)
+        raise AssertionError("readline returned without a timeout")
+    except TimeoutError:
+        pass
