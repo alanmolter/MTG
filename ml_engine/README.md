@@ -58,5 +58,51 @@ python -m ml_engine.ray_cluster.orchestrator
 ## Tests
 
 ```bash
-pytest ml_engine/forge_worker/tests
+pytest ml_engine
 ```
+
+## Behavior cloning and deck pool v2
+
+Deck pool v1 stays the 14 Challenger lists. v2 is a separate manifest at
+`ml_engine/ray_cluster/data/deck_pool/v2/` built from MIT-licensed MTGJSON
+constructed decks and the Standard/Pioneer rows in the Postgres tournament
+export. `deck_quality` plus Forge `cardsfolder` filename resolution decide
+what is written. Rejections, licenses, and the train / holdout / benchmark
+split are in `manifest.json` and `rejections.json`. Holdout is the newest
+set inside each archetype and color pair, so a group is not split across
+train and eval. Select it with `DECK_POOL_VERSION=2`.
+
+Record Forge-AI vs Forge-AI decisions through rlbridge (the jar must be
+rebuilt after `rlbridge_src` changes; see `rlbridge_src/README.md`):
+
+```bash
+python -m ml_engine.scripts.e2e_preflight --stage bc --work bc_smoke
+```
+
+That stores seed, deck id, the 512-wide mask, and the mapped action, and
+prints the unmappable rate. Train the GNN with masked cross-entropy and a
+value head, then start IMPALA from those weights:
+
+```bash
+python -m ml_engine.ray_cluster.orchestrator --bc-checkpoint bc_smoke/bc.pt --bc-kl-coeff 0.5 --bc-kl-iters 50
+```
+
+The KL term is `KL(current || BC)` on the legal mask and decays to 0 after
+`--bc-kl-iters`. IMPALA's `entropy_coeff` stays on. The smoke checkpoint
+uses a small GNN so the preflight can finish; a checkpoint that initializes
+the training model has to be saved from the default `GNNConfig`. Holdout
+eval reports action accuracy. Win rate versus Forge AI is not measured:
+rlbridge still lets Forge's AI play both sides and does not apply `step`
+actions.
+
+Windows, one shot:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e-preflight.ps1
+```
+
+The script prints PASS or FAIL for postgres, rlbridge, deck pools, database
+lists that have cards, the BC record/train step, the RLlib config, and eval.
+If a stopped container named `mtg-pgvector` was left by the old compose
+service `db`, the script removes that stopped container and starts service
+`postgres`. A container that is already running is reused.

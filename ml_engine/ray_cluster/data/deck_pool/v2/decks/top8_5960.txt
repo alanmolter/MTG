@@ -1,0 +1,32 @@
+About
+Name Azorius Aggro
+
+Deck
+3 Cosmogrand Zenith
+4 Daydream
+8 Plains
+3 Haliya, Guided by Light
+2 Multiversal Passage
+4 Nurturing Pixie
+2 Parting Gust
+4 Momo, Friendly Flier
+4 Quantum Riddler
+4 Starfield Shepherd
+2 Starting Town
+4 Sage of the Skies
+4 Springleaf Drum
+2 Abandoned Air Temple
+4 Hallowed Fountain
+2 Seam Rip
+4 Floodfarm Verge
+
+Sideboard
+2 Seam Rip
+1 Curious Farm Animals
+1 Spell Pierce
+1 Emeritus of Ideation
+2 Get Lost
+4 Rest in Peace
+2 Disdainful Stroke
+1 Split Up
+1 Wan Shi Tong, Librarian

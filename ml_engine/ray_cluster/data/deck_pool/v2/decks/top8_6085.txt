@@ -1,0 +1,32 @@
+About
+Name Orzhov Aggro
+
+Deck
+2 Swamp
+4 Silverquill Charm
+2 Killian's Confidence
+1 Conciliator's Duelist
+4 Lecturing Scornmage
+4 Stirring Hopesinger
+4 Quill-Blade Laureate
+4 Practiced Offense
+4 Informed Inkwright
+2 Erode
+2 Requiting Hex
+2 Tragic Trajectory
+2 Honor
+1 Starting Town
+4 Bleachbone Verge
+4 Shattered Sanctum
+4 Godless Shrine
+4 Concealed Courtyard
+4 Iron-Shield Elf
+2 Plains
+
+Sideboard
+1 Requiting Hex
+1 Tragic Trajectory
+4 Rest in Peace
+4 Strategic Betrayal
+3 Restoration Magic
+2 Voice of Victory

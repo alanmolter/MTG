@@ -1,0 +1,34 @@
+About
+Name Selesnya Aggro
+
+Deck
+1 Forest
+4 Temple Garden
+4 Enduring Innocence
+4 Collected Company
+4 Razorverge Thicket
+4 Badgermole Cub
+4 Brushland
+4 Skyclave Apparition
+2 Elspeth, Storm Slayer
+4 Elvish Mystic
+2 Thalia, Guardian of Thraben
+4 Llanowar Elves
+3 Ouroboroid
+3 Plains
+3 Aven Interrupter
+2 Abandoned Air Temple
+1 Surrak, Elusive Hunter
+1 The Wandering Emperor
+2 Multiversal Passage
+2 Hushwood Verge
+2 Archon of Emeria
+
+Sideboard
+3 March of Otherworldly Light
+2 High Noon
+2 Unlicensed Hearse
+1 Aven Interrupter
+3 Seam Rip
+2 Beza, the Bounding Spring
+2 Archon of Emeria

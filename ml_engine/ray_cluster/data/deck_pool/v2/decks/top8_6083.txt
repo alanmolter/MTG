@@ -1,0 +1,34 @@
+About
+Name Golgari Aggro
+
+Deck
+4 Badgermole Cub
+4 Blooming Marsh
+2 Deathcap Glade
+2 Duress
+2 Emeritus of Abundance
+3 Forest
+1 Maelstrom Pulse
+4 Llanowar Elves
+2 Multiversal Passage
+2 Leatherhead, Swamp Stalker
+4 Overgrown Tomb
+4 Professor Dellian Fel
+2 Ral Zarek, Guest Lecturer
+4 Requiting Hex
+4 Restless Cottage
+2 Shoot the Sheriff
+4 Wastewood Verge
+1 Swamp
+1 Witherbloom Charm
+4 Keen-Eyed Curator
+4 Sentinel of the Nameless City
+
+Sideboard
+2 Duress
+1 Maelstrom Pulse
+2 Day of Black Sun
+2 Strategic Betrayal
+4 Qarsi Revenant
+1 Ghost Vacuum
+3 Ancient Vendetta

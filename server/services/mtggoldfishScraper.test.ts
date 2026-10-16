@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { importMTGGoldfishDecks } from "./mtggoldfishScraper";
+import { parseDeckExport, saveCompetitiveDeck } from "./competitiveDeckStore";
 
 // Mock fetch
 global.fetch = vi.fn();
@@ -65,5 +66,56 @@ describe("importMTGGoldfishDecks", () => {
 
     expect(result.decksImported).toBe(0);
     expect(result.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("competitive deck import contract", () => {
+  it("reads an Arena textarea and ignores a Cloudflare challenge", () => {
+    const html = `<textarea class='copy-paste-box'>Deck\n4 Lightning Bolt\n20 Mountain\n\nSideboard\n1 Red Elemental Blast</textarea>`;
+    const parsed = parseDeckExport(html);
+    expect(parsed?.mainboard).toEqual([
+      { quantity: 4, cardName: "Lightning Bolt" },
+      { quantity: 20, cardName: "Mountain" },
+    ]);
+    expect(parsed?.sideboard).toEqual([{ quantity: 1, cardName: "Red Elemental Blast" }]);
+    expect(parseDeckExport("<html>Just a moment...</html>")).toBeNull();
+    const plain = parseDeckExport("4 Lightning Bolt\n20 Mountain\n\n1 Red Elemental Blast");
+    expect(plain?.sideboard.map((card) => card.cardName)).toEqual(["Red Elemental Blast"]);
+  });
+
+  it("does not insert a header when the mainboard is empty", async () => {
+    const pg = vi.fn(async () => [{ id: 1 }]);
+    const result = await saveCompetitiveDeck(pg as any, {
+      sourceId: "goldfish-1",
+      source: "mtggoldfish",
+      name: "Empty",
+      format: "standard",
+      mainboard: [],
+      sideboard: [],
+    });
+    expect(result.imported).toBe(false);
+    expect(pg).not.toHaveBeenCalled();
+  });
+
+  it("rolls the header and cards back together when a transaction is available", async () => {
+    const statements: string[] = [];
+    const sql = vi.fn(async (strings: TemplateStringsArray) => {
+      statements.push(strings.join(" "));
+      return [{ id: 9 }];
+    });
+    const pg = Object.assign(sql, {
+      begin: async (fn: (tx: typeof sql) => Promise<unknown>) => fn(sql),
+    });
+    const result = await saveCompetitiveDeck(pg as any, {
+      sourceId: "top8-e=1&d=2",
+      source: "mtgtop8",
+      name: "Burn",
+      format: "pioneer",
+      mainboard: [{ cardName: "Lightning Bolt", quantity: 4 }],
+      sideboard: [],
+    });
+    expect(result).toEqual({ imported: true, cards: 1 });
+    expect(statements.some((sqlText) => sqlText.includes("raw_json"))).toBe(true);
+    expect(statements.some((sqlText) => sqlText.includes("DELETE FROM competitive_deck_cards"))).toBe(true);
   });
 });

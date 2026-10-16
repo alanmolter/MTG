@@ -1,0 +1,30 @@
+About
+Name Jund
+
+Deck
+2 Swamp
+3 Overgrown Tomb
+4 Blood Crypt
+4 Blackcleave Cliffs
+4 Fatal Push
+4 Mayhem Devil
+4 Cauldron Familiar
+4 Witch's Oven
+4 Deadly Dispute
+1 Den of the Bugbear
+4 Bloodtithe Harvester
+4 Fable of the Mirror-Breaker
+1 Sokenzan, Crucible of Defiance
+4 Scavenger's Talent
+2 Ygra, Eater of All
+3 Blazemire Verge
+4 Moonshadow
+4 Blightstep Pathway
+
+Sideboard
+4 Leyline of the Void
+4 Thoughtseize
+2 Kolaghan's Command
+2 The Legend of Roku
+2 Withering Curse
+1 Decorum Dissertation

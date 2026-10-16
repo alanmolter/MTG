@@ -127,6 +127,7 @@ venv-*/
 
 # Ray results
 ray_results/
+bc_smoke/
 
 # Claude Code workspace
 .claude/

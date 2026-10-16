@@ -1,0 +1,34 @@
+About
+Name Dimir Aggro
+
+Deck
+4 Fatal Push
+4 Floodpits Drowner
+4 Moon-Circuit Hacker
+4 Gloomlake Verge
+1 Anoint with Affliction
+4 Kaito, Bane of Nightmares
+4 Mutavault
+1 Urborg, Tomb of Yawgmoth
+4 Darkslick Shores
+4 Watery Grave
+1 Otawara, Soaring City
+2 Enduring Curiosity
+4 Thoughtseize
+2 Island
+4 Faerie Miscreant
+4 Mockingbird
+2 Go for the Throat
+2 Cecil, Dark Knight
+2 Brazen Borrower
+3 Multiversal Passage
+
+Sideboard
+4 Leyline of the Void
+2 Anoint with Affliction
+2 Disdainful Stroke
+2 Tishana's Tidebinder
+2 Sheoldred, the Apocalypse
+1 Spell Pierce
+1 Qarsi Revenant
+1 Ray of Enfeeblement

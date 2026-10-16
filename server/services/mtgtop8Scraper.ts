@@ -1,4 +1,5 @@
 import { getRawClient } from "../db";
+import { saveCompetitiveDeck } from "./competitiveDeckStore";
 
 const MTGTOP8_BASE_URL = "https://mtgtop8.com";
 const USER_AGENT =
@@ -219,39 +220,16 @@ async function saveDeckToDb(
   const pgClient = await getRawClient();
   if (!pgClient) return { imported: false, cards: 0 };
 
-  const fullSourceId = `top8-${sourceId}`;
-  const name        = detail.name || `Deck ${sourceId}`;
-  const archetype   = detail.archetype || null;
-
-  // INSERT usando postgres.js tagged template literal (sem Drizzle)
-  const rows = await pgClient`
-    INSERT INTO competitive_decks
-      (source_id, source, name, format, archetype, author)
-    VALUES
-      (${fullSourceId}, ${'mtgtop8'}, ${name}, ${detail.format}, ${archetype}, ${'MTGTop8'})
-    ON CONFLICT (source_id)
-      DO UPDATE SET name = EXCLUDED.name
-    RETURNING id
-  `;
-
-  const deckId = rows[0]?.id as number | undefined;
-  if (!deckId) return { imported: false, cards: 0 };
-
-  const allCards = [
-    ...detail.mainboard.map((c) => ({ ...c, section: "mainboard" as const })),
-    ...detail.sideboard.map((c) => ({ ...c, section: "sideboard" as const })),
-  ];
-
-  for (const card of allCards) {
-    await pgClient`
-      INSERT INTO competitive_deck_cards (deck_id, card_name, quantity, section)
-      VALUES (${deckId}, ${card.cardName}, ${card.quantity}, ${card.section})
-      ON CONFLICT (deck_id, card_name, section)
-        DO UPDATE SET quantity = EXCLUDED.quantity
-    `;
-  }
-
-  return { imported: true, cards: allCards.length };
+  return saveCompetitiveDeck(pgClient, {
+    sourceId: `top8-${sourceId}`,
+    source: "mtgtop8",
+    name: detail.name || `Deck ${sourceId}`,
+    format: detail.format,
+    archetype: detail.archetype || null,
+    author: "MTGTop8",
+    mainboard: detail.mainboard,
+    sideboard: detail.sideboard,
+  });
 }
 
 // ─── Importação por formato ───────────────────────────────────────────────────

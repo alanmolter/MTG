@@ -1,0 +1,31 @@
+About
+Name Selesnya Aggro
+
+Deck
+1 Temple Garden
+4 Fabled Passage
+4 Escape Tunnel
+2 Traveling Chocobo
+4 Earthbender Ascension
+2 Royal Treatment
+3 Ba Sing Se
+4 Mossborn Hydra
+4 Tifa Lockhart
+4 Sazh's Chocobo
+4 Planar Engineering
+1 Plains
+12 Forest
+4 Llanowar Elves
+1 Snakeskin Veil
+4 Badgermole Cub
+2 Bristly Bill, Spine Sower
+
+Sideboard
+1 Snakeskin Veil
+2 Origin of Metalbending
+3 Erode
+2 Sheltered by Ghosts
+2 Soul-Guide Lantern
+1 Leatherhead, Swamp Stalker
+2 Keen-Eyed Curator
+2 Sandman, Shifting Scoundrel

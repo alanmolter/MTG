@@ -1,0 +1,34 @@
+About
+Name Golgari Aggro
+
+Deck
+4 Witch's Oven
+4 Cauldron Familiar
+4 Scavenger's Talent
+4 Gilded Goose
+4 Darkbore Pathway
+2 Boseiju, Who Endures
+4 Overgrown Tomb
+3 Abrupt Decay
+2 Swamp
+4 Cache Grab
+3 Ygra, Eater of All
+3 Traverse the Ulvenwald
+3 Dredger's Insight
+4 Badgermole Cub
+1 Fountainport
+4 Blooming Marsh
+2 Forest
+2 The Meathook Massacre
+3 Fatal Push
+
+Sideboard
+1 Unlicensed Hearse
+1 Liliana of the Veil
+1 Abrupt Decay
+1 The Meathook Massacre
+3 Illness in the Ranks
+1 Ray of Enfeeblement
+1 Ghost Vacuum
+4 Thoughtseize
+2 Professor Dellian Fel

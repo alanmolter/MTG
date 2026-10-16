@@ -216,16 +216,16 @@ def _load_card_file(name: str, card_database: Path) -> CardData | None:
     return None
 
 
-@lru_cache(maxsize=1)
-def _bundled_card_index() -> dict[str, CardData]:
-    """Casefold name -> card. Empty when the index file is absent."""
+def card_index_from_file(path: Path) -> dict[str, CardData]:
+    """Name index stored next to a deck-pool manifest."""
 
-    path = BUNDLED_CARD_INDEX
-    if not path.is_file():
-        return {}
     import json
 
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    file = Path(path)
+    return _index_from_payload(json.loads(file.read_text(encoding="utf-8")), file)
+
+
+def _index_from_payload(payload: dict, path: Path) -> dict[str, CardData]:
     index: dict[str, CardData] = {}
     for entry in payload.get("cards", []):
         card = CardData(
@@ -239,6 +239,30 @@ def _bundled_card_index() -> dict[str, CardData]:
         keys = [card.name, *list(entry.get("aliases") or ())]
         for key in keys:
             index[str(key).casefold()] = card
+    return index
+
+
+@lru_cache(maxsize=1)
+def _bundled_card_index() -> dict[str, CardData]:
+    """Casefold name -> card. Merges every versioned ``forge_cards.json``.
+
+    v1 stays the historical index. Later pools (v2, ...) add cards without
+    rewriting v1. The cardsfolder still wins inside ``load_card``.
+    """
+
+    import json
+
+    root = BUNDLED_CARD_INDEX.parent.parent
+    paths = sorted(root.glob("v*/forge_cards.json"))
+    if not paths and BUNDLED_CARD_INDEX.is_file():
+        paths = [BUNDLED_CARD_INDEX]
+    index: dict[str, CardData] = {}
+    for path in paths:
+        if not path.is_file():
+            continue
+        for key, card in _index_from_payload(json.loads(path.read_text(encoding="utf-8")), path).items():
+            # Earlier pools keep their card data. Later pools only add names.
+            index.setdefault(key, card)
     return index
 
 
@@ -434,6 +458,7 @@ def evaluate_deck(
     *,
     card_database: Path = DEFAULT_CARD_DATABASE,
     config: DeckGateConfig = DeckGateConfig(),
+    extra_index: Mapping[str, CardData] | None = None,
 ) -> dict[str, object]:
     """Return a deterministic result with actionable error/warning findings."""
 
@@ -471,7 +496,11 @@ def evaluate_deck(
         findings.append(_finding("card_database_missing", "error", f"Forge card database missing: {card_database}"))
     metadata: dict[str, CardData] = {}
     for name in quantities:
-        card = load_card(name, Path(card_database))
+        card = None
+        if extra_index is not None:
+            card = extra_index.get(name.casefold())
+        if card is None:
+            card = load_card(name, Path(card_database))
         if card is None:
             findings.append(_finding("unknown_card", "error", f"Card not found in Forge data: {name}"))
         else:
@@ -592,10 +621,13 @@ def deck_rejection_reason(
     *,
     card_database: Path = DEFAULT_CARD_DATABASE,
     config: DeckGateConfig = DeckGateConfig(),
+    extra_index: Mapping[str, CardData] | None = None,
 ) -> str | None:
     """None when the deck passes. Otherwise one line naming every error."""
 
-    result = evaluate_deck(deck_id, decklist, card_database=card_database, config=config)
+    result = evaluate_deck(
+        deck_id, decklist, card_database=card_database, config=config, extra_index=extra_index,
+    )
     if result["pass"]:
         return None
     details = [

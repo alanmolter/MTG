@@ -168,7 +168,8 @@ export type InsertEmbeddingsCache = typeof embeddingsCache.$inferInsert;
 export const competitiveDecks = pgTable("competitive_decks", {
   id: serial("id").primaryKey(),
   sourceId: varchar("source_id", { length: 128 }).notNull().unique(),
-  source: varchar("source", { length: 50 }).notNull().default("mtggoldfish"),
+  // Live Postgres default is 'moxfield'. Scrapers always set source explicitly.
+  source: varchar("source", { length: 50 }).notNull().default("moxfield"),
   name: varchar("name", { length: 255 }).notNull(),
   format: varchar("format", { length: 50 }).notNull(),
   archetype: varchar("archetype", { length: 100 }),
@@ -202,7 +203,12 @@ export const competitiveDeckCards = pgTable(
     section: varchar("section", { length: 20 }).default("mainboard"),
   },
   (table) => ({
-    deckCardUnique: { unique: true, columns: [table.deckId, table.cardName, table.section] },
+    deckCardUnique: uniqueIndex("competitive_deck_cards_deck_card_section_unique").on(
+      table.deckId,
+      table.cardName,
+      table.section,
+    ),
+    deckIdIdx: index("competitive_deck_cards_deck_id_idx").on(table.deckId),
   })
 );
 
