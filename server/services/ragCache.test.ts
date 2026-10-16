@@ -14,7 +14,12 @@ vi.mock("./anthropicClient", () => ({
   callHaiku: vi.fn(),
 }));
 
-import { queryWithRAG, hashPrompt, toVectorLiteral, getCacheStats } from "./ragCache";
+import {
+  queryWithRAG,
+  hashPrompt,
+  toVectorLiteral,
+  getCacheStats,
+} from "./ragCache";
 import { getDb } from "../db";
 import { CircuitBreaker } from "./circuitBreaker";
 import { callHaiku } from "./anthropicClient";
@@ -30,27 +35,31 @@ const makeEmbedding = (): number[] =>
  *   - persist via db.execute(sql`INSERT ...`)
  *   - hit counter bump via db.update().set().where()
  */
-function makeMockDb(options: {
-  exactHit?: {
-    id: number;
-    responseJson: unknown;
-    modelUsed: string;
-    hitCount: number;
-    expiresAt: Date | null;
-  };
-  semanticHit?: {
-    id: number;
-    response_json: unknown;
-    model_used: string;
-    similarity: number;
-    expires_at: Date | null;
-  };
-  executeError?: Error;
-} = {}) {
+function makeMockDb(
+  options: {
+    exactHit?: {
+      id: number;
+      responseJson: unknown;
+      modelUsed: string;
+      hitCount: number;
+      expiresAt: Date | null;
+    };
+    semanticHit?: {
+      id: number;
+      response_json: unknown;
+      model_used: string;
+      similarity: number;
+      expires_at: Date | null;
+    };
+    executeError?: Error;
+  } = {}
+) {
   const selectChain = {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue(options.exactHit ? [options.exactHit] : []),
+    limit: vi
+      .fn()
+      .mockResolvedValue(options.exactHit ? [options.exactHit] : []),
   };
   const updateChain = {
     set: vi.fn().mockReturnThis(),
@@ -214,7 +223,9 @@ describe("ragCache", () => {
 
     it("lança erro quando skipApi=true em cache miss", async () => {
       (getDb as any).mockResolvedValue(makeMockDb());
-      await expect(queryWithRAG("p", { skipApi: true })).rejects.toThrow(/skipApi=true/);
+      await expect(queryWithRAG("p", { skipApi: true })).rejects.toThrow(
+        /skipApi=true/
+      );
       expect(callHaiku).not.toHaveBeenCalled();
     });
 
@@ -334,7 +345,10 @@ describe("ragCache", () => {
       expect(stats.totalCostUsd).toBeCloseTo(0.05);
       expect(stats.avgCostPerEntry).toBeCloseTo(0.005);
       expect(stats.topModels).toHaveLength(2);
-      expect(stats.topModels[0]).toEqual({ model: "claude-haiku-4-5", count: 7 });
+      expect(stats.topModels[0]).toEqual({
+        model: "claude-haiku-4-5",
+        count: 7,
+      });
     });
   });
 });

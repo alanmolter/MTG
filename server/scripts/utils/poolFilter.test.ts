@@ -35,7 +35,7 @@ describe("poolFilter", () => {
 
     it.each(["1", "true", "yes", "on", "TRUE", "True", "Yes", "On", " 1 "])(
       "returns true for truthy value %j",
-      (value) => {
+      value => {
         process.env.TRAINING_POOL_ARENA_ONLY = value;
         expect(isArenaOnlyTraining()).toBe(true);
       }
@@ -43,7 +43,7 @@ describe("poolFilter", () => {
 
     it.each(["0", "false", "no", "off", "anything-else", "2", "FALSE"])(
       "returns false for non-truthy value %j",
-      (value) => {
+      value => {
         process.env.TRAINING_POOL_ARENA_ONLY = value;
         expect(isArenaOnlyTraining()).toBe(false);
       }

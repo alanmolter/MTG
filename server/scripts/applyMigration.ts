@@ -42,7 +42,7 @@ export function adapt(sql: Sql | postgres.TransactionSql): MigrationDb {
     },
     transaction(fn) {
       if (!("begin" in sql)) return fn(adapt(sql));
-      return sql.begin((tx) => fn(adapt(tx))) as Promise<never>;
+      return sql.begin(tx => fn(adapt(tx))) as Promise<never>;
     },
   };
 }
@@ -88,7 +88,9 @@ async function main() {
     const result = await migrateDatabase(dbUrl, migrationsFolder, args);
     if (result.stamped.length > 0) {
       const source = result.plan.kind === "stamp" ? result.plan.source : "";
-      console.log(`[Migration] baseline (${source}): ${result.stamped.join(", ")}`);
+      console.log(
+        `[Migration] baseline (${source}): ${result.stamped.join(", ")}`
+      );
     }
     console.log(
       result.migrated

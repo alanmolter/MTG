@@ -133,7 +133,14 @@ describe("extractCardFeatures", () => {
   });
 
   it("deve retornar impactScore entre 0 e 10", () => {
-    const cards = [lightningBolt, goblinGuide, brainstorm, counterspell, llanowarElves, mountain];
+    const cards = [
+      lightningBolt,
+      goblinGuide,
+      brainstorm,
+      counterspell,
+      llanowarElves,
+      mountain,
+    ];
     for (const card of cards) {
       const f = extractCardFeatures(card);
       expect(f.impactScore).toBeGreaterThanOrEqual(0);
@@ -153,16 +160,47 @@ describe("manaCurveScore", () => {
       text: "",
       cmc: 5,
     }));
-    const { score } = manaCurveScore(heavyDeck.map(extractCardFeatures), "aggro");
+    const { score } = manaCurveScore(
+      heavyDeck.map(extractCardFeatures),
+      "aggro"
+    );
     expect(score).toBeLessThan(0); // penalidade por não ter curva baixa
   });
 
   it("deve dar score melhor para deck aggro com curva baixa", () => {
     const aggroDeck = [
-      ...Array.from({ length: 12 }, () => extractCardFeatures({ name: "1-drop", type: "Creature", text: "", cmc: 1 })),
-      ...Array.from({ length: 14 }, () => extractCardFeatures({ name: "2-drop", type: "Creature", text: "", cmc: 2 })),
-      ...Array.from({ length: 8 }, () => extractCardFeatures({ name: "3-drop", type: "Creature", text: "", cmc: 3 })),
-      ...Array.from({ length: 2 }, () => extractCardFeatures({ name: "4-drop", type: "Creature", text: "", cmc: 4 })),
+      ...Array.from({ length: 12 }, () =>
+        extractCardFeatures({
+          name: "1-drop",
+          type: "Creature",
+          text: "",
+          cmc: 1,
+        })
+      ),
+      ...Array.from({ length: 14 }, () =>
+        extractCardFeatures({
+          name: "2-drop",
+          type: "Creature",
+          text: "",
+          cmc: 2,
+        })
+      ),
+      ...Array.from({ length: 8 }, () =>
+        extractCardFeatures({
+          name: "3-drop",
+          type: "Creature",
+          text: "",
+          cmc: 3,
+        })
+      ),
+      ...Array.from({ length: 2 }, () =>
+        extractCardFeatures({
+          name: "4-drop",
+          type: "Creature",
+          text: "",
+          cmc: 4,
+        })
+      ),
     ];
     const heavyDeck = Array.from({ length: 36 }, () =>
       extractCardFeatures({ name: "5-drop", type: "Sorcery", text: "", cmc: 5 })
@@ -222,7 +260,9 @@ describe("landRatioScore", () => {
 
 describe("mechanicSynergyScore", () => {
   it("deve dar score maior para deck com tags repetidas (stacking)", () => {
-    const drawHeavy = Array.from({ length: 12 }, () => extractCardFeatures(brainstorm));
+    const drawHeavy = Array.from({ length: 12 }, () =>
+      extractCardFeatures(brainstorm)
+    );
     const mixed = [
       ...Array.from({ length: 3 }, () => extractCardFeatures(brainstorm)),
       ...Array.from({ length: 3 }, () => extractCardFeatures(lightningBolt)),
@@ -249,8 +289,12 @@ describe("mechanicSynergyScore", () => {
   });
 
   it("deve dar bônus por ter remoção suficiente", () => {
-    const withRemoval = Array.from({ length: 8 }, () => extractCardFeatures(lightningBolt));
-    const withoutRemoval = Array.from({ length: 8 }, () => extractCardFeatures(goblinGuide));
+    const withRemoval = Array.from({ length: 8 }, () =>
+      extractCardFeatures(lightningBolt)
+    );
+    const withoutRemoval = Array.from({ length: 8 }, () =>
+      extractCardFeatures(goblinGuide)
+    );
     const { score: removalScore } = mechanicSynergyScore(withRemoval);
     const { score: noRemovalScore } = mechanicSynergyScore(withoutRemoval);
     expect(removalScore).toBeGreaterThan(noRemovalScore);
@@ -328,7 +372,11 @@ describe("evaluateDeck", () => {
       ...Array.from({ length: 36 }, () => ({ ...lightningBolt })),
     ];
     const m = evaluateDeck(cards, "default");
-    const expectedTotal = m.breakdown.curve + m.breakdown.lands + m.breakdown.synergy + m.breakdown.simulation;
+    const expectedTotal =
+      m.breakdown.curve +
+      m.breakdown.lands +
+      m.breakdown.synergy +
+      m.breakdown.simulation;
     expect(m.totalScore).toBeCloseTo(expectedTotal, 1);
   });
 
@@ -356,8 +404,14 @@ describe("calibrateFromRealDecks", () => {
 
   it("deve calcular média de terrenos corretamente", () => {
     const decks = [
-      [{ cmc: 0, type: "Basic Land", quantity: 20 }, { cmc: 1, type: "Creature", quantity: 40 }],
-      [{ cmc: 0, type: "Basic Land", quantity: 24 }, { cmc: 2, type: "Instant", quantity: 36 }],
+      [
+        { cmc: 0, type: "Basic Land", quantity: 20 },
+        { cmc: 1, type: "Creature", quantity: 40 },
+      ],
+      [
+        { cmc: 0, type: "Basic Land", quantity: 24 },
+        { cmc: 2, type: "Instant", quantity: 36 },
+      ],
     ];
     const { avgLands } = calibrateFromRealDecks(decks);
     expect(avgLands).toBe(22); // (20 + 24) / 2
@@ -365,8 +419,15 @@ describe("calibrateFromRealDecks", () => {
 
   it("deve calcular curva média corretamente", () => {
     const decks = [
-      [{ cmc: 0, type: "Land", quantity: 20 }, { cmc: 1, type: "Creature", quantity: 40 }],
-      [{ cmc: 0, type: "Land", quantity: 20 }, { cmc: 1, type: "Creature", quantity: 20 }, { cmc: 2, type: "Instant", quantity: 20 }],
+      [
+        { cmc: 0, type: "Land", quantity: 20 },
+        { cmc: 1, type: "Creature", quantity: 40 },
+      ],
+      [
+        { cmc: 0, type: "Land", quantity: 20 },
+        { cmc: 1, type: "Creature", quantity: 20 },
+        { cmc: 2, type: "Instant", quantity: 20 },
+      ],
     ];
     const { avgCurve } = calibrateFromRealDecks(decks);
     expect(avgCurve[1]).toBe(30); // (40 + 20) / 2

@@ -44,10 +44,18 @@ let _weightCacheTimestamp = 0;
 let _weightCacheLogged = false; // garante log único por sessão de processo
 
 /** Cache em memória dos pesos por archetype (Phase 2). TTL compartilhado. */
-const _archetypeWeightCache: Record<string, { map: Record<string, number>; ts: number }> = {};
+const _archetypeWeightCache: Record<
+  string,
+  { map: Record<string, number>; ts: number }
+> = {};
 
 /** Fonte de aprendizado — usada para rastrear qual processo atualizou o peso */
-export type LearningSource = "user_generation" | "self_play" | "commander_train" | "rl_policy" | "forge_reality";
+export type LearningSource =
+  | "user_generation"
+  | "self_play"
+  | "commander_train"
+  | "rl_policy"
+  | "forge_reality";
 
 export class modelLearningService {
   /**
@@ -61,7 +69,9 @@ export class modelLearningService {
    *
    * Para forçar recarga imediata (ex: após updateWeights), use invalidateCache().
    */
-  public static async getCardWeights(archetype?: CardLearningArchetype | string): Promise<Record<string, number>> {
+  public static async getCardWeights(
+    archetype?: CardLearningArchetype | string
+  ): Promise<Record<string, number>> {
     const now = Date.now();
 
     // Phase 2 — se archetype for passado, lemos (e cacheamos) a coluna
@@ -70,24 +80,34 @@ export class modelLearningService {
     const normalizedArch = normalizeArchetype(archetype);
     if (normalizedArch) {
       const cached = _archetypeWeightCache[normalizedArch];
-      if (cached && (now - cached.ts) < WEIGHT_CACHE_TTL_MS) {
+      if (cached && now - cached.ts < WEIGHT_CACHE_TTL_MS) {
         return cached.map;
       }
       const database = await getDb();
       if (!database) return {};
-      const colKey = `weight${normalizedArch.charAt(0).toUpperCase()}${normalizedArch.slice(1)}` as
-        "weightAggro" | "weightControl" | "weightMidrange" | "weightCombo" | "weightRamp";
+      const colKey =
+        `weight${normalizedArch.charAt(0).toUpperCase()}${normalizedArch.slice(1)}` as
+          | "weightAggro"
+          | "weightControl"
+          | "weightMidrange"
+          | "weightCombo"
+          | "weightRamp";
       const rows = await database
         .select({ name: cardLearning.cardName, w: cardLearning[colKey] })
         .from(cardLearning);
       const map: Record<string, number> = {};
-      rows.forEach((r: any) => { map[r.name] = r.w; });
+      rows.forEach((r: any) => {
+        map[r.name] = r.w;
+      });
       _archetypeWeightCache[normalizedArch] = { map, ts: now };
       return map;
     }
 
     // Retorna cache global se ainda válido
-    if (_weightCache !== null && (now - _weightCacheTimestamp) < WEIGHT_CACHE_TTL_MS) {
+    if (
+      _weightCache !== null &&
+      now - _weightCacheTimestamp < WEIGHT_CACHE_TTL_MS
+    ) {
       return _weightCache;
     }
 
@@ -97,14 +117,14 @@ export class modelLearningService {
     const weights = await database.select().from(cardLearning);
     const weightMap: Record<string, number> = {};
     let highCount = 0;
-    let midCount  = 0;
+    let midCount = 0;
     let baseCount = 0;
 
     weights.forEach(w => {
       weightMap[w.cardName] = w.weight;
-      if (w.weight >= 10.0)      highCount++;
-      else if (w.weight >= 2.0)  midCount++;
-      else                       baseCount++;
+      if (w.weight >= 10.0) highCount++;
+      else if (w.weight >= 2.0) midCount++;
+      else baseCount++;
     });
 
     // Atualiza cache
@@ -117,11 +137,21 @@ export class modelLearningService {
       // Garante que o log do Brain nao sobreponha a barra de progresso
       // (que usa \r sem \n). O \n extra cria uma linha limpa antes dos logs.
       process.stdout.write("\n");
-      console.log(`[Brain] Dados de inteligencia carregados: ${weights.length} cartas`);
-      console.log(`[Brain] Alta relevancia (>=10): ${highCount} | Media (2-9): ${midCount} | Base (<2): ${baseCount}`);
-      console.log(`[Brain] Fontes: forge_reality + self_play + commander_train + user_generation + rl_policy`);
-      console.log(`[Brain] Pesos serao aplicados na selecao de cartas do deck.`);
-      console.log(`[Brain] Cache ativo: recarrega a cada ${WEIGHT_CACHE_TTL_MS / 1000}s.`);
+      console.log(
+        `[Brain] Dados de inteligencia carregados: ${weights.length} cartas`
+      );
+      console.log(
+        `[Brain] Alta relevancia (>=10): ${highCount} | Media (2-9): ${midCount} | Base (<2): ${baseCount}`
+      );
+      console.log(
+        `[Brain] Fontes: forge_reality + self_play + commander_train + user_generation + rl_policy`
+      );
+      console.log(
+        `[Brain] Pesos serao aplicados na selecao de cartas do deck.`
+      );
+      console.log(
+        `[Brain] Cache ativo: recarrega a cada ${WEIGHT_CACHE_TTL_MS / 1000}s.`
+      );
     }
 
     return weightMap;
@@ -152,7 +182,15 @@ export class modelLearningService {
    * @param source   Identificador da fonte de aprendizado (para rastreabilidade)
    */
   public static async updateWeights(
-    updates: Record<string, { weightDelta: number; scoreDelta?: number; win?: boolean; archetype?: CardLearningArchetype | string }>,
+    updates: Record<
+      string,
+      {
+        weightDelta: number;
+        scoreDelta?: number;
+        win?: boolean;
+        archetype?: CardLearningArchetype | string;
+      }
+    >,
     source: LearningSource = "self_play",
     defaultArchetype?: CardLearningArchetype | string
   ): Promise<void> {
@@ -258,27 +296,35 @@ export class modelLearningService {
   public static async runSelfPlaySession(
     population: any[][]
   ): Promise<{ wins: number; matches: number }> {
-    const weightUpdates: Record<string, { weightDelta: number; win?: boolean }> = {};
+    const weightUpdates: Record<
+      string,
+      { weightDelta: number; win?: boolean }
+    > = {};
     let wins = 0;
     let matches = 0;
 
     for (let i = 0; i < population.length; i++) {
       for (let j = i + 1; j < Math.min(i + 5, population.length); j++) {
-        const result = ModelEvaluator.simulateMatch(population[i], population[j]);
+        const result = ModelEvaluator.simulateMatch(
+          population[i],
+          population[j]
+        );
         matches++;
         if (result.winner === "A") wins++;
 
         const winner = result.winner === "A" ? population[i] : population[j];
-        const loser  = result.winner === "A" ? population[j] : population[i];
+        const loser = result.winner === "A" ? population[j] : population[i];
 
         winner.forEach(card => {
-          if (!weightUpdates[card.name]) weightUpdates[card.name] = { weightDelta: 0 };
+          if (!weightUpdates[card.name])
+            weightUpdates[card.name] = { weightDelta: 0 };
           weightUpdates[card.name].weightDelta += 0.05;
           weightUpdates[card.name].win = true;
         });
 
         loser.forEach(card => {
-          if (!weightUpdates[card.name]) weightUpdates[card.name] = { weightDelta: 0 };
+          if (!weightUpdates[card.name])
+            weightUpdates[card.name] = { weightDelta: 0 };
           weightUpdates[card.name].weightDelta -= 0.02;
           weightUpdates[card.name].win = false;
         });

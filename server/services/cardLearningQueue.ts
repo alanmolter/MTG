@@ -12,7 +12,11 @@
  */
 
 import { getDb } from "../db";
-import { cardLearning, CARD_LEARNING_ARCHETYPES, type CardLearningArchetype } from "../../drizzle/schema";
+import {
+  cardLearning,
+  CARD_LEARNING_ARCHETYPES,
+  type CardLearningArchetype,
+} from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 export interface CardLearningUpdate {
@@ -21,7 +25,14 @@ export interface CardLearningUpdate {
   delta?: number;
   /** alias de delta — aceito para compatibilidade com modelLearning */
   weightDelta?: number;
-  source: "forge_reality" | "unified_learning" | "rl_feedback" | "user_generation" | "self_play" | "commander_train" | "rl_policy";
+  source:
+    | "forge_reality"
+    | "unified_learning"
+    | "rl_feedback"
+    | "user_generation"
+    | "self_play"
+    | "commander_train"
+    | "rl_policy";
   /**
    * Phase 2 — arquétipo-alvo. Quando definido, o delta é aplicado **também**
    * na coluna `weight_<archetype>` além da coluna global `weight`. Isso
@@ -45,7 +56,9 @@ const ARCHETYPE_COLUMN_MAP = {
 } as const;
 
 /** Valida e normaliza archetype recebido em runtime (JSON / RPC). */
-export function normalizeArchetype(raw: unknown): CardLearningArchetype | undefined {
+export function normalizeArchetype(
+  raw: unknown
+): CardLearningArchetype | undefined {
   if (typeof raw !== "string") return undefined;
   const lower = raw.trim().toLowerCase();
   return (CARD_LEARNING_ARCHETYPES as readonly string[]).includes(lower)
@@ -94,8 +107,8 @@ export class CardLearningQueue {
   private stats = {
     totalProcessed: 0,
     totalUpdated: 0,
-    totalSaturated: 0,  // cartas que chegaram ao teto/piso
-    totalDecayed: 0,    // cartas que tiveram delta reduzido por decay
+    totalSaturated: 0, // cartas que chegaram ao teto/piso
+    totalDecayed: 0, // cartas que tiveram delta reduzido por decay
     batchCount: 0,
   };
 
@@ -119,7 +132,9 @@ export class CardLearningQueue {
   async enqueue(update: CardLearningUpdate): Promise<void> {
     const effectiveDelta = update.delta ?? update.weightDelta ?? 0;
     if (!update.cardName || typeof effectiveDelta !== "number") {
-      throw new Error("Invalid card learning update: missing cardName or delta");
+      throw new Error(
+        "Invalid card learning update: missing cardName or delta"
+      );
     }
     update.delta = effectiveDelta;
     update.timestamp = update.timestamp || Date.now();
@@ -139,7 +154,7 @@ export class CardLearningQueue {
    * Aguarda até que a fila esteja vazia
    */
   async waitUntilEmpty(): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const checkEmpty = () => {
         if (this.queue.length === 0 && !this.isProcessing) {
           resolve();
@@ -156,7 +171,13 @@ export class CardLearningQueue {
    */
   getAndResetStats() {
     const s = { ...this.stats };
-    this.stats = { totalProcessed: 0, totalUpdated: 0, totalSaturated: 0, totalDecayed: 0, batchCount: 0 };
+    this.stats = {
+      totalProcessed: 0,
+      totalUpdated: 0,
+      totalSaturated: 0,
+      totalDecayed: 0,
+      batchCount: 0,
+    };
     return s;
   }
 
@@ -167,7 +188,8 @@ export class CardLearningQueue {
     return {
       queueLength: this.queue.length,
       isProcessing: this.isProcessing,
-      estimatedTimeMs: (this.queue.length / this.BATCH_SIZE) * this.PROCESS_INTERVAL,
+      estimatedTimeMs:
+        (this.queue.length / this.BATCH_SIZE) * this.PROCESS_INTERVAL,
       accumulated: { ...this.stats },
     };
   }
@@ -243,7 +265,6 @@ export class CardLearningQueue {
         // Padding de 25 espaços para apagar restos de linhas anteriores mais longas
         process.stdout.write(`\r${queueLine.padEnd(queueLine.length + 25)}`);
       }
-
     } catch (error) {
       // Silencioso — não poluir o terminal com stack traces de erros de DB
       // O erro já foi logado pelo updateCardWeight
@@ -300,9 +321,14 @@ export class CardLearningQueue {
 
       // 3. Decay + capping da coluna global
       const decayedGlobal = applyDecay(currentWeight, buckets._global.raw);
-      const wasDecayed = Math.abs(decayedGlobal) < Math.abs(buckets._global.raw) * 0.99;
-      const newWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, currentWeight + decayedGlobal));
-      const globalSaturated = newWeight === MAX_WEIGHT || newWeight === MIN_WEIGHT;
+      const wasDecayed =
+        Math.abs(decayedGlobal) < Math.abs(buckets._global.raw) * 0.99;
+      const newWeight = Math.max(
+        MIN_WEIGHT,
+        Math.min(MAX_WEIGHT, currentWeight + decayedGlobal)
+      );
+      const globalSaturated =
+        newWeight === MAX_WEIGHT || newWeight === MIN_WEIGHT;
       const globalChanged = Math.abs(newWeight - currentWeight) > 0.0001;
 
       // 4. Montar o SET do UPDATE — sempre inclui o global; inclui colunas
@@ -322,21 +348,32 @@ export class CardLearningQueue {
         const colKey = `weight${arche.charAt(0).toUpperCase()}${arche.slice(1)}`;
         const currentArch: number = (current as any)?.[colKey] ?? 1.0;
         const decayedArch = applyDecay(currentArch, bucket.raw);
-        const newArch = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, currentArch + decayedArch));
+        const newArch = Math.max(
+          MIN_WEIGHT,
+          Math.min(MAX_WEIGHT, currentArch + decayedArch)
+        );
         if (Math.abs(newArch - currentArch) > 0.0001) {
           setObj[colKey] = newArch;
           anyChanged = true;
-          if (newArch === MAX_WEIGHT || newArch === MIN_WEIGHT) anySaturated = true;
+          if (newArch === MAX_WEIGHT || newArch === MIN_WEIGHT)
+            anySaturated = true;
         }
       }
 
       if (!anyChanged) {
-        return { updated: false, saturated: globalSaturated, decayed: wasDecayed };
+        return {
+          updated: false,
+          saturated: globalSaturated,
+          decayed: wasDecayed,
+        };
       }
 
       // 5. Upsert
       if (current) {
-        await db.update(cardLearning).set(setObj).where(eq(cardLearning.cardName, cardName));
+        await db
+          .update(cardLearning)
+          .set(setObj)
+          .where(eq(cardLearning.cardName, cardName));
       } else {
         // Novo registro: archetype columns default = newWeight se tivermos
         // delta para aquele archetype, senão ficam em 1.0 (default).
@@ -355,7 +392,6 @@ export class CardLearningQueue {
       }
 
       return { updated: true, saturated: anySaturated, decayed: wasDecayed };
-
     } catch (error) {
       // Erro silencioso — não poluir terminal
       return { updated: false, saturated: false, decayed: false };

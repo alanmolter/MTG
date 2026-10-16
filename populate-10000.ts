@@ -27,7 +27,8 @@ interface ScryfallCard {
 
 async function getImageUrl(card: ScryfallCard): Promise<string | null> {
   if (card.image_uris?.normal) return card.image_uris.normal;
-  if (card.card_faces?.[0]?.image_uris?.normal) return card.card_faces[0].image_uris.normal;
+  if (card.card_faces?.[0]?.image_uris?.normal)
+    return card.card_faces[0].image_uris.normal;
   return null;
 }
 
@@ -40,9 +41,13 @@ async function populateTo12000() {
   }
 
   // Check current count
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(cards);
+  const countResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(cards);
   let currentCount = Number(countResult[0].count);
-  console.log(`\nStarting BATCH population logic. Current count: ${currentCount}`);
+  console.log(
+    `\nStarting BATCH population logic. Current count: ${currentCount}`
+  );
 
   if (currentCount >= TARGET) {
     console.log(`✅ Já existem ${currentCount} cartas no banco.`);
@@ -89,16 +94,17 @@ async function populateTo12000() {
       if (cardsToInsert.length > 0) {
         // Batch insert with conflict handling
         await db.insert(cards).values(cardsToInsert).onConflictDoNothing();
-        
+
         // Re-check count (expensive but accurate for progress)
-        const newCountResult = await db.select({ count: sql<number>`count(*)` }).from(cards);
+        const newCountResult = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(cards);
         currentCount = Number(newCountResult[0].count);
         console.log(`   ✅ Current total: ${currentCount}`);
       }
 
       nextPageUrl = data.next_page;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (err) {
       console.error("❌ Erro:", err);
       break;

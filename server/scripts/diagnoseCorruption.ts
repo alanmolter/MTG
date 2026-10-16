@@ -34,7 +34,9 @@ function unwrap(e: any, depth = 0): string {
     lines.push(unwrap(e.cause, depth + 1));
   }
   if (e.stack && depth === 0) {
-    lines.push(`${pad}stack=${String(e.stack).split("\n").slice(0, 3).join(" | ")}`);
+    lines.push(
+      `${pad}stack=${String(e.stack).split("\n").slice(0, 3).join(" | ")}`
+    );
   }
   return lines.join("\n");
 }
@@ -46,24 +48,44 @@ async function main() {
   console.log("DATABASE_URL set:", Boolean(process.env.DATABASE_URL));
   if (process.env.DATABASE_URL) {
     const u = new URL(process.env.DATABASE_URL);
-    console.log(`  host=${u.hostname} port=${u.port || 5432} db=${u.pathname.slice(1)} user=${u.username}`);
+    console.log(
+      `  host=${u.hostname} port=${u.port || 5432} db=${u.pathname.slice(1)} user=${u.username}`
+    );
   }
 
   const sql = await getRawClient();
   if (!sql) {
-    console.error("No SQL client — DATABASE_URL missing or postgres() init failed.");
+    console.error(
+      "No SQL client — DATABASE_URL missing or postgres() init failed."
+    );
     process.exit(1);
   }
 
   const probes: Array<[string, () => Promise<any>]> = [
     ["SELECT 1", async () => sql`SELECT 1 AS ok`],
     ["SELECT version()", async () => sql`SELECT version() AS v`],
-    ["list public tables", async () => sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`],
-    ["card_synergies exists", async () => sql`SELECT to_regclass('public.card_synergies') AS t`],
-    ["card_learning exists", async () => sql`SELECT to_regclass('public.card_learning') AS t`],
+    [
+      "list public tables",
+      async () =>
+        sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
+    ],
+    [
+      "card_synergies exists",
+      async () => sql`SELECT to_regclass('public.card_synergies') AS t`,
+    ],
+    [
+      "card_learning exists",
+      async () => sql`SELECT to_regclass('public.card_learning') AS t`,
+    ],
     ["cards exists", async () => sql`SELECT to_regclass('public.cards') AS t`],
-    ["card_synergies count", async () => sql`SELECT COUNT(*)::int AS c FROM card_synergies`],
-    ["card_learning count", async () => sql`SELECT COUNT(*)::int AS c FROM card_learning`],
+    [
+      "card_synergies count",
+      async () => sql`SELECT COUNT(*)::int AS c FROM card_synergies`,
+    ],
+    [
+      "card_learning count",
+      async () => sql`SELECT COUNT(*)::int AS c FROM card_learning`,
+    ],
     ["cards count", async () => sql`SELECT COUNT(*)::int AS c FROM cards`],
   ];
 
@@ -78,7 +100,12 @@ async function main() {
       } catch {}
     } catch (e: any) {
       console.log("FAIL");
-      console.log(unwrap(e).split("\n").map(l => "  " + l).join("\n"));
+      console.log(
+        unwrap(e)
+          .split("\n")
+          .map(l => "  " + l)
+          .join("\n")
+      );
     }
   }
 
@@ -86,7 +113,7 @@ async function main() {
   console.log("═".repeat(60));
 }
 
-main().catch((e) => {
+main().catch(e => {
   console.error("[fatal]", unwrap(e));
   process.exit(1);
 });

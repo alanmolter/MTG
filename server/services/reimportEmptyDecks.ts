@@ -5,7 +5,11 @@
  * touch them. Stored raw_json is preferred. When it has no mainboard, goldfish
  * and top8 ids are fetched again. Anything else is skipped and reported.
  */
-import { parseDeckExport, saveCompetitiveDeck, type CompetitiveDeckWrite } from "./competitiveDeckStore";
+import {
+  parseDeckExport,
+  saveCompetitiveDeck,
+  type CompetitiveDeckWrite,
+} from "./competitiveDeckStore";
 
 export const EMPTY_DECK_SQL = `
 SELECT d.id, d.source_id, d.source, d.name, d.format, d.archetype, d.author, d.raw_json
@@ -86,8 +90,11 @@ export function refetchUrls(row: EmptyDeckRow): string[] {
   }
   // MTGTop8 ids come as `top8-e=N&d=N` (current scraper) or bare `e=N&d=N`
   // (March 2026 import). The bare form is only trusted for source=mtgtop8.
-  const top8 = /^top8-(e=\d+&d=\d+)$/.exec(row.sourceId)
-    ?? (row.source.toLowerCase() === "mtgtop8" ? /^(e=\d+&d=\d+)$/.exec(row.sourceId) : null);
+  const top8 =
+    /^top8-(e=\d+&d=\d+)$/.exec(row.sourceId) ??
+    (row.source.toLowerCase() === "mtgtop8"
+      ? /^(e=\d+&d=\d+)$/.exec(row.sourceId)
+      : null);
   if (top8) return [`${TOP8}/mtgo?${top8[1]}`];
   return [];
 }
@@ -106,11 +113,16 @@ function asCardLines(value: unknown): CardLine[] | null {
   return lines;
 }
 
-export function deckFromStoredJson(row: EmptyDeckRow): CompetitiveDeckWrite | null {
+export function deckFromStoredJson(
+  row: EmptyDeckRow
+): CompetitiveDeckWrite | null {
   const raw = row.rawJson?.trim();
   if (!raw) return null;
 
-  const fromLists = (mainboard: CardLine[], sideboard: CardLine[]): CompetitiveDeckWrite | null => {
+  const fromLists = (
+    mainboard: CardLine[],
+    sideboard: CardLine[]
+  ): CompetitiveDeckWrite | null => {
     if (mainboard.length === 0) return null;
     return {
       sourceId: row.sourceId,
@@ -138,7 +150,8 @@ export function deckFromStoredJson(row: EmptyDeckRow): CompetitiveDeckWrite | nu
         const obj = parsed as Record<string, unknown>;
         const mainboard = asCardLines(obj.mainboard);
         const sideboard = asCardLines(obj.sideboard) ?? [];
-        if (mainboard && mainboard.length > 0) return fromLists(mainboard, sideboard);
+        if (mainboard && mainboard.length > 0)
+          return fromLists(mainboard, sideboard);
         for (const key of ["text", "deck", "list"]) {
           if (typeof obj[key] === "string") {
             const decoded = fromText(obj[key] as string);
@@ -153,23 +166,34 @@ export function deckFromStoredJson(row: EmptyDeckRow): CompetitiveDeckWrite | nu
   return fromText(raw);
 }
 
-export async function reimportEmptyDecks(deps: {
-  listEmpty: () => Promise<EmptyDeckRow[]>;
-  fetchText: (url: string) => Promise<string | null>;
-  save: (deck: CompetitiveDeckWrite) => Promise<{ imported: boolean; cards: number }>;
-  /** Re-checked right before writing so a deck filled meanwhile is not touched. */
-  isStillEmpty?: (row: EmptyDeckRow) => Promise<boolean>;
-  /**
-   * Record the fetch outcome (download_status / last_fetch_error). Optional;
-   * a no-op when the provenance columns are missing. Errors here never
-   * change the deck outcome.
-   */
-  markStatus?: (row: EmptyDeckRow, status: "ok" | "failed", error: string | null) => Promise<void>;
-}, options: ReimportOptions = {}): Promise<ReimportReport> {
+export async function reimportEmptyDecks(
+  deps: {
+    listEmpty: () => Promise<EmptyDeckRow[]>;
+    fetchText: (url: string) => Promise<string | null>;
+    save: (
+      deck: CompetitiveDeckWrite
+    ) => Promise<{ imported: boolean; cards: number }>;
+    /** Re-checked right before writing so a deck filled meanwhile is not touched. */
+    isStillEmpty?: (row: EmptyDeckRow) => Promise<boolean>;
+    /**
+     * Record the fetch outcome (download_status / last_fetch_error). Optional;
+     * a no-op when the provenance columns are missing. Errors here never
+     * change the deck outcome.
+     */
+    markStatus?: (
+      row: EmptyDeckRow,
+      status: "ok" | "failed",
+      error: string | null
+    ) => Promise<void>;
+  },
+  options: ReimportOptions = {}
+): Promise<ReimportReport> {
   const batchSize = Math.max(1, Math.floor(options.batchSize ?? 50));
   const wanted = options.source?.toLowerCase();
   const all = await deps.listEmpty();
-  const rows = wanted ? all.filter((row) => row.source.toLowerCase() === wanted) : all;
+  const rows = wanted
+    ? all.filter(row => row.source.toLowerCase() === wanted)
+    : all;
   const report: ReimportReport = {
     considered: rows.length,
     reimported: 0,
@@ -181,14 +205,32 @@ export async function reimportEmptyDecks(deps: {
   };
 
   for (let start = 0; start < rows.length; start += batchSize) {
-    if (options.maxBatches !== undefined && report.batches >= options.maxBatches) break;
+    if (
+      options.maxBatches !== undefined &&
+      report.batches >= options.maxBatches
+    )
+      break;
     const entries: DeckLogEntry[] = [];
     for (const row of rows.slice(start, start + batchSize)) {
-      const entry = await processRow(row, deps, report, Boolean(options.dryRun));
-      if (!options.dryRun && deps.markStatus && (entry.outcome === "reimported" || entry.outcome === "failed")) {
+      const entry = await processRow(
+        row,
+        deps,
+        report,
+        Boolean(options.dryRun)
+      );
+      if (
+        !options.dryRun &&
+        deps.markStatus &&
+        (entry.outcome === "reimported" || entry.outcome === "failed")
+      ) {
         try {
-          await deps.markStatus(row, entry.outcome === "reimported" ? "ok" : "failed",
-            entry.outcome === "failed" ? (entry.detail ?? "unknown error") : null);
+          await deps.markStatus(
+            row,
+            entry.outcome === "reimported" ? "ok" : "failed",
+            entry.outcome === "failed"
+              ? (entry.detail ?? "unknown error")
+              : null
+          );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           entry.detail = `${entry.detail ? entry.detail + "; " : ""}status not recorded: ${message}`;
@@ -207,7 +249,7 @@ async function processRow(
   row: EmptyDeckRow,
   deps: Parameters<typeof reimportEmptyDecks>[0],
   report: ReimportReport,
-  dryRun: boolean,
+  dryRun: boolean
 ): Promise<DeckLogEntry> {
   const label = `${row.id} ${row.sourceId}`;
   const base = { id: row.id, sourceId: row.sourceId, source: row.source };
@@ -223,7 +265,12 @@ async function processRow(
         return { ...base, outcome: "skipped", detail };
       }
       if (dryRun) {
-        return { ...base, outcome: "would_reimport", via: "refetch", url: urls[0] };
+        return {
+          ...base,
+          outcome: "would_reimport",
+          via: "refetch",
+          url: urls[0],
+        };
       }
       for (const url of urls) {
         const body = await deps.fetchText(url);
@@ -250,8 +297,14 @@ async function processRow(
       report.failed.push(`${label}: ${detail}`);
       return { ...base, outcome: "failed", via, detail };
     }
-    const mainCards = deck.mainboard.reduce((sum, card) => sum + card.quantity, 0);
-    const sideCards = deck.sideboard.reduce((sum, card) => sum + card.quantity, 0);
+    const mainCards = deck.mainboard.reduce(
+      (sum, card) => sum + card.quantity,
+      0
+    );
+    const sideCards = deck.sideboard.reduce(
+      (sum, card) => sum + card.quantity,
+      0
+    );
     if (dryRun) {
       return { ...base, outcome: "would_reimport", via, mainCards, sideCards };
     }
@@ -265,7 +318,14 @@ async function processRow(
       return { ...base, outcome: "failed", via, url: usedUrl, detail };
     }
     report.reimported += 1;
-    return { ...base, outcome: "reimported", via, url: usedUrl, mainCards, sideCards };
+    return {
+      ...base,
+      outcome: "reimported",
+      via,
+      url: usedUrl,
+      mainCards,
+      sideCards,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     report.failed.push(`${label}: ${message}`);

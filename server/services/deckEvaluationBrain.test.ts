@@ -15,60 +15,275 @@ function make(n: number, card: any) {
 }
 
 const AGGRO_CARDS = [
-  ...make(4, { name: "Goblin Guide", type: "Creature - Goblin Scout", cmc: 1, text: "Haste" }),
-  ...make(4, { name: "Monastery Swiftspear", type: "Creature - Human Monk", cmc: 1, text: "Prowess, haste" }),
-  ...make(4, { name: "Soul-Scar Mage", type: "Creature - Human Wizard", cmc: 1, text: "Prowess" }),
-  ...make(4, { name: "Eidolon of the Great Revel", type: "Creature - Spirit", cmc: 2, text: "Whenever" }),
-  ...make(4, { name: "Lightning Bolt", type: "Instant", cmc: 1, text: "Lightning Bolt deals 3 damage to any target" }),
-  ...make(4, { name: "Lava Spike", type: "Sorcery", cmc: 1, text: "Lava Spike deals 3 damage to target player" }),
-  ...make(4, { name: "Rift Bolt", type: "Sorcery", cmc: 3, text: "Rift Bolt deals 3 damage to any target" }),
-  ...make(4, { name: "Skewer the Critics", type: "Sorcery", cmc: 3, text: "Skewer the Critics deals 3 damage to any target" }),
-  ...make(4, { name: "Light Up the Stage", type: "Sorcery", cmc: 3, text: "Exile the top three cards" }),
-  ...make(20, { name: "Mountain", type: "Basic Land - Mountain", cmc: 0, text: "" }),
-  ...make(4, { name: "Scalding Tarn", type: "Land", cmc: 0, text: "Fetch land" }),
+  ...make(4, {
+    name: "Goblin Guide",
+    type: "Creature - Goblin Scout",
+    cmc: 1,
+    text: "Haste",
+  }),
+  ...make(4, {
+    name: "Monastery Swiftspear",
+    type: "Creature - Human Monk",
+    cmc: 1,
+    text: "Prowess, haste",
+  }),
+  ...make(4, {
+    name: "Soul-Scar Mage",
+    type: "Creature - Human Wizard",
+    cmc: 1,
+    text: "Prowess",
+  }),
+  ...make(4, {
+    name: "Eidolon of the Great Revel",
+    type: "Creature - Spirit",
+    cmc: 2,
+    text: "Whenever",
+  }),
+  ...make(4, {
+    name: "Lightning Bolt",
+    type: "Instant",
+    cmc: 1,
+    text: "Lightning Bolt deals 3 damage to any target",
+  }),
+  ...make(4, {
+    name: "Lava Spike",
+    type: "Sorcery",
+    cmc: 1,
+    text: "Lava Spike deals 3 damage to target player",
+  }),
+  ...make(4, {
+    name: "Rift Bolt",
+    type: "Sorcery",
+    cmc: 3,
+    text: "Rift Bolt deals 3 damage to any target",
+  }),
+  ...make(4, {
+    name: "Skewer the Critics",
+    type: "Sorcery",
+    cmc: 3,
+    text: "Skewer the Critics deals 3 damage to any target",
+  }),
+  ...make(4, {
+    name: "Light Up the Stage",
+    type: "Sorcery",
+    cmc: 3,
+    text: "Exile the top three cards",
+  }),
+  ...make(20, {
+    name: "Mountain",
+    type: "Basic Land - Mountain",
+    cmc: 0,
+    text: "",
+  }),
+  ...make(4, {
+    name: "Scalding Tarn",
+    type: "Land",
+    cmc: 0,
+    text: "Fetch land",
+  }),
 ];
 
 const CONTROL_CARDS = [
-  ...make(4, { name: "Counterspell", type: "Instant", cmc: 2, text: "Counter target spell" }),
-  ...make(4, { name: "Mana Leak", type: "Instant", cmc: 2, text: "Counter target spell" }),
-  ...make(4, { name: "Force of Negation", type: "Instant", cmc: 3, text: "Counter target noncreature spell" }),
-  ...make(4, { name: "Snapcaster Mage", type: "Creature - Human Wizard", cmc: 2, text: "Flash" }),
-  ...make(2, { name: "Jace, the Mind Sculptor", type: "Planeswalker", cmc: 4, text: "Draw a card" }),
-  ...make(4, { name: "Preordain", type: "Sorcery", cmc: 1, text: "Scry. Draw a card" }),
-  ...make(4, { name: "Brainstorm", type: "Instant", cmc: 1, text: "Draw three cards" }),
-  ...make(4, { name: "Fact or Fiction", type: "Instant", cmc: 4, text: "Reveal the top five cards. Draw cards" }),
-  ...make(4, { name: "Swords to Plowshares", type: "Instant", cmc: 1, text: "Exile target creature" }),
-  ...make(4, { name: "Path to Exile", type: "Instant", cmc: 1, text: "Exile target creature" }),
-  ...make(22, { name: "Island", type: "Basic Land - Island", cmc: 0, text: "" }),
+  ...make(4, {
+    name: "Counterspell",
+    type: "Instant",
+    cmc: 2,
+    text: "Counter target spell",
+  }),
+  ...make(4, {
+    name: "Mana Leak",
+    type: "Instant",
+    cmc: 2,
+    text: "Counter target spell",
+  }),
+  ...make(4, {
+    name: "Force of Negation",
+    type: "Instant",
+    cmc: 3,
+    text: "Counter target noncreature spell",
+  }),
+  ...make(4, {
+    name: "Snapcaster Mage",
+    type: "Creature - Human Wizard",
+    cmc: 2,
+    text: "Flash",
+  }),
+  ...make(2, {
+    name: "Jace, the Mind Sculptor",
+    type: "Planeswalker",
+    cmc: 4,
+    text: "Draw a card",
+  }),
+  ...make(4, {
+    name: "Preordain",
+    type: "Sorcery",
+    cmc: 1,
+    text: "Scry. Draw a card",
+  }),
+  ...make(4, {
+    name: "Brainstorm",
+    type: "Instant",
+    cmc: 1,
+    text: "Draw three cards",
+  }),
+  ...make(4, {
+    name: "Fact or Fiction",
+    type: "Instant",
+    cmc: 4,
+    text: "Reveal the top five cards. Draw cards",
+  }),
+  ...make(4, {
+    name: "Swords to Plowshares",
+    type: "Instant",
+    cmc: 1,
+    text: "Exile target creature",
+  }),
+  ...make(4, {
+    name: "Path to Exile",
+    type: "Instant",
+    cmc: 1,
+    text: "Exile target creature",
+  }),
+  ...make(22, {
+    name: "Island",
+    type: "Basic Land - Island",
+    cmc: 0,
+    text: "",
+  }),
 ];
 
 const COMBO_CARDS = [
   // Combo pieces: high tutor count + repeated engine cards produce high synergy
-  ...make(4, { name: "Splinter Twin", type: "Enchantment - Aura", cmc: 3, text: "Whenever enchanted creature becomes tapped" }),
-  ...make(4, { name: "Deceiver Exarch", type: "Creature", cmc: 3, text: "Flash. Untap target permanent" }),
-  ...make(4, { name: "Kiki-Jiki", type: "Creature - Legendary", cmc: 5, text: "Create a token copy of target nonlegendary creature" }),
-  ...make(4, { name: "Mystical Tutor", type: "Instant", cmc: 1, text: "Search your library for an instant or sorcery" }),
-  ...make(4, { name: "Vampiric Tutor", type: "Instant", cmc: 1, text: "Search your library for a card" }),
-  ...make(4, { name: "Demonic Tutor", type: "Sorcery", cmc: 2, text: "Search your library for a card" }),
-  ...make(4, { name: "Brainstorm", type: "Instant", cmc: 1, text: "Draw three cards" }),
-  ...make(4, { name: "Ponder", type: "Sorcery", cmc: 1, text: "Look at the top three cards. Draw a card" }),
-  ...make(4, { name: "Preordain", type: "Sorcery", cmc: 1, text: "Scry 2. Draw a card" }),
-  ...make(10, { name: "Island", type: "Basic Land - Island", cmc: 0, text: "" }),
+  ...make(4, {
+    name: "Splinter Twin",
+    type: "Enchantment - Aura",
+    cmc: 3,
+    text: "Whenever enchanted creature becomes tapped",
+  }),
+  ...make(4, {
+    name: "Deceiver Exarch",
+    type: "Creature",
+    cmc: 3,
+    text: "Flash. Untap target permanent",
+  }),
+  ...make(4, {
+    name: "Kiki-Jiki",
+    type: "Creature - Legendary",
+    cmc: 5,
+    text: "Create a token copy of target nonlegendary creature",
+  }),
+  ...make(4, {
+    name: "Mystical Tutor",
+    type: "Instant",
+    cmc: 1,
+    text: "Search your library for an instant or sorcery",
+  }),
+  ...make(4, {
+    name: "Vampiric Tutor",
+    type: "Instant",
+    cmc: 1,
+    text: "Search your library for a card",
+  }),
+  ...make(4, {
+    name: "Demonic Tutor",
+    type: "Sorcery",
+    cmc: 2,
+    text: "Search your library for a card",
+  }),
+  ...make(4, {
+    name: "Brainstorm",
+    type: "Instant",
+    cmc: 1,
+    text: "Draw three cards",
+  }),
+  ...make(4, {
+    name: "Ponder",
+    type: "Sorcery",
+    cmc: 1,
+    text: "Look at the top three cards. Draw a card",
+  }),
+  ...make(4, {
+    name: "Preordain",
+    type: "Sorcery",
+    cmc: 1,
+    text: "Scry 2. Draw a card",
+  }),
+  ...make(10, {
+    name: "Island",
+    type: "Basic Land - Island",
+    cmc: 0,
+    text: "",
+  }),
   ...make(14, { name: "Swamp", type: "Basic Land - Swamp", cmc: 0, text: "" }),
 ];
 
 const RAMP_CARDS = [
-  ...make(4, { name: "Llanowar Elves", type: "Creature - Elf Druid", cmc: 1, text: "Add {G}" }),
-  ...make(4, { name: "Elvish Mystic", type: "Creature - Elf Druid", cmc: 1, text: "Add {G}" }),
-  ...make(4, { name: "Arbor Elf", type: "Creature - Elf Druid", cmc: 1, text: "Add {G}" }),
-  ...make(4, { name: "Cultivate", type: "Sorcery", cmc: 3, text: "Search your library for a basic land" }),
-  ...make(4, { name: "Kodama's Reach", type: "Sorcery", cmc: 3, text: "Search your library for a basic land" }),
-  ...make(4, { name: "Rampant Growth", type: "Sorcery", cmc: 2, text: "Search your library for a basic land" }),
-  ...make(4, { name: "Explore", type: "Sorcery", cmc: 2, text: "You may play an additional land. Draw a card" }),
-  ...make(2, { name: "Ulamog, the Infinite Gyre", type: "Creature - Eldrazi", cmc: 10, text: "Annihilator" }),
-  ...make(2, { name: "Craterhoof Behemoth", type: "Creature - Beast", cmc: 8, text: "Trample" }),
-  ...make(4, { name: "Primeval Titan", type: "Creature - Giant", cmc: 6, text: "Whenever Primeval Titan attacks" }),
-  ...make(22, { name: "Forest", type: "Basic Land - Forest", cmc: 0, text: "" }),
+  ...make(4, {
+    name: "Llanowar Elves",
+    type: "Creature - Elf Druid",
+    cmc: 1,
+    text: "Add {G}",
+  }),
+  ...make(4, {
+    name: "Elvish Mystic",
+    type: "Creature - Elf Druid",
+    cmc: 1,
+    text: "Add {G}",
+  }),
+  ...make(4, {
+    name: "Arbor Elf",
+    type: "Creature - Elf Druid",
+    cmc: 1,
+    text: "Add {G}",
+  }),
+  ...make(4, {
+    name: "Cultivate",
+    type: "Sorcery",
+    cmc: 3,
+    text: "Search your library for a basic land",
+  }),
+  ...make(4, {
+    name: "Kodama's Reach",
+    type: "Sorcery",
+    cmc: 3,
+    text: "Search your library for a basic land",
+  }),
+  ...make(4, {
+    name: "Rampant Growth",
+    type: "Sorcery",
+    cmc: 2,
+    text: "Search your library for a basic land",
+  }),
+  ...make(4, {
+    name: "Explore",
+    type: "Sorcery",
+    cmc: 2,
+    text: "You may play an additional land. Draw a card",
+  }),
+  ...make(2, {
+    name: "Ulamog, the Infinite Gyre",
+    type: "Creature - Eldrazi",
+    cmc: 10,
+    text: "Annihilator",
+  }),
+  ...make(2, {
+    name: "Craterhoof Behemoth",
+    type: "Creature - Beast",
+    cmc: 8,
+    text: "Trample",
+  }),
+  ...make(4, {
+    name: "Primeval Titan",
+    type: "Creature - Giant",
+    cmc: 6,
+    text: "Whenever Primeval Titan attacks",
+  }),
+  ...make(22, {
+    name: "Forest",
+    type: "Basic Land - Forest",
+    cmc: 0,
+    text: "",
+  }),
   ...make(2, { name: "Misty Rainforest", type: "Land", cmc: 0, text: "" }),
 ];
 
@@ -148,7 +363,7 @@ describe("Deck Evaluation Brain", () => {
 
     it("deve detectar tutors", () => {
       const result = evaluateDeck(COMBO_CARDS, "combo");
-      expect((result.roleCounts.tutor || 0)).toBeGreaterThan(0);
+      expect(result.roleCounts.tutor || 0).toBeGreaterThan(0);
     });
   });
 
@@ -175,7 +390,15 @@ describe("Deck Evaluation Brain", () => {
 
   describe("Normalização de Scores", () => {
     it("normalizedScore sempre deve estar entre 0-100", () => {
-      const archetypes = ["aggro", "control", "combo", "ramp", "tempo", "midrange", "burn"];
+      const archetypes = [
+        "aggro",
+        "control",
+        "combo",
+        "ramp",
+        "tempo",
+        "midrange",
+        "burn",
+      ];
 
       for (const archetype of archetypes) {
         const result = evaluateDeck(AGGRO_CARDS, archetype);
@@ -261,7 +484,9 @@ describe("Deck Evaluation Brain", () => {
       const fullResult = evaluateDeck(AGGRO_CARDS, "aggro");
       // Ambos usam normalizeScore(totalScore, -50, 350). simulateTurns é
       // estocástico, então pode variar +/- alguns pontos entre chamadas.
-      expect(Math.abs(quickScore - fullResult.normalizedScore)).toBeLessThan(10);
+      expect(Math.abs(quickScore - fullResult.normalizedScore)).toBeLessThan(
+        10
+      );
     });
   });
 
@@ -276,7 +501,9 @@ describe("Deck Evaluation Brain", () => {
 
     it("deve diferenciar decks quando totalScore raw é diferente", () => {
       // AGGRO_CARDS vs um deck trivialmente pior (só 1 card)
-      const trivialDeck = [{ name: "Forest", type: "Basic Land - Forest", cmc: 0, text: "" }];
+      const trivialDeck = [
+        { name: "Forest", type: "Basic Land - Forest", cmc: 0, text: "" },
+      ];
       const result = compareDeckQuality(AGGRO_CARDS, trivialDeck, "aggro");
       expect(result.winner).toBe("A"); // deck real > deck trivial em aggro
     });

@@ -2,8 +2,17 @@ import { Card } from "../../drizzle/schema";
 import { getCardById, getCardsByIds } from "./scryfall";
 import { findSimilarCardsForDeck } from "./embeddings";
 import { getCardSynergy } from "./synergy";
-import { evaluateDeck as evaluateDeckBase, optimizeDeckRL, extractCardFeatures, type DeckMetrics } from "./gameFeatureEngine";
-import { evaluateDeckWithBrain as evaluateDeckBrain, evaluateDeckQuick, type EvaluationResult } from "./deckEvaluationBrain";
+import {
+  evaluateDeck as evaluateDeckBase,
+  optimizeDeckRL,
+  extractCardFeatures,
+  type DeckMetrics,
+} from "./gameFeatureEngine";
+import {
+  evaluateDeckWithBrain as evaluateDeckBrain,
+  evaluateDeckQuick,
+  type EvaluationResult,
+} from "./deckEvaluationBrain";
 import { modelLearningService } from "./modelLearning";
 
 interface DeckGeneratorOptions {
@@ -34,7 +43,9 @@ export function validateDeck(
   // Validações por formato
   if (format === "commander") {
     if (totalCards !== 100) {
-      errors.push(`Commander deck deve ter exatamente 100 cartas, tem ${totalCards}`);
+      errors.push(
+        `Commander deck deve ter exatamente 100 cartas, tem ${totalCards}`
+      );
     }
 
     // Verificar se há um comandante (deve ser a primeira carta)
@@ -45,7 +56,9 @@ export function validateDeck(
     // Máximo 1 cópia de cada carta (exceto básicas)
     for (const card of cards) {
       if (card.quantity > 1 && !card.type?.includes("Basic")) {
-        errors.push(`${card.name}: máximo 1 cópia em Commander (tem ${card.quantity})`);
+        errors.push(
+          `${card.name}: máximo 1 cópia em Commander (tem ${card.quantity})`
+        );
       }
     }
   } else {
@@ -110,8 +123,16 @@ export async function generateInitialDeck(
 
   // Se não temos seed, gerar cartas aleatórias iniciais
   if (seedCards.length === 0) {
-    for (let i = 1; i <= Math.min(20, targetSize / 3) && currentSize < targetSize; i++) {
-      const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies, targetSize - currentSize);
+    for (
+      let i = 1;
+      i <= Math.min(20, targetSize / 3) && currentSize < targetSize;
+      i++
+    ) {
+      const quantity = Math.min(
+        Math.floor(Math.random() * maxCopies) + 1,
+        maxCopies,
+        targetSize - currentSize
+      );
       deck.set(i, quantity);
       currentSize += quantity;
     }
@@ -129,7 +150,7 @@ export async function generateInitialDeck(
     const { getSynergyNeighbors } = await import("./synergy");
     for (const id of deckCardIds.slice(0, 5)) {
       const neighbors = await getSynergyNeighbors(id, 10);
-      neighbors.forEach((n) => synergyNeighborIds.add(n.cardId));
+      neighbors.forEach(n => synergyNeighborIds.add(n.cardId));
     }
   }
 
@@ -151,7 +172,11 @@ export async function generateInitialDeck(
       const chance = Math.random() * (weight * synergyBoost);
 
       if (!deck.has(card.id) && chance > 0.5) {
-        const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies, targetSize - currentSize);
+        const quantity = Math.min(
+          Math.floor(Math.random() * maxCopies) + 1,
+          maxCopies,
+          targetSize - currentSize
+        );
         deck.set(card.id, quantity);
         deckCardIds.push(card.id);
         currentSize += quantity;
@@ -174,7 +199,7 @@ export async function generateInitialDeck(
   const cardIds = Array.from(deck.keys());
   const cards = await getCardsByIds(cardIds);
 
-  const generated = cards.map((card) => ({
+  const generated = cards.map(card => ({
     ...card,
     quantity: deck.get(card.id) || 1,
   }));
@@ -183,7 +208,9 @@ export async function generateInitialDeck(
     // Returning a deck that cannot be played is worse than surfacing the
     // unavailable candidate pool. Callers can retry with seeds or a richer
     // imported pool, but never train on this invalid output.
-    throw new Error(`[DeckGenerator] rejected generated deck: ${validation.errors.join("; ")}`);
+    throw new Error(
+      `[DeckGenerator] rejected generated deck: ${validation.errors.join("; ")}`
+    );
   }
   return generated;
 }
@@ -201,7 +228,7 @@ export async function optimizeDeck(
 
   for (let i = 0; i < iterations; i++) {
     // Encontrar cartas fracas (com baixa sinergia)
-    const deckCardIds = deck.map((c) => c.id);
+    const deckCardIds = deck.map(c => c.id);
     let worstCard = null;
     let worstScore = Infinity;
 
@@ -222,13 +249,13 @@ export async function optimizeDeck(
     // Tentar substituir pela melhor carta similar
     if (worstCard) {
       const similar = await findSimilarCardsForDeck(
-        deckCardIds.filter((id) => id !== worstCard!.id),
+        deckCardIds.filter(id => id !== worstCard!.id),
         5
       );
 
       if (similar.length > 0) {
         const bestCard = similar[0];
-        deck = deck.filter((c) => c.id !== worstCard!.id);
+        deck = deck.filter(c => c.id !== worstCard!.id);
         deck.push({ ...bestCard, quantity: worstCard.quantity });
       }
     }
@@ -251,10 +278,20 @@ export function evaluateDeckWithEngine(
   archetype: string = "default"
 ): DeckMetrics {
   // Expandir deck com quantidades para avaliação
-  const expanded: { name: string; type?: string | null; text?: string | null; cmc?: number | null }[] = [];
+  const expanded: {
+    name: string;
+    type?: string | null;
+    text?: string | null;
+    cmc?: number | null;
+  }[] = [];
   for (const card of deck) {
     for (let i = 0; i < card.quantity; i++) {
-      expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc });
+      expanded.push({
+        name: card.name,
+        type: card.type,
+        text: card.text,
+        cmc: card.cmc,
+      });
     }
   }
   return evaluateDeckBase(expanded, archetype);
@@ -287,10 +324,20 @@ export function evaluateDeckQuickScore(
   archetype: string = "default"
 ): number {
   // Expandir deck com quantidades para avaliação
-  const expanded: { name: string; type?: string | null; text?: string | null; cmc?: number | null }[] = [];
+  const expanded: {
+    name: string;
+    type?: string | null;
+    text?: string | null;
+    cmc?: number | null;
+  }[] = [];
   for (const card of deck) {
     for (let i = 0; i < card.quantity; i++) {
-      expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc });
+      expanded.push({
+        name: card.name,
+        type: card.type,
+        text: card.text,
+        cmc: card.cmc,
+      });
     }
   }
   return evaluateDeckQuick(expanded, archetype);
@@ -305,16 +352,37 @@ export async function trainDeckWithRL(
   options: DeckGeneratorOptions,
   cardPool?: Card[],
   iterations: number = 200
-): Promise<{ deck: (Card & { quantity: number })[]; metrics: DeckMetrics; improvements: number }> {
+): Promise<{
+  deck: (Card & { quantity: number })[];
+  metrics: DeckMetrics;
+  improvements: number;
+}> {
   // Usar pool fornecido ou gerar um básico
   const pool: Card[] = cardPool || [];
 
-  const expanded: { name: string; type?: string | null; text?: string | null; cmc?: number | null; quantity?: number }[] = [];
+  const expanded: {
+    name: string;
+    type?: string | null;
+    text?: string | null;
+    cmc?: number | null;
+    quantity?: number;
+  }[] = [];
   for (const card of initialDeck) {
-    expanded.push({ name: card.name, type: card.type, text: card.text, cmc: card.cmc, quantity: card.quantity });
+    expanded.push({
+      name: card.name,
+      type: card.type,
+      text: card.text,
+      cmc: card.cmc,
+      quantity: card.quantity,
+    });
   }
 
-  const { deck: optimizedExpanded, initialScore, finalScore, improvements } = optimizeDeckRL(
+  const {
+    deck: optimizedExpanded,
+    initialScore,
+    finalScore,
+    improvements,
+  } = optimizeDeckRL(
     expanded,
     pool,
     options.archetype || "default",
@@ -323,8 +391,8 @@ export async function trainDeckWithRL(
   );
 
   // Reconstruir deck com objetos Card completos
-  const cardMap = new Map(initialDeck.map((c) => [c.name, c]));
-  const poolMap = new Map((cardPool || []).map((c) => [c.name, c]));
+  const cardMap = new Map(initialDeck.map(c => [c.name, c]));
+  const poolMap = new Map((cardPool || []).map(c => [c.name, c]));
 
   const resultDeck: (Card & { quantity: number })[] = [];
   for (const entry of optimizedExpanded) {
@@ -334,15 +402,21 @@ export async function trainDeckWithRL(
     }
   }
 
-  const metrics = evaluateDeckWithEngine(resultDeck, options.archetype || "default");
+  const metrics = evaluateDeckWithEngine(
+    resultDeck,
+    options.archetype || "default"
+  );
 
-  console.log(`[RL] Score: ${initialScore.toFixed(1)} → ${finalScore.toFixed(1)} (${improvements} melhorias)`);
+  console.log(
+    `[RL] Score: ${initialScore.toFixed(1)} → ${finalScore.toFixed(1)} (${improvements} melhorias)`
+  );
 
   // CORREÇÃO (Problema 3): Retroalimenta card_learning com o resultado da otimização RL.
   // O bridge converte o score em reward e enfileira os deltas via CardLearningQueue,
   // eliminando o isolamento do RL em relação ao ciclo de aprendizado tabular.
   try {
-    const { getRLToCardLearningBridge } = await import("./rlToCardLearningBridge");
+    const { getRLToCardLearningBridge } =
+      await import("./rlToCardLearningBridge");
     const bridge = getRLToCardLearningBridge();
     await bridge.feedbackFromDeckOptimization(resultDeck, finalScore);
   } catch (bridgeErr) {

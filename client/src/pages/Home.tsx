@@ -22,8 +22,14 @@ export default function Home() {
           </div>
           {isAuthenticated ? (
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-300">Welcome, {user?.name}</span>
-              <Button variant="outline" size="sm" onClick={() => setLocation("/archetype")}>
+              <span className="text-sm text-gray-300">
+                Welcome, {user?.name}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation("/archetype")}
+              >
                 Dashboard
               </Button>
             </div>
@@ -42,24 +48,35 @@ export default function Home() {
             Generate Competitive MTG Decks with AI
           </h2>
           <p className="text-xl text-gray-300 mb-8">
-            Discover synergies, analyze the meta, and build winning decks powered by machine learning and data-driven insights.
+            Discover synergies, analyze the meta, and build winning decks
+            powered by machine learning and data-driven insights.
           </p>
-          
+
           <div className="flex gap-6 justify-center flex-wrap">
             <Link href="/archetype">
-              <Button size="lg" className="h-16 px-8 text-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-lg shadow-orange-500/20">
+              <Button
+                size="lg"
+                className="h-16 px-8 text-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-lg shadow-orange-500/20"
+              >
                 <Layers className="w-6 h-6 mr-3" />
                 Archetype Builder
               </Button>
             </Link>
             <Link href="/search">
-              <Button size="lg" className="h-16 px-8 text-lg bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-500/20">
+              <Button
+                size="lg"
+                className="h-16 px-8 text-lg bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-500/20"
+              >
                 <Search className="w-6 h-6 mr-3" />
                 Search Cards
               </Button>
             </Link>
             <Link href="/synergy">
-              <Button size="lg" variant="outline" className="h-16 px-8 text-lg border-cyan-500 text-cyan-300 hover:bg-cyan-500/10 shadow-lg shadow-cyan-500/10">
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-16 px-8 text-lg border-cyan-500 text-cyan-300 hover:bg-cyan-500/10 shadow-lg shadow-cyan-500/10"
+              >
                 <Network className="w-6 h-6 mr-3" />
                 Synergy Graph
               </Button>
@@ -73,10 +90,15 @@ export default function Home() {
             <Card className="bg-slate-900/50 border-amber-500/30 group-hover:border-amber-500/60 transition-all transform group-hover:-translate-y-1 h-full">
               <CardHeader>
                 <Layers className="w-10 h-10 text-amber-400 mb-2" />
-                <CardTitle className="text-white text-xl">Archetype Builder</CardTitle>
+                <CardTitle className="text-white text-xl">
+                  Archetype Builder
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-400">Generate decks by archetype with color filters, tribe/type selection, and priority-based scoring.</p>
+                <p className="text-gray-400">
+                  Generate decks by archetype with color filters, tribe/type
+                  selection, and priority-based scoring.
+                </p>
               </CardContent>
             </Card>
           </Link>
@@ -85,10 +107,15 @@ export default function Home() {
             <Card className="bg-slate-900/50 border-purple-500/30 group-hover:border-purple-500/60 transition-all transform group-hover:-translate-y-1 h-full">
               <CardHeader>
                 <Search className="w-10 h-10 text-purple-400 mb-2" />
-                <CardTitle className="text-white text-xl">Card Search</CardTitle>
+                <CardTitle className="text-white text-xl">
+                  Card Search
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-400">Advanced search for cards by name, type, colors, and mana cost with meta data insights.</p>
+                <p className="text-gray-400">
+                  Advanced search for cards by name, type, colors, and mana cost
+                  with meta data insights.
+                </p>
               </CardContent>
             </Card>
           </Link>
@@ -97,10 +124,15 @@ export default function Home() {
             <Card className="bg-slate-900/50 border-cyan-500/30 group-hover:border-cyan-500/60 transition-all transform group-hover:-translate-y-1 h-full">
               <CardHeader>
                 <Network className="w-10 h-10 text-cyan-400 mb-2" />
-                <CardTitle className="text-white text-xl">Synergy Graph</CardTitle>
+                <CardTitle className="text-white text-xl">
+                  Synergy Graph
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-400">Explore complex card relationships and synergy networks discovered by our AI engines.</p>
+                <p className="text-gray-400">
+                  Explore complex card relationships and synergy networks
+                  discovered by our AI engines.
+                </p>
               </CardContent>
             </Card>
           </Link>
@@ -109,11 +141,18 @@ export default function Home() {
         {/* CTA Section */}
         {!isAuthenticated && (
           <div className="mt-20 bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500/30 rounded-lg p-12 text-center">
-            <h3 className="text-2xl font-bold text-white mb-4">Ready to build your next deck?</h3>
+            <h3 className="text-2xl font-bold text-white mb-4">
+              Ready to build your next deck?
+            </h3>
             <p className="text-gray-300 mb-6 max-w-2xl mx-auto">
-              Sign in to create, save, and share your decks. Start exploring the power of data-driven deck building today.
+              Sign in to create, save, and share your decks. Start exploring the
+              power of data-driven deck building today.
             </p>
-            <Button size="lg" asChild className="bg-purple-600 hover:bg-purple-700">
+            <Button
+              size="lg"
+              asChild
+              className="bg-purple-600 hover:bg-purple-700"
+            >
               <a href={getLoginUrl()}>Get Started</a>
             </Button>
           </div>

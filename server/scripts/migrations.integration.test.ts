@@ -1,7 +1,7 @@
 /**
  * Integração real (PostgreSQL + pgvector). Só roda com MIGRATION_IT_DATABASE_URL
  * apontando para um superusuário (cria/derruba bancos it_*). No CI usa a imagem
- * pgvector/pgvector (ver ci/migrations.yml; mover para .github/workflows/ para ativar). Local:
+ * pgvector/pgvector (ver .github/workflows/migrations.yml). Local:
  *   MIGRATION_IT_DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres npx vitest run server/scripts/migrations.integration.test.ts
  */
 import * as fs from "fs";
@@ -15,6 +15,12 @@ const ADMIN_URL = process.env.MIGRATION_IT_DATABASE_URL;
 const folder = path.resolve(__dirname, "../../drizzle");
 const journal = readJournal(folder);
 const tags = journal.map((entry) => entry.tag);
+/**
+ * Só as migrações que o runner de af0ece20 conhecia (00NN_). As novas (prefixo
+ * timestamp) nunca aparecem em schema_migrations nem têm TAG_CHECKS: o migrator
+ * as aplica depois do baseline. Os fixtures do estado legado usam só estas.
+ */
+const legacy = tags.filter((tag) => /^00\d\d_/.test(tag));
 
 function dbUrl(name: string): string {
   const url = new URL(ADMIN_URL!);
@@ -84,17 +90,17 @@ describe.skipIf(!ADMIN_URL)("migrations against real PostgreSQL + pgvector", () 
 
   it("af0ece20 state (0003–0010 applied + schema_migrations): baseline then migrate", async () => {
     const url = await freshDb("it_mig_legacy");
-    await af0ece20State(url, tags, tags);
+    await af0ece20State(url, legacy, legacy);
     const result = await migrateDatabase(url, folder);
     expect(result.plan.kind).toBe("stamp");
-    expect(result.stamped).toEqual(tags);
+    expect(result.stamped).toEqual(legacy);
     expect(await ledgerCount(url)).toBe(tags.length);
     expect(await checkMigrations(folder, url)).toEqual([]);
   });
 
   it("af0ece20 state with 0010 pending: stamps 0003–0009, migrator applies 0010", async () => {
     const url = await freshDb("it_mig_partial");
-    const upTo9 = tags.slice(0, tags.indexOf("0009_competitive_deck_import") + 1);
+    const upTo9 = legacy.slice(0, legacy.indexOf("0009_competitive_deck_import") + 1);
     await af0ece20State(url, upTo9, upTo9);
     const result = await migrateDatabase(url, folder);
     expect(result.stamped).toEqual(upTo9);
@@ -104,18 +110,18 @@ describe.skipIf(!ADMIN_URL)("migrations against real PostgreSQL + pgvector", () 
 
   it("fake legacy record (af0ece20 stamped what never ran): aborts and writes nothing", async () => {
     const url = await freshDb("it_mig_fake");
-    await af0ece20State(url, tags.slice(0, 2), tags.slice(0, 7));
+    await af0ece20State(url, legacy.slice(0, 2), legacy.slice(0, 7));
     await expect(migrateDatabase(url, folder)).rejects.toThrow(/0005_endgame_pgvector: falta/);
     expect(await ledgerExists(url)).toBe(false);
     // caminho de recuperação documentado: --through na última tag verdadeira
-    const fixed = await migrateDatabase(url, folder, { through: tags[1] });
-    expect(fixed.stamped).toEqual(tags.slice(0, 2));
+    const fixed = await migrateDatabase(url, folder, { through: legacy[1] });
+    expect(fixed.stamped).toEqual(legacy.slice(0, 2));
     expect(fixed.ledgerSize).toBe(tags.length);
   });
 
   it("concurrent runs (training:prepare + import:competitive) do not double-stamp or fail", async () => {
     const url = await freshDb("it_mig_concurrent");
-    await af0ece20State(url, tags, tags);
+    await af0ece20State(url, legacy, legacy);
     const results = await Promise.all([1, 2, 3].map(() => migrateDatabase(url, folder)));
     expect(results.map((r) => r.plan.kind).sort()).toEqual(["stamp", "tracked", "tracked"]);
     expect(await ledgerCount(url)).toBe(tags.length);

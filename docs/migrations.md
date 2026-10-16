@@ -103,7 +103,7 @@ deste PR, então não há hash antigo a conciliar.
 
 ### CI
 
-`ci/migrations.yml` (pronto para mover para `.github/workflows/`; o token usado no push não tinha escopo `workflow`) sobe `pgvector/pgvector:pg16` e roda
+`.github/workflows/migrations.yml` sobe `pgvector/pgvector:pg16` e roda
 `server/scripts/migrations.integration.test.ts`: banco vazio, estado af0ece20
 (arquivos aplicados + `schema_migrations`), 0010 pendente, registro falso, concorrência e
 arquivo editado. Localmente:

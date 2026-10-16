@@ -17,7 +17,7 @@ async function verifyPersistence() {
     .select({
       avgWeight: sql<number>`AVG(${cardLearning.weight})`,
       maxWeight: sql<number>`MAX(${cardLearning.weight})`,
-      totalWins: sql<number>`SUM(${cardLearning.winCount})`
+      totalWins: sql<number>`SUM(${cardLearning.winCount})`,
     })
     .from(cardLearning);
 
@@ -31,16 +31,24 @@ async function verifyPersistence() {
   console.log("\n📊 RELATÓRIO DE EVOLUÇÃO DA INTELIGÊNCIA:");
   console.log("=".repeat(60));
   console.log(`✅ Cartas que evoluíram (Peso > 1.0): ${learnedCount[0].value}`);
-  console.log(`📈 Peso Médio da Memória: ${Number(stats[0].avgWeight).toFixed(4)}`);
-  console.log(`🔥 Peso Máximo Alcançado: ${Number(stats[0].maxWeight).toFixed(2)}`);
+  console.log(
+    `📈 Peso Médio da Memória: ${Number(stats[0].avgWeight).toFixed(4)}`
+  );
+  console.log(
+    `🔥 Peso Máximo Alcançado: ${Number(stats[0].maxWeight).toFixed(2)}`
+  );
   console.log(`⚔️  Total de Partidas Simuladas: ${stats[0].totalWins}`);
-  
+
   console.log("TOP: " + topWinners.map(c => c.cardName).join(", "));
 
   console.log("\n💡 CONCLUSÃO: Sim, a IA está retendo o aprendizado.");
-  console.log("Os pesos estão sendo salvos na tabela 'card_learning' e são carregados");
-  console.log("toda vez que um novo deck é gerado, influenciando a escolha final.");
-  
+  console.log(
+    "Os pesos estão sendo salvos na tabela 'card_learning' e são carregados"
+  );
+  console.log(
+    "toda vez que um novo deck é gerado, influenciando a escolha final."
+  );
+
   process.exit(0);
 }
 

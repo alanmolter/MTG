@@ -31,7 +31,11 @@ function passingEvidence() {
     win_rate_lower_bound_95: 0.52,
     mean_life_difference: 6,
   };
-  const baselineMetrics = { ...metrics, win_rate: 0.4, mean_life_difference: 1 };
+  const baselineMetrics = {
+    ...metrics,
+    win_rate: 0.4,
+    mean_life_difference: 1,
+  };
   const comparison = {
     win_rate_delta: 0.3,
     win_rate_delta_lower_bound_95: 0.04,
@@ -59,7 +63,7 @@ function passingEvidence() {
       candidate_vs_legal_random: comparison,
       candidate_vs_forge_ai: comparison,
     },
-    heldout_matchups: [1, 2, 3].map((seed) => ({
+    heldout_matchups: [1, 2, 3].map(seed => ({
       id: `heldout-${seed}`,
       seed,
       declared_heldout: true,
@@ -67,7 +71,10 @@ function passingEvidence() {
       agent_deck_sha256: agentDeckHash,
       opponent_deck_sha256: opponentDeckHash,
     })),
-    heldout_protocol: { training_deck_hashes_supplied: 12, verified_disjoint_matchups: 3 },
+    heldout_protocol: {
+      training_deck_hashes_supplied: 12,
+      verified_disjoint_matchups: 3,
+    },
     gates: {
       candidate_has_no_system_errors: true,
       always_pass_baseline_available: true,
@@ -90,7 +97,7 @@ function passingEvidence() {
     gate: "deck_quality",
     pass: true,
     source: { card_database: "forge_cardsfolder" },
-    decks: [agentDeckHash, opponentDeckHash].map((hash) => ({
+    decks: [agentDeckHash, opponentDeckHash].map(hash => ({
       deck_id: hash,
       decklist_sha256: hash,
       pass: true,
@@ -129,7 +136,9 @@ function promotionInput() {
 
 describe("training quality contract", () => {
   it("accepts an exact, non-synthetic 60-card mainboard", () => {
-    expect(validateTrainingDeck({ format: "modern", cards: validCards })).toMatchObject({
+    expect(
+      validateTrainingDeck({ format: "modern", cards: validCards })
+    ).toMatchObject({
       eligible: true,
       mainboardCards: 60,
       reasons: [],
@@ -140,14 +149,18 @@ describe("training quality contract", () => {
     const result = validateTrainingDeck({
       format: "modern",
       isSynthetic: true,
-      cards: [{ cardName: "Lightning Bolt", quantity: 5, section: "mainboard" }],
+      cards: [
+        { cardName: "Lightning Bolt", quantity: 5, section: "mainboard" },
+      ],
     });
     expect(result.eligible).toBe(false);
-    expect(result.reasons).toEqual(expect.arrayContaining([
-      "synthetic_source",
-      "mainboard_size_5_expected_60",
-      "copy_limit_Lightning Bolt_5",
-    ]));
+    expect(result.reasons).toEqual(
+      expect.arrayContaining([
+        "synthetic_source",
+        "mainboard_size_5_expected_60",
+        "copy_limit_Lightning Bolt_5",
+      ])
+    );
   });
 
   it("never permits a self-synergy observation", () => {
@@ -157,19 +170,34 @@ describe("training quality contract", () => {
   });
 
   it("approves strong policy and deck evidence even if training reward is negative", () => {
-    expect(evaluatePromotionGates(promotionInput())).toEqual({ passed: true, failures: [] });
+    expect(evaluatePromotionGates(promotionInput())).toEqual({
+      passed: true,
+      failures: [],
+    });
   });
 
   it("fails closed without independent evaluation reports", () => {
     const input = promotionInput();
-    expect(evaluatePromotionGates({ ...input, policyReport: undefined, deckReport: undefined }).failures)
-      .toEqual(expect.arrayContaining(["policy_evaluation_missing", "deck_evaluation_missing"]));
+    expect(
+      evaluatePromotionGates({
+        ...input,
+        policyReport: undefined,
+        deckReport: undefined,
+      }).failures
+    ).toEqual(
+      expect.arrayContaining([
+        "policy_evaluation_missing",
+        "deck_evaluation_missing",
+      ])
+    );
   });
 
   it("rejects a blocked Forge AI baseline even if report.pass is spoofed true", () => {
     const input = promotionInput();
     input.policyReport.baselines.forge_ai.status = "blocked";
-    expect(evaluatePromotionGates(input).failures).toContain("forge_ai_baseline_not_passed");
+    expect(evaluatePromotionGates(input).failures).toContain(
+      "forge_ai_baseline_not_passed"
+    );
   });
 
   it("rejects unverified holdouts, deck hash mismatch, and wrong checkpoint", () => {
@@ -177,27 +205,37 @@ describe("training quality contract", () => {
     input.policyReport.heldout_matchups[0].verified_disjoint_from_training = false;
     input.deckReport.decks.pop();
     input.policyReport.candidate.checkpoint = "C:\\models\\stale";
-    expect(evaluatePromotionGates(input).failures).toEqual(expect.arrayContaining([
-      "policy_checkpoint_mismatch", "heldout_not_verified_disjoint", "deck_cohort_coverage_missing",
-    ]));
+    expect(evaluatePromotionGates(input).failures).toEqual(
+      expect.arrayContaining([
+        "policy_checkpoint_mismatch",
+        "heldout_not_verified_disjoint",
+        "deck_cohort_coverage_missing",
+      ])
+    );
   });
 
   it("rejects weak execution and comparison evidence regardless of reward", () => {
     const input = promotionInput();
     input.policyReport.candidate.metrics.action_applied_rate = 0.5;
-    input.policyReport.comparisons.candidate_vs_forge_ai.win_rate_delta_lower_bound_95 = -0.1;
-    expect(evaluatePromotionGates(input).failures).toEqual(expect.arrayContaining([
-      "candidate_action_applied_rate_below_0_98", "forge_ai_stable_improvement_not_proven",
-    ]));
+    input.policyReport.comparisons.candidate_vs_forge_ai.win_rate_delta_lower_bound_95 =
+      -0.1;
+    expect(evaluatePromotionGates(input).failures).toEqual(
+      expect.arrayContaining([
+        "candidate_action_applied_rate_below_0_98",
+        "forge_ai_stable_improvement_not_proven",
+      ])
+    );
   });
 
   it("requires same-holdout incumbent comparison after the first promotion", () => {
     const input = promotionInput();
-    expect(evaluatePromotionGates({
-      ...input,
-      promotionMode: "challenge_incumbent",
-      incumbentCheckpoint: "C:\\models\\champion",
-    }).failures).toContain("incumbent_comparison_missing");
+    expect(
+      evaluatePromotionGates({
+        ...input,
+        promotionMode: "challenge_incumbent",
+        incumbentCheckpoint: "C:\\models\\champion",
+      }).failures
+    ).toContain("incumbent_comparison_missing");
   });
 });
 

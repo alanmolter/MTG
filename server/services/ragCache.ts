@@ -3,7 +3,11 @@ import { getDb } from "../db";
 import { semanticCache } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import { CircuitBreaker } from "./circuitBreaker";
-import { callHaiku, type HaikuCallParams, type HaikuResponse } from "./anthropicClient";
+import {
+  callHaiku,
+  type HaikuCallParams,
+  type HaikuResponse,
+} from "./anthropicClient";
 
 /**
  * Pillar 4 — RAG + Semantic Cache
@@ -33,7 +37,9 @@ import { callHaiku, type HaikuCallParams, type HaikuResponse } from "./anthropic
  * não gastar dinheiro à toa.
  */
 
-const SIMILARITY_THRESHOLD = Number(process.env.RAG_SIMILARITY_THRESHOLD ?? 0.95);
+const SIMILARITY_THRESHOLD = Number(
+  process.env.RAG_SIMILARITY_THRESHOLD ?? 0.95
+);
 const ML_ENGINE_URL = process.env.ML_ENGINE_URL ?? "http://127.0.0.1:8765";
 const EMBEDDING_DIM = 384;
 
@@ -63,7 +69,10 @@ export interface RagOptions {
  * Entrypoint principal. Faz a cascata L0 → L1 → breaker → L3.
  * Se precisar do valor bruto do response.json(), veja `response` no L3.
  */
-export async function queryWithRAG(prompt: string, options: RagOptions = {}): Promise<RagResult> {
+export async function queryWithRAG(
+  prompt: string,
+  options: RagOptions = {}
+): Promise<RagResult> {
   const db = await getDb();
   if (!db) {
     throw new Error("[RAG] Banco indisponível — impossível consultar cache");
@@ -140,12 +149,16 @@ export async function queryWithRAG(prompt: string, options: RagOptions = {}): Pr
 
   // ── L2/L3: gate + API call ────────────────────────────────────────────────
   if (options.skipApi) {
-    throw new Error("[RAG] cache miss e skipApi=true — sem resposta disponível offline");
+    throw new Error(
+      "[RAG] cache miss e skipApi=true — sem resposta disponível offline"
+    );
   }
 
   const gate = await CircuitBreaker.canCall();
   if (!gate.ok) {
-    throw new Error(`[RAG] Circuit Breaker bloqueou chamada: ${gate.reason} — ${gate.detail ?? ""}`);
+    throw new Error(
+      `[RAG] Circuit Breaker bloqueou chamada: ${gate.reason} — ${gate.detail ?? ""}`
+    );
   }
 
   let haikuResponse: HaikuResponse;
@@ -189,7 +202,9 @@ export function hashPrompt(prompt: string): string {
 
 export function toVectorLiteral(embedding: number[]): string {
   if (embedding.length !== EMBEDDING_DIM) {
-    throw new Error(`[RAG] embedding dim ${embedding.length} !== ${EMBEDDING_DIM}`);
+    throw new Error(
+      `[RAG] embedding dim ${embedding.length} !== ${EMBEDDING_DIM}`
+    );
   }
   return `[${embedding.join(",")}]`;
 }
@@ -210,7 +225,12 @@ function extractText(responseJson: unknown): string {
 
 function asArray<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];
-  if (result && typeof result === "object" && "rows" in result && Array.isArray((result as any).rows)) {
+  if (
+    result &&
+    typeof result === "object" &&
+    "rows" in result &&
+    Array.isArray((result as any).rows)
+  ) {
     return (result as any).rows as T[];
   }
   return [];
@@ -236,7 +256,10 @@ async function embedViaMlEngine(prompt: string): Promise<number[]> {
     throw new Error(`[RAG] ml_engine /embed retornou ${response.status}`);
   }
   const data = (await response.json()) as { embedding?: number[] };
-  if (!Array.isArray(data.embedding) || data.embedding.length !== EMBEDDING_DIM) {
+  if (
+    !Array.isArray(data.embedding) ||
+    data.embedding.length !== EMBEDDING_DIM
+  ) {
     throw new Error(`[RAG] ml_engine /embed resposta inválida`);
   }
   return data.embedding;
@@ -252,7 +275,10 @@ async function persistCacheEntry(
     ttlHours?: number;
   }
 ): Promise<void> {
-  const preview = params.prompt.length > 400 ? params.prompt.slice(0, 400) + "…" : params.prompt;
+  const preview =
+    params.prompt.length > 400
+      ? params.prompt.slice(0, 400) + "…"
+      : params.prompt;
   const expiresAt = params.ttlHours
     ? new Date(Date.now() + params.ttlHours * 60 * 60 * 1000).toISOString()
     : null;
@@ -281,7 +307,10 @@ async function persistCacheEntry(
     `);
   } catch (err) {
     // Cache write failing doesn't break the request — we already have the response
-    console.warn("[RAG] Falha ao persistir cache (resposta entregue normalmente):", err);
+    console.warn(
+      "[RAG] Falha ao persistir cache (resposta entregue normalmente):",
+      err
+    );
   }
 }
 
@@ -295,7 +324,13 @@ export async function getCacheStats(): Promise<{
 }> {
   const db = await getDb();
   if (!db) {
-    return { totalEntries: 0, totalHits: 0, totalCostUsd: 0, avgCostPerEntry: 0, topModels: [] };
+    return {
+      totalEntries: 0,
+      totalHits: 0,
+      totalCostUsd: 0,
+      avgCostPerEntry: 0,
+      topModels: [],
+    };
   }
 
   const stats = asArray<{
@@ -330,6 +365,9 @@ export async function getCacheStats(): Promise<{
     totalHits,
     totalCostUsd,
     avgCostPerEntry: totalEntries > 0 ? totalCostUsd / totalEntries : 0,
-    topModels: byModel.map((m) => ({ model: m.model_used, count: Number(m.count) })),
+    topModels: byModel.map(m => ({
+      model: m.model_used,
+      count: Number(m.count),
+    })),
   };
 }

@@ -37,7 +37,7 @@ export const META_DECKS = {
     4 Shard Volley
     4 Goblin Rabblemaster
     20 Mountain
-    `
+    `,
   ],
   control: [
     `
@@ -68,7 +68,7 @@ export const META_DECKS = {
     4 Spell Pierce
     4 Jace, the Mind Sculptor
     24 Island
-    `
+    `,
   ],
   midrange: [
     `
@@ -97,8 +97,8 @@ export const META_DECKS = {
     4 Terminate
     4 Bloodbraid Elf
     20 Swamp
-    `
-  ]
+    `,
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -109,14 +109,20 @@ export const META_DECKS = {
  * Retorna decks de referência para avaliação de winrate.
  * Prioriza decks competitivos reais do banco; usa META_DECKS hardcoded como fallback.
  */
-export async function getMetaDecksForArchetype(archetype: string): Promise<string[]> {
+export async function getMetaDecksForArchetype(
+  archetype: string
+): Promise<string[]> {
   try {
     const { getDb } = await import("../db");
-    const { competitiveDecks, competitiveDeckCards } = await import("../../drizzle/schema");
+    const { competitiveDecks, competitiveDeckCards } =
+      await import("../../drizzle/schema");
     const { eq, inArray } = await import("drizzle-orm");
 
     const db = await getDb();
-    if (!db) return META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro;
+    if (!db)
+      return (
+        META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro
+      );
 
     // Busca até 3 decks competitivos reais para o arquétipo
     const dbDecks = await db
@@ -126,10 +132,12 @@ export async function getMetaDecksForArchetype(archetype: string): Promise<strin
       .limit(3);
 
     if (dbDecks.length === 0) {
-      return META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro;
+      return (
+        META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro
+      );
     }
 
-    const deckIds = dbDecks.map((d) => d.id);
+    const deckIds = dbDecks.map(d => d.id);
     const cardRows = await db
       .select()
       .from(competitiveDeckCards)
@@ -143,12 +151,12 @@ export async function getMetaDecksForArchetype(archetype: string): Promise<strin
     }
 
     const decklists = deckIds
-      .map((id) => byDeck.get(id)?.join("\n") ?? "")
-      .filter((d) => d.length > 0);
+      .map(id => byDeck.get(id)?.join("\n") ?? "")
+      .filter(d => d.length > 0);
 
     return decklists.length > 0
       ? decklists
-      : META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro;
+      : (META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro);
   } catch {
     return META_DECKS[archetype as keyof typeof META_DECKS] ?? META_DECKS.aggro;
   }

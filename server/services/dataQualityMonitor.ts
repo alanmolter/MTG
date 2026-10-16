@@ -1,8 +1,8 @@
 /**
  * Data Quality Monitor
- * 
+ *
  * Problema: Fallback sintético do Moxfield polui embeddings
- * 
+ *
  * Solução:
  * - Marcar dados com flags isSynthetic e dataConfidence
  * - Filtrar em embeddingTrainer.ts
@@ -94,9 +94,7 @@ export class DataQualityMonitor {
             ? (metrics.syntheticDecks / metrics.totalDecks) * 100
             : 0;
         metrics.dataConfidence =
-          metrics.totalDecks > 0
-            ? totalConfidence / metrics.totalDecks
-            : 1.0;
+          metrics.totalDecks > 0 ? totalConfidence / metrics.totalDecks : 1.0;
       }
 
       // 4. Gerar warnings
@@ -110,12 +108,16 @@ export class DataQualityMonitor {
 
       const avgConfidence = totalConfidence / allDecks.length;
       if (avgConfidence < 0.8) {
-        warnings.push(`MEDIUM: Average confidence ${avgConfidence.toFixed(2)} is low`);
+        warnings.push(
+          `MEDIUM: Average confidence ${avgConfidence.toFixed(2)} is low`
+        );
       }
 
       console.log("[DataQuality] ✓ Analysis complete");
       console.log(`  Total decks: ${allDecks.length}`);
-      console.log(`  Synthetic: ${totalSynthetic} (${((totalSynthetic / allDecks.length) * 100).toFixed(1)}%)`);
+      console.log(
+        `  Synthetic: ${totalSynthetic} (${((totalSynthetic / allDecks.length) * 100).toFixed(1)}%)`
+      );
       console.log(`  Avg confidence: ${avgConfidence.toFixed(2)}`);
 
       return {

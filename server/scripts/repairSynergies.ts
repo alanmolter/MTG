@@ -42,7 +42,9 @@ function banner(title: string) {
   console.log(`\n${line}\n  ${title}\n${line}`);
 }
 
-async function probeHealth(sql: any): Promise<{ ok: boolean; error?: any; rows?: number }> {
+async function probeHealth(
+  sql: any
+): Promise<{ ok: boolean; error?: any; rows?: number }> {
   try {
     const rows = await sql`SELECT COUNT(*)::int AS c FROM card_synergies`;
     return { ok: true, rows: rows[0]?.c ?? 0 };
@@ -66,7 +68,9 @@ async function run() {
 
   const sql = await getRawClient();
   if (!sql) {
-    console.error("[ERRO] DATABASE_URL não configurado ou cliente indisponível.");
+    console.error(
+      "[ERRO] DATABASE_URL não configurado ou cliente indisponível."
+    );
     process.exit(1);
   }
 
@@ -101,14 +105,22 @@ async function run() {
 
   if (!DO_REINDEX && !DO_VACUUM && !DO_REBUILD) {
     banner("COMO REPARAR");
-    console.log(`  Tabela com corrupção detectada. Opções (ordem recomendada):`);
+    console.log(
+      `  Tabela com corrupção detectada. Opções (ordem recomendada):`
+    );
     console.log(`    1) npx tsx server/scripts/repairSynergies.ts --reindex`);
     console.log(`       (mais rápido, tenta reconstruir só os índices)`);
     console.log(`    2) npx tsx server/scripts/repairSynergies.ts --vacuum`);
-    console.log(`       (reescreve o heap — pode falhar se o bloco corrompido não puder ser lido)`);
+    console.log(
+      `       (reescreve o heap — pode falhar se o bloco corrompido não puder ser lido)`
+    );
     console.log(`    3) npx tsx server/scripts/repairSynergies.ts --rebuild`);
-    console.log(`       (nuclear: DROP + recriação. Dados de sinergia são perdidos;`);
-    console.log(`        serão reconstruídos nos próximos treinos via pair learning.)`);
+    console.log(
+      `       (nuclear: DROP + recriação. Dados de sinergia são perdidos;`
+    );
+    console.log(
+      `        serão reconstruídos nos próximos treinos via pair learning.)`
+    );
     await closeDb();
     process.exit(2);
   }
@@ -121,7 +133,10 @@ async function run() {
       console.log("  ✅ REINDEX concluído.");
       const re = await fullScan(sql);
       if (re.ok) console.log("  ✅ Full scan agora passa. Tabela reparada.");
-      else console.log(`  ⚠ Ainda corrompida após REINDEX: ${unwrapMsg(re.error)}`);
+      else
+        console.log(
+          `  ⚠ Ainda corrompida após REINDEX: ${unwrapMsg(re.error)}`
+        );
     } catch (e: any) {
       console.error(`  ❌ REINDEX falhou: ${unwrapMsg(e)}`);
     }
@@ -135,17 +150,22 @@ async function run() {
       console.log("  ✅ VACUUM FULL concluído.");
       const re = await fullScan(sql);
       if (re.ok) console.log("  ✅ Full scan agora passa. Tabela reparada.");
-      else console.log(`  ⚠ Ainda corrompida após VACUUM: ${unwrapMsg(re.error)}`);
+      else
+        console.log(`  ⚠ Ainda corrompida após VACUUM: ${unwrapMsg(re.error)}`);
     } catch (e: any) {
       console.error(`  ❌ VACUUM FULL falhou: ${unwrapMsg(e)}`);
-      console.error(`     (esperado se o bloco corrompido for ilegível — use --rebuild)`);
+      console.error(
+        `     (esperado se o bloco corrompido for ilegível — use --rebuild)`
+      );
     }
   }
 
   // 5) REBUILD (nuclear)
   if (DO_REBUILD) {
     banner("REBUILD card_synergies (DROP + CREATE)");
-    console.log("  ⚠ Perderá todos os dados de sinergia. Treinos subsequentes recriam via pair learning.");
+    console.log(
+      "  ⚠ Perderá todos os dados de sinergia. Treinos subsequentes recriam via pair learning."
+    );
     try {
       await sql.unsafe(`DROP TABLE IF EXISTS card_synergies CASCADE`);
       console.log("  ✔ DROP OK.");
@@ -161,12 +181,19 @@ async function run() {
         )
       `);
       console.log("  ✔ CREATE OK.");
-      await sql.unsafe(`CREATE INDEX idx_card_synergies_c1 ON card_synergies(card1_id)`);
-      await sql.unsafe(`CREATE INDEX idx_card_synergies_c2 ON card_synergies(card2_id)`);
+      await sql.unsafe(
+        `CREATE INDEX idx_card_synergies_c1 ON card_synergies(card1_id)`
+      );
+      await sql.unsafe(
+        `CREATE INDEX idx_card_synergies_c2 ON card_synergies(card2_id)`
+      );
       console.log("  ✔ Índices criados.");
       const re = await fullScan(sql);
       if (re.ok) console.log("  ✅ Tabela recriada e saudável.");
-      else console.log(`  ❌ Inesperado: scan ainda falha: ${unwrapMsg(re.error)}`);
+      else
+        console.log(
+          `  ❌ Inesperado: scan ainda falha: ${unwrapMsg(re.error)}`
+        );
     } catch (e: any) {
       console.error(`  ❌ REBUILD falhou: ${unwrapMsg(e)}`);
     }
@@ -176,8 +203,10 @@ async function run() {
   await closeDb();
 }
 
-run().catch(async (e) => {
+run().catch(async e => {
   console.error("[repairSynergies] Erro fatal:", unwrapMsg(e));
-  try { await closeDb(); } catch {}
+  try {
+    await closeDb();
+  } catch {}
   process.exit(1);
 });

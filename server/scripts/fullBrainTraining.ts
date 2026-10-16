@@ -1,5 +1,9 @@
 import { getDb, closeDb } from "../db";
-import { cardLearning, cards as cardsTable, forgeMatches } from "../../drizzle/schema";
+import {
+  cardLearning,
+  cards as cardsTable,
+  forgeMatches,
+} from "../../drizzle/schema";
 import { count, gt, gte, lt, and, eq, sql } from "drizzle-orm";
 import { spawn } from "child_process";
 import { describeTrainingPool, isArenaOnlyTraining } from "./utils/poolFilter";
@@ -109,24 +113,39 @@ async function reportBrainDataStatus(db: any): Promise<void> {
   console.log(`\n  Conexao com banco de inteligencia : OK`);
   console.log(`  Total de cartas aprendidas        : ${total}`);
   console.log(`  Peso medio geral                  : ${avgWeight}`);
-  console.log(`  Cartas com historico de vitorias  : ${withWins} (${pct(Number(withWins), total)})`);
-  console.log(`  Cartas com historico de derrotas  : ${withLosses} (${pct(Number(withLosses), total)})`);
-  console.log(`  Cartas com score calculado        : ${withScore} (${pct(Number(withScore), total)})`);
+  console.log(
+    `  Cartas com historico de vitorias  : ${withWins} (${pct(Number(withWins), total)})`
+  );
+  console.log(
+    `  Cartas com historico de derrotas  : ${withLosses} (${pct(Number(withLosses), total)})`
+  );
+  console.log(
+    `  Cartas com score calculado        : ${withScore} (${pct(Number(withScore), total)})`
+  );
 
   console.log("\n  DISTRIBUICAO DE PESOS:");
-  console.log(`  Alta relevancia  (>= 10.0) : ${bar(Number(highWeight), total)} ${highWeight} (${pct(Number(highWeight), total)})`);
-  console.log(`  Media relevancia (2.0-9.9) : ${bar(Number(midWeight), total)} ${midWeight} (${pct(Number(midWeight), total)})`);
-  console.log(`  Base             (0.5-1.9) : ${bar(Number(baseWeight), total)} ${baseWeight} (${pct(Number(baseWeight), total)})`);
-  console.log(`  Baixa relevancia (< 0.5)   : ${bar(Number(lowWeight), total)} ${lowWeight} (${pct(Number(lowWeight), total)})`);
+  console.log(
+    `  Alta relevancia  (>= 10.0) : ${bar(Number(highWeight), total)} ${highWeight} (${pct(Number(highWeight), total)})`
+  );
+  console.log(
+    `  Media relevancia (2.0-9.9) : ${bar(Number(midWeight), total)} ${midWeight} (${pct(Number(midWeight), total)})`
+  );
+  console.log(
+    `  Base             (0.5-1.9) : ${bar(Number(baseWeight), total)} ${baseWeight} (${pct(Number(baseWeight), total)})`
+  );
+  console.log(
+    `  Baixa relevancia (< 0.5)   : ${bar(Number(lowWeight), total)} ${lowWeight} (${pct(Number(lowWeight), total)})`
+  );
 
   if (topCards.length > 0) {
     console.log("\n  TOP 5 CARTAS POR PESO APRENDIDO:");
     console.log("  " + "─".repeat(50));
     topCards.forEach((c: any, i: number) => {
       const matches = c.winCount + c.lossCount;
-      const winRate = matches > 0
-        ? ((c.winCount / matches) * 100).toFixed(1) + "% wr"
-        : "sem historico";
+      const winRate =
+        matches > 0
+          ? ((c.winCount / matches) * 100).toFixed(1) + "% wr"
+          : "sem historico";
       console.log(
         `  ${i + 1}. ${c.cardName.padEnd(30)} peso: ${c.weight.toFixed(3).padStart(7)} | ${winRate}`
       );
@@ -135,11 +154,17 @@ async function reportBrainDataStatus(db: any): Promise<void> {
   }
 
   console.log("\n  FONTES DE APRENDIZADO ACUMULADAS NO BANCO:");
-  console.log("    [F] forge_reality   — partidas reais simuladas via Forge engine");
+  console.log(
+    "    [F] forge_reality   — partidas reais simuladas via Forge engine"
+  );
   console.log("    [S] self_play       — simulacoes internas do loop genetico");
-  console.log("    [C] commander_train — treinamento especializado Commander EDH");
+  console.log(
+    "    [C] commander_train — treinamento especializado Commander EDH"
+  );
   console.log("    [U] user_generation — interacoes do usuario no front-end");
-  console.log("    [R] rl_policy       — retroalimentacao do algoritmo RL REINFORCE");
+  console.log(
+    "    [R] rl_policy       — retroalimentacao do algoritmo RL REINFORCE"
+  );
   console.log("\n  TODOS OS DADOS ACIMA SERAO UTILIZADOS NO TREINAMENTO.");
   console.log("═".repeat(52) + "\n");
 }
@@ -153,21 +178,29 @@ async function launchMasterTraining() {
   console.log(`  Inicio: ${timestamp()}`);
   console.log("═".repeat(52));
 
-  console.log("  Modo de integridade: pesos só podem mudar após resultado gravado em forge_matches.");
+  console.log(
+    "  Modo de integridade: pesos só podem mudar após resultado gravado em forge_matches."
+  );
 
   const db = await getDb();
   if (!db) {
     console.error("  [ERRO] Nao foi possivel conectar ao banco. Abortando.");
-    closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
+    closeDb()
+      .then(() => process.exit(1))
+      .catch(() => process.exit(1));
     return;
   }
 
   // Fonte de rótulos verificável. Não inferimos procedência olhando apenas
   // win_count/loss_count, porque bancos antigos misturavam self-play e Forge.
-  const [{ value: forgeMatchCount }] = await db.select({ value: count() }).from(forgeMatches);
+  const [{ value: forgeMatchCount }] = await db
+    .select({ value: count() })
+    .from(forgeMatches);
   console.log(`  Partidas Forge auditáveis: ${forgeMatchCount}`);
   if (Number(forgeMatchCount) === 0) {
-    console.log("  [PENDENTE] Rode `npm run train:visual:historic:auto` para iniciar a coleta de rótulos reais.");
+    console.log(
+      "  [PENDENTE] Rode `npm run train:visual:historic:auto` para iniciar a coleta de rótulos reais."
+    );
   }
 
   // ── 4b. Escopo do pool de treinamento (Arena vs full catalog) ─────────────
@@ -189,13 +222,21 @@ async function launchMasterTraining() {
   console.log("  POOL DE TREINAMENTO");
   console.log("═".repeat(52));
   console.log(`  Modo                : ${describeTrainingPool()}`);
-  console.log(`  Cartas Arena no DB  : ${arenaCount} (${pct(Number(arenaCount), Number(totalCardCount))})`);
+  console.log(
+    `  Cartas Arena no DB  : ${arenaCount} (${pct(Number(arenaCount), Number(totalCardCount))})`
+  );
   console.log(`  Cartas totais no DB : ${totalCardCount}`);
   if (arenaOnly && Number(arenaCount) === 0) {
     console.log("");
-    console.log("  [AVISO] TRAINING_POOL_ARENA_ONLY=1 mas nenhuma carta tem is_arena=1.");
-    console.log("           Rode `npm run db:repair-arena -- --apply` antes do treino,");
-    console.log("           senão o pool ficará vazio e os decks não serão gerados.");
+    console.log(
+      "  [AVISO] TRAINING_POOL_ARENA_ONLY=1 mas nenhuma carta tem is_arena=1."
+    );
+    console.log(
+      "           Rode `npm run db:repair-arena -- --apply` antes do treino,"
+    );
+    console.log(
+      "           senão o pool ficará vazio e os decks não serão gerados."
+    );
   }
   console.log("═".repeat(52) + "\n");
 
@@ -203,16 +244,21 @@ async function launchMasterTraining() {
     .select({ value: count() })
     .from(cardLearning);
 
-  const runScript = (name: string, path: string, args: string[] = []): Promise<number> => {
-    return new Promise((resolve) => {
+  const runScript = (
+    name: string,
+    path: string,
+    args: string[] = []
+  ): Promise<number> => {
+    return new Promise(resolve => {
       divider(`Modulo: ${name}`);
       console.log(`  Script : npx tsx ${path} ${args.join(" ")}`);
       console.log(`  Status : executando...\n`);
 
       const childCommand = process.platform === "win32" ? "cmd.exe" : "npx";
-      const childArgs = process.platform === "win32"
-        ? ["/d", "/s", "/c", "npx", "tsx", path, ...args]
-        : ["tsx", path, ...args];
+      const childArgs =
+        process.platform === "win32"
+          ? ["/d", "/s", "/c", "npx", "tsx", path, ...args]
+          : ["tsx", path, ...args];
       const child = spawn(childCommand, childArgs, {
         shell: false,
         stdio: "inherit",
@@ -227,16 +273,20 @@ async function launchMasterTraining() {
         lastHeartbeat = now;
 
         const elapsedSec = ((now - tStart) / 1000).toFixed(0);
-        const pid = child.pid ?? 'n/a';
-        console.log(`[Orchestrator] ${name} ainda executando... pid=${pid} | +${elapsedSec}s | ${timestamp()}`);
+        const pid = child.pid ?? "n/a";
+        console.log(
+          `[Orchestrator] ${name} ainda executando... pid=${pid} | +${elapsedSec}s | ${timestamp()}`
+        );
       }, 1000);
-      child.on("close", (code) => {
+      child.on("close", code => {
         clearInterval(heartbeat);
         const dur = ((Date.now() - tStart) / 1000).toFixed(1);
         if (code === 0) {
           console.log(`\n  [OK] Modulo "${name}" concluido em ${dur}s`);
         } else {
-          console.warn(`\n  [AVISO] Modulo "${name}" terminou com codigo ${code} (${dur}s)`);
+          console.warn(
+            `\n  [AVISO] Modulo "${name}" terminou com codigo ${code} (${dur}s)`
+          );
         }
         resolve(code ?? 1);
       });
@@ -250,13 +300,19 @@ async function launchMasterTraining() {
   const qualityExit = await runScript(
     "Quality Gate (dados competitivos)",
     "server/scripts/sanitizeTrainingData.ts",
-    ["--apply", "--require-ready"],
+    ["--apply", "--require-ready"]
   );
   if (qualityExit !== 0) {
-    throw new Error("Quality gate bloqueou o treino; corrija/importa dados antes de gerar novos pesos.");
+    throw new Error(
+      "Quality gate bloqueou o treino; corrija/importa dados antes de gerar novos pesos."
+    );
   }
-  console.log("\n  [Safety] Loops heurísticos foram colocados em modo somente-avaliação.");
-  console.log("  [Next] Rode `npm run train:visual:historic:auto` para registrar uma partida Forge observável.");
+  console.log(
+    "\n  [Safety] Loops heurísticos foram colocados em modo somente-avaliação."
+  );
+  console.log(
+    "  [Next] Rode `npm run train:visual:historic:auto` para registrar uma partida Forge observável."
+  );
 
   // ── 7. Resultado Final ────────────────────────────────────────────────────
   const [{ value: finalCount }] = await db
@@ -271,15 +327,23 @@ async function launchMasterTraining() {
   console.log(`  Duracao total           : ${totalDur}s`);
   console.log(`  Cartas antes do treino  : ${initialCount}`);
   console.log(`  Cartas apos o treino    : ${finalCount}`);
-  console.log(`  Novas entradas criadas  : ${Number(finalCount) - Number(initialCount)}`);
-  console.log(`  Motor de regras         : Forge visual (única fonte aceita de rótulos)`);
+  console.log(
+    `  Novas entradas criadas  : ${Number(finalCount) - Number(initialCount)}`
+  );
+  console.log(
+    `  Motor de regras         : Forge visual (única fonte aceita de rótulos)`
+  );
   console.log(`  Fim: ${timestamp()}`);
   console.log("═".repeat(52) + "\n");
 
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+  closeDb()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(0));
 }
 
-launchMasterTraining().catch((e) => {
+launchMasterTraining().catch(e => {
   console.error("[fullBrainTraining] Erro fatal:", e?.message);
-  closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
+  closeDb()
+    .then(() => process.exit(1))
+    .catch(() => process.exit(1));
 });

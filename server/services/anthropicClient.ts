@@ -33,25 +33,34 @@ export interface HaikuCallParams {
  * Fonte: https://www.anthropic.com/pricing (modelos de texto).
  */
 const PRICING: Record<string, { input: number; output: number }> = {
-  "claude-haiku-4-5":         { input: 0.80, output: 4.00 },
-  "claude-haiku-4":           { input: 0.25, output: 1.25 },
-  "claude-3-5-haiku-20241022":{ input: 0.80, output: 4.00 },
-  "claude-3-haiku-20240307":  { input: 0.25, output: 1.25 },
-  "claude-sonnet-4-5":        { input: 3.00, output: 15.00 },
-  "claude-sonnet-4-6":        { input: 3.00, output: 15.00 },
-  "claude-opus-4-7":          { input: 15.00, output: 75.00 },
+  "claude-haiku-4-5": { input: 0.8, output: 4.0 },
+  "claude-haiku-4": { input: 0.25, output: 1.25 },
+  "claude-3-5-haiku-20241022": { input: 0.8, output: 4.0 },
+  "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
+  "claude-sonnet-4-5": { input: 3.0, output: 15.0 },
+  "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
+  "claude-opus-4-7": { input: 15.0, output: 75.0 },
 };
 
-export function priceOf(model: string, inputTokens: number, outputTokens: number): number {
+export function priceOf(
+  model: string,
+  inputTokens: number,
+  outputTokens: number
+): number {
   const pricing = PRICING[model] ?? PRICING["claude-haiku-4-5"];
-  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
+  return (
+    (inputTokens / 1_000_000) * pricing.input +
+    (outputTokens / 1_000_000) * pricing.output
+  );
 }
 
 const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5";
 const API_URL = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
 
-export async function callHaiku(params: HaikuCallParams): Promise<HaikuResponse> {
+export async function callHaiku(
+  params: HaikuCallParams
+): Promise<HaikuResponse> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY não configurada no .env");
@@ -78,7 +87,9 @@ export async function callHaiku(params: HaikuCallParams): Promise<HaikuResponse>
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "(no body)");
-    throw new Error(`Anthropic API ${response.status}: ${errorText.slice(0, 500)}`);
+    throw new Error(
+      `Anthropic API ${response.status}: ${errorText.slice(0, 500)}`
+    );
   }
 
   const json: any = await response.json();

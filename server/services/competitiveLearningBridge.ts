@@ -1,8 +1,8 @@
 /**
  * Competitive Learning Bridge com Validação de Versão e Hash
- * 
+ *
  * Problema: competitive_train.json pode ficar obsoleto se export falhar
- * 
+ *
  * Solução:
  * - Adicionar metadados de versão e hash SHA256
  * - Escrever atomicamente (tmp → rename)
@@ -41,7 +41,8 @@ interface CompetitiveTrainData {
 
 export class CompetitiveLearningBridge {
   private readonly exportPath = "server/ml/models/competitive_train.json";
-  private readonly metadataPath = "server/ml/models/competitive_train.metadata.json";
+  private readonly metadataPath =
+    "server/ml/models/competitive_train.metadata.json";
   private readonly versionFile = "server/ml/models/competitive_train.version";
 
   /**
@@ -58,7 +59,9 @@ export class CompetitiveLearningBridge {
       return { version: 0, hash: "", deckCount: 0 };
     }
 
-    console.log(`[CompetitiveLearning] Exporting competitive decks for ${format}...`);
+    console.log(
+      `[CompetitiveLearning] Exporting competitive decks for ${format}...`
+    );
 
     try {
       // 1. Ler decks competitivos
@@ -68,7 +71,9 @@ export class CompetitiveLearningBridge {
         .where(eq(competitiveDecks.format, format));
 
       if (competitiveDecksData.length === 0) {
-        console.warn(`[CompetitiveLearning] No competitive decks found for ${format}`);
+        console.warn(
+          `[CompetitiveLearning] No competitive decks found for ${format}`
+        );
         return { version: 0, hash: "", deckCount: 0 };
       }
 
@@ -80,10 +85,15 @@ export class CompetitiveLearningBridge {
         .where(inArray(competitiveDeckCards.deckId, deckIds));
 
       // Agrupar cartas por deckId
-      const cardsByDeck = new Map<number, Array<{ name: string; count: number }>>();
+      const cardsByDeck = new Map<
+        number,
+        Array<{ name: string; count: number }>
+      >();
       for (const row of allCardRows) {
         if (!cardsByDeck.has(row.deckId)) cardsByDeck.set(row.deckId, []);
-        cardsByDeck.get(row.deckId)!.push({ name: row.cardName, count: row.quantity });
+        cardsByDeck
+          .get(row.deckId)!
+          .push({ name: row.cardName, count: row.quantity });
       }
 
       // 3. Transformar para formato de treino com cartas reais
@@ -129,11 +139,15 @@ export class CompetitiveLearningBridge {
       await fs.writeFile(this.versionFile, newVersion.toString(), "utf-8");
 
       // Salvar metadata separadamente
-      await fs.writeFile(this.metadataPath, JSON.stringify(metadata, null, 2), "utf-8");
+      await fs.writeFile(
+        this.metadataPath,
+        JSON.stringify(metadata, null, 2),
+        "utf-8"
+      );
 
       console.log(
         `[CompetitiveLearning] ✓ Exported v${newVersion} ` +
-        `(${decks.length} decks, hash=${dataHash.substring(0, 8)}...)`
+          `(${decks.length} decks, hash=${dataHash.substring(0, 8)}...)`
       );
 
       return {
@@ -172,7 +186,10 @@ export class CompetitiveLearningBridge {
       }
 
       // 3. Validar versão se esperada
-      if (expectedVersion !== undefined && data.metadata.version !== expectedVersion) {
+      if (
+        expectedVersion !== undefined &&
+        data.metadata.version !== expectedVersion
+      ) {
         return {
           valid: false,
           version: data.metadata.version,

@@ -1,4 +1,3 @@
-# Para ativar: mover para .github/workflows/migrations.yml (o push exige token com escopo `workflow`).
 name: Migrações (PostgreSQL + pgvector)
 
 on:
@@ -17,6 +16,7 @@ on:
       - "drizzle/**"
       - "server/scripts/applyMigration.ts"
       - "server/scripts/migrationBaseline*.ts"
+      - ".github/workflows/migrations.yml"
 
 env:
   NODE_VERSION: "22.13.0"

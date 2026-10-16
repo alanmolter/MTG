@@ -25,11 +25,16 @@ export interface CompetitiveDeckWrite {
   sideboard: Array<{ cardName: string; quantity: number }>;
 }
 
-type Sql = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Array<{ id?: number }>>;
+type Sql = (
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+) => Promise<Array<{ id?: number }>>;
 
 /** postgres.js client, or a test double with the same tagged-template call. */
 type DeckWriter = Sql & {
-  begin?: (fn: (sql: Sql) => Promise<{ imported: boolean; cards: number }>) => Promise<{ imported: boolean; cards: number }>;
+  begin?: (
+    fn: (sql: Sql) => Promise<{ imported: boolean; cards: number }>
+  ) => Promise<{ imported: boolean; cards: number }>;
 };
 
 export function parseDeckExport(text: string): {
@@ -38,7 +43,8 @@ export function parseDeckExport(text: string): {
 } | null {
   const textarea = text.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/i);
   const body = decodeHtml(textarea ? textarea[1] : text);
-  if (!textarea && /<!doctype html|<html|just a moment/i.test(body)) return null;
+  if (!textarea && /<!doctype html|<html|just a moment/i.test(body))
+    return null;
 
   const mainboard: Array<{ cardName: string; quantity: number }> = [];
   const sideboard: Array<{ cardName: string; quantity: number }> = [];
@@ -53,7 +59,11 @@ export function parseDeckExport(text: string): {
       continue;
     }
     const header = line.toLowerCase();
-    if (header === "about" || header.startsWith("name ") || header === "companion") {
+    if (
+      header === "about" ||
+      header.startsWith("name ") ||
+      header === "companion"
+    ) {
       headerMode = true;
       section = "skip";
       continue;
@@ -97,7 +107,7 @@ function decodeHtml(value: string): string {
  * same card used to abort the transaction and leave the deck with no cards.
  */
 export function aggregateCardLines(
-  cards: Array<{ cardName: string; quantity: number }>,
+  cards: Array<{ cardName: string; quantity: number }>
 ): Array<{ cardName: string; quantity: number }> {
   const totals = new Map<string, { cardName: string; quantity: number }>();
   for (const card of cards) {
@@ -128,10 +138,10 @@ export async function saveCompetitiveDeck(
   const mainboard = aggregateCardLines(canon(deck.mainboard));
   const sideboard = aggregateCardLines(canon(deck.sideboard));
   const cards: DeckCardEntry[] = [
-    ...mainboard.map((card) => ({ ...card, section: "mainboard" as const })),
-    ...sideboard.map((card) => ({ ...card, section: "sideboard" as const })),
+    ...mainboard.map(card => ({ ...card, section: "mainboard" as const })),
+    ...sideboard.map(card => ({ ...card, section: "sideboard" as const })),
   ];
-  if (mainboard.length === 0 || mainboard.every((card) => card.quantity <= 0)) {
+  if (mainboard.length === 0 || mainboard.every(card => card.quantity <= 0)) {
     return { imported: false, cards: 0 };
   }
   const rawJson = JSON.stringify({ mainboard, sideboard });
@@ -162,7 +172,7 @@ export async function saveCompetitiveDeck(
   };
   if (typeof client.begin !== "function") {
     throw new Error(
-      "saveCompetitiveDeck requires pg.begin; refusing a non-transactional write",
+      "saveCompetitiveDeck requires pg.begin; refusing a non-transactional write"
     );
   }
   return client.begin(write);

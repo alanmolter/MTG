@@ -1,18 +1,29 @@
 import { getDb } from "../db";
-import { competitiveDecks, competitiveDeckCards, cards, metaStats } from "../../drizzle/schema";
+import {
+  competitiveDecks,
+  competitiveDeckCards,
+  cards,
+  metaStats,
+} from "../../drizzle/schema";
 import { eq, sql, and } from "drizzle-orm";
 
 export interface MetaStatsResult {
   format: string;
   totalDecks: number;
   topCards: Array<{ name: string; frequency: number; playRate: number }>;
-  archetypeDistribution: Array<{ archetype: string; count: number; percentage: number }>;
+  archetypeDistribution: Array<{
+    archetype: string;
+    count: number;
+    percentage: number;
+  }>;
 }
 
 /**
  * Performs analysis of competitive decks to generate meta statistics
  */
-export async function performMetaAnalysis(format: string): Promise<MetaStatsResult> {
+export async function performMetaAnalysis(
+  format: string
+): Promise<MetaStatsResult> {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
 
@@ -41,7 +52,7 @@ export async function performMetaAnalysis(format: string): Promise<MetaStatsResu
     .groupBy(competitiveDecks.archetype)
     .orderBy(sql`count(*) DESC`);
 
-  const archetypeDistribution = archetypeStats.map((a) => ({
+  const archetypeDistribution = archetypeStats.map(a => ({
     archetype: a.archetype || "Unknown",
     count: a.count,
     percentage: (a.count / totalDecks) * 100,
@@ -55,13 +66,21 @@ export async function performMetaAnalysis(format: string): Promise<MetaStatsResu
       totalQuantity: sql<number>`sum(${competitiveDeckCards.quantity})`,
     })
     .from(competitiveDeckCards)
-    .innerJoin(competitiveDecks, eq(competitiveDeckCards.deckId, competitiveDecks.id))
-    .where(and(eq(competitiveDecks.format, format), eq(competitiveDeckCards.section, "mainboard")))
+    .innerJoin(
+      competitiveDecks,
+      eq(competitiveDeckCards.deckId, competitiveDecks.id)
+    )
+    .where(
+      and(
+        eq(competitiveDecks.format, format),
+        eq(competitiveDeckCards.section, "mainboard")
+      )
+    )
     .groupBy(competitiveDeckCards.cardName)
     .orderBy(sql`count(distinct ${competitiveDeckCards.deckId}) DESC`)
     .limit(50);
 
-  const topCards = cardStats.map((c) => ({
+  const topCards = cardStats.map(c => ({
     name: c.cardName,
     frequency: c.decksWithCard,
     playRate: (c.decksWithCard / totalDecks) * 100,
@@ -71,24 +90,27 @@ export async function performMetaAnalysis(format: string): Promise<MetaStatsResu
   // This helps the deck generator and other services find "staples"
   for (const card of topCards) {
     const cardInfo = await db
-        .select({ id: cards.id })
-        .from(cards)
-        .where(eq(cards.name, card.name))
-        .limit(1);
+      .select({ id: cards.id })
+      .from(cards)
+      .where(eq(cards.name, card.name))
+      .limit(1);
 
     if (cardInfo.length > 0) {
-        await db.insert(metaStats).values({
-            cardId: cardInfo[0].id,
-            format,
+      await db
+        .insert(metaStats)
+        .values({
+          cardId: cardInfo[0].id,
+          format,
+          frequency: card.frequency,
+          playRate: Math.round(card.playRate),
+        })
+        .onConflictDoUpdate({
+          target: [metaStats.cardId, metaStats.format, metaStats.archetype],
+          set: {
             frequency: card.frequency,
             playRate: Math.round(card.playRate),
-        }).onConflictDoUpdate({
-            target: [metaStats.cardId, metaStats.format, metaStats.archetype],
-            set: { 
-                frequency: card.frequency, 
-                playRate: Math.round(card.playRate),
-                updatedAt: new Date()
-            }
+            updatedAt: new Date(),
+          },
         });
     }
   }

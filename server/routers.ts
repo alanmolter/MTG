@@ -94,9 +94,19 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { addCardToDeck, getDeckById } = await import("./db-decks");
         const deck = await getDeckById(input.deckId);
-        if (!deck) throw new TRPCError({ code: "NOT_FOUND", message: "Deck não encontrado" });
-        if (deck.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
-        return await addCardToDeck(input.deckId, input.cardId, input.quantity, deck.format);
+        if (!deck)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Deck não encontrado",
+          });
+        if (deck.userId !== ctx.user.id)
+          throw new TRPCError({ code: "FORBIDDEN" });
+        return await addCardToDeck(
+          input.deckId,
+          input.cardId,
+          input.quantity,
+          deck.format
+        );
       }),
 
     removeCard: protectedProcedure
@@ -109,8 +119,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { removeCardFromDeck, getDeckById } = await import("./db-decks");
         const deck = await getDeckById(input.deckId);
-        if (!deck) throw new TRPCError({ code: "NOT_FOUND", message: "Deck não encontrado" });
-        if (deck.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (!deck)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Deck não encontrado",
+          });
+        if (deck.userId !== ctx.user.id)
+          throw new TRPCError({ code: "FORBIDDEN" });
         return await removeCardFromDeck(input.deckId, input.cardId);
       }),
 
@@ -119,13 +134,20 @@ export const appRouter = router({
       return await getDeckCards(input);
     }),
 
-    delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
-      const { deleteDeck, getDeckById } = await import("./db-decks");
-      const deck = await getDeckById(input);
-      if (!deck) throw new TRPCError({ code: "NOT_FOUND", message: "Deck não encontrado" });
-      if (deck.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
-      return await deleteDeck(input);
-    }),
+    delete: protectedProcedure
+      .input(z.number())
+      .mutation(async ({ ctx, input }) => {
+        const { deleteDeck, getDeckById } = await import("./db-decks");
+        const deck = await getDeckById(input);
+        if (!deck)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Deck não encontrado",
+          });
+        if (deck.userId !== ctx.user.id)
+          throw new TRPCError({ code: "FORBIDDEN" });
+        return await deleteDeck(input);
+      }),
   }),
 
   generator: router({
@@ -176,8 +198,10 @@ export const appRouter = router({
         const { searchCards } = await import("./services/scryfall");
         const { evaluateDeckWithEngine, evaluateDeckWithBrain, validateDeck } =
           await import("./services/deckGenerator");
-        const { modelLearningService } = await import("./services/modelLearning");
-        const { getCardLearningQueue } = await import("./services/cardLearningQueue");
+        const { modelLearningService } =
+          await import("./services/modelLearning");
+        const { getCardLearningQueue } =
+          await import("./services/cardLearningQueue");
 
         // Carregar pool de cartas do banco
         const cardPool = await searchCards({
@@ -251,7 +275,9 @@ export const appRouter = router({
         } else {
           // A generation request is not evidence. Invalid candidates must not
           // reinforce their own cards merely because they reached the UI.
-          console.warn(`[DeckGeneration] learning skipped: ${validation.errors.join("; ")}`);
+          console.warn(
+            `[DeckGeneration] learning skipped: ${validation.errors.join("; ")}`
+          );
         }
         // Não aguarda flush — aprendizado é assíncrono e não bloqueia a resposta ao usuário
 
@@ -372,7 +398,8 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        const { evaluateDeckWithBrain } = await import("./services/deckEvaluationBrain");
+        const { evaluateDeckWithBrain } =
+          await import("./services/deckEvaluationBrain");
         // Expandir cartas com quantidades
         const expanded: any[] = [];
         for (const card of input.cards) {
@@ -380,7 +407,10 @@ export const appRouter = router({
             expanded.push({ ...card });
           }
         }
-        return await evaluateDeckWithBrain(expanded, input.archetype || "default");
+        return await evaluateDeckWithBrain(
+          expanded,
+          input.archetype || "default"
+        );
       }),
 
     // -----------------------------------------------------------------------
@@ -402,7 +432,8 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        const { generateDeckWithLLM } = await import("./services/llmDeckGenerator");
+        const { generateDeckWithLLM } =
+          await import("./services/llmDeckGenerator");
         return await generateDeckWithLLM(input);
       }),
 
@@ -455,7 +486,6 @@ export const appRouter = router({
       return await getCardStats();
     }),
   }),
-
 
   mtgtop8: router({
     importDecks: publicProcedure

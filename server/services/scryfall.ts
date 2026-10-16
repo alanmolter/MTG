@@ -20,7 +20,9 @@ interface ScryfallCard {
   games?: string[];
 }
 
-export async function searchScryfallCards(query: string): Promise<ScryfallCard[]> {
+export async function searchScryfallCards(
+  query: string
+): Promise<ScryfallCard[]> {
   try {
     const response = await fetch(
       `${SCRYFALL_API}/cards/search?q=${encodeURIComponent(query)}&unique=cards`
@@ -34,7 +36,9 @@ export async function searchScryfallCards(query: string): Promise<ScryfallCard[]
   }
 }
 
-export async function getScryfallCardByName(name: string): Promise<ScryfallCard | null> {
+export async function getScryfallCardByName(
+  name: string
+): Promise<ScryfallCard | null> {
   try {
     const response = await fetch(
       `${SCRYFALL_API}/cards/named?exact=${encodeURIComponent(name)}`
@@ -47,7 +51,9 @@ export async function getScryfallCardByName(name: string): Promise<ScryfallCard 
   }
 }
 
-export async function syncCardFromScryfall(scryfallCard: ScryfallCard): Promise<Card | null> {
+export async function syncCardFromScryfall(
+  scryfallCard: ScryfallCard
+): Promise<Card | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -95,7 +101,11 @@ export async function getCardByName(name: string): Promise<Card | null> {
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.select().from(cards).where(eq(cards.name, name)).limit(1);
+  const result = await db
+    .select()
+    .from(cards)
+    .where(eq(cards.name, name))
+    .limit(1);
   return result[0] || null;
 }
 
@@ -133,7 +143,7 @@ export async function searchCards(filters: {
     // Se várias cores forem passadas, buscar qualquer uma delas (simplificado)
     const colorConditions = filters.colors
       .split("")
-      .map((c) => ilike(cards.colors, `%${c}%`));
+      .map(c => ilike(cards.colors, `%${c}%`));
     if (colorConditions.length > 0) {
       conditions.push(or(...colorConditions));
     }
@@ -146,7 +156,7 @@ export async function searchCards(filters: {
   }
 
   const query = db.select().from(cards);
-  
+
   if (conditions.length > 0) {
     query.where(and(...conditions));
   }
@@ -160,7 +170,11 @@ export async function getCardById(cardId: number): Promise<Card | null> {
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.select().from(cards).where(eq(cards.id, cardId)).limit(1);
+  const result = await db
+    .select()
+    .from(cards)
+    .where(eq(cards.id, cardId))
+    .limit(1);
   return result[0] || null;
 }
 
@@ -171,6 +185,9 @@ export async function getCardsByIds(cardIds: number[]): Promise<Card[]> {
   if (cardIds.length === 0) return [];
 
   const { inArray } = await import("drizzle-orm");
-  const result = await db.select().from(cards).where(inArray(cards.id, cardIds));
+  const result = await db
+    .select()
+    .from(cards)
+    .where(inArray(cards.id, cardIds));
   return result;
 }
