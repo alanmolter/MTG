@@ -52,7 +52,7 @@ export default function ClusteringPage() {
         `Clustering concluído! ${data.totalClusters} clusters com ${data.totalDecksClustered} decks.`
       );
     },
-    onError: (error: any) => {
+    onError: error => {
       toast.error(`Clustering falhou: ${error.message}`);
     },
   });

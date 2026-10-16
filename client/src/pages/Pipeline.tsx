@@ -26,8 +26,12 @@ import {
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { RouterOutputs } from "@/lib/apiTypes";
 
 type PipelineStep = "idle" | "importing" | "training" | "generating" | "done";
+type ImportResult = RouterOutputs["mtggoldfish"]["importDecks"];
+type TrainResult = RouterOutputs["training"]["trainEmbeddings"];
+type GeneratedDeck = RouterOutputs["generator"]["generate"];
 
 export default function Pipeline() {
   const [format, setFormat] = useState<
@@ -36,9 +40,11 @@ export default function Pipeline() {
   const [deckLimit, setDeckLimit] = useState(30);
   const [archetype, setArchetype] = useState("");
   const [step, setStep] = useState<PipelineStep>("idle");
-  const [importResult, setImportResult] = useState<any>(null);
-  const [trainResult, setTrainResult] = useState<any>(null);
-  const [generatedDeck, setGeneratedDeck] = useState<any>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [trainResult, setTrainResult] = useState<TrainResult | null>(null);
+  const [generatedDeck, setGeneratedDeck] = useState<GeneratedDeck | null>(
+    null
+  );
 
   const trainingHistory = trpc.training.getHistory.useQuery();
 
@@ -115,7 +121,7 @@ export default function Pipeline() {
   const exportDeck = () => {
     if (!generatedDeck?.deck) return;
     const text = generatedDeck.deck
-      .map((c: any) => `${c.quantity}x ${c.name}`)
+      .map(c => `${c.quantity}x ${c.name}`)
       .join("\n");
     const el = document.createElement("a");
     el.setAttribute(
@@ -173,7 +179,7 @@ export default function Pipeline() {
                   <Label className="text-gray-300">Formato</Label>
                   <Select
                     value={format}
-                    onValueChange={(v: any) => setFormat(v)}
+                    onValueChange={value => setFormat(value as typeof format)}
                   >
                     <SelectTrigger className="bg-slate-800 border-purple-500/30 text-white">
                       <SelectValue />
@@ -467,7 +473,7 @@ export default function Pipeline() {
                     </CardTitle>
                     <CardDescription className="text-gray-400">
                       {generatedDeck.deck?.reduce(
-                        (s: number, c: any) => s + c.quantity,
+                        (s: number, c) => s + c.quantity,
                         0
                       )}{" "}
                       cartas •{" "}
@@ -490,7 +496,7 @@ export default function Pipeline() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-1 max-h-80 overflow-y-auto">
-                    {generatedDeck.deck?.map((card: any, idx: number) => (
+                    {generatedDeck.deck?.map((card, idx: number) => (
                       <div
                         key={idx}
                         className="flex justify-between items-center py-1.5 px-3 bg-slate-800/40 rounded hover:bg-slate-800/70 transition-colors"

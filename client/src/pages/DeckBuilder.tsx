@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -83,7 +83,7 @@ function toCardCardData(card: CardRow) {
 export default function DeckBuilder() {
   const [selectedDeck, setSelectedDeck] = useState<DeckRow | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<CardRow[]>([]);
   const [newDeck, setNewDeck] = useState({
@@ -105,13 +105,16 @@ export default function DeckBuilder() {
   // Busca de cartas (é uma query, não mutation)
   const [searchEnabled, setSearchEnabled] = useState(false);
   const { data: cardSearchData, isFetching: isSearching } =
-    trpc.cards.search.useQuery({ name: searchQuery }, {
-      enabled: searchEnabled && !!searchQuery.trim(),
-      onSuccess: (data: CardRow[]) => {
-        setSearchResults(data);
-        setSearchEnabled(false);
-      },
-    } as any);
+    trpc.cards.search.useQuery(
+      { name: searchQuery },
+      { enabled: searchEnabled && !!searchQuery.trim() }
+    );
+
+  useEffect(() => {
+    if (!searchEnabled || !cardSearchData) return;
+    setSearchResults(cardSearchData);
+    setSearchEnabled(false);
+  }, [cardSearchData, searchEnabled]);
 
   // Mutations
   const createDeckMutation = trpc.decks.create.useMutation({
@@ -126,8 +129,7 @@ export default function DeckBuilder() {
       });
       toast.success("Deck criado com sucesso!");
     },
-    onError: (error: any) =>
-      toast.error(`Erro ao criar deck: ${error.message}`),
+    onError: error => toast.error(`Erro ao criar deck: ${error.message}`),
   });
 
   const deleteDeckMutation = trpc.decks.delete.useMutation({
@@ -136,8 +138,7 @@ export default function DeckBuilder() {
       setSelectedDeck(null);
       toast.success("Deck excluído com sucesso!");
     },
-    onError: (error: any) =>
-      toast.error(`Erro ao excluir deck: ${error.message}`),
+    onError: error => toast.error(`Erro ao excluir deck: ${error.message}`),
   });
 
   const addCardMutation = trpc.decks.addCard.useMutation({
@@ -149,8 +150,7 @@ export default function DeckBuilder() {
       }
       toast.success("Carta adicionada ao deck!");
     },
-    onError: (error: any) =>
-      toast.error(`Erro ao adicionar carta: ${error.message}`),
+    onError: error => toast.error(`Erro ao adicionar carta: ${error.message}`),
   });
 
   const removeCardMutation = trpc.decks.removeCard.useMutation({
@@ -162,8 +162,7 @@ export default function DeckBuilder() {
       }
       toast.success("Carta removida do deck!");
     },
-    onError: (error: any) =>
-      toast.error(`Erro ao remover carta: ${error.message}`),
+    onError: error => toast.error(`Erro ao remover carta: ${error.message}`),
   });
 
   const handleCreateDeck = () => {

@@ -27,12 +27,28 @@ import {
   Swords,
   Zap,
   Shield,
-  BarChart3,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import type { RouterOutputs } from "@/lib/apiTypes";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+
+type ArchetypeResult = RouterOutputs["generator"]["generateByArchetype"];
+type ArchetypeDeckCard = NonNullable<ArchetypeResult["deck"]>[number];
+
+type ManaCurve = Record<string, number>;
+type DeckTemplate = {
+  curve: ManaCurve;
+  lands: number;
+  creatures: number;
+  spells: number;
+  priorities: string[];
+};
+type PlaystyleMod = {
+  curve: ManaCurve;
+  priorities: string[];
+};
 
 type ArchetypeName =
   | "aggro"
@@ -338,7 +354,7 @@ function TemplatePreview({
   powerLevel?: PowerLevel;
   consistency?: Consistency;
 }) {
-  const baseTemplates: Record<ArchetypeName, any> = {
+  const baseTemplates: Record<ArchetypeName, DeckTemplate> = {
     aggro: {
       curve: { 1: 12, 2: 14, 3: 8, 4: 4 },
       lands: 22,
@@ -390,7 +406,7 @@ function TemplatePreview({
     },
   };
 
-  const playstyleMods: Record<string, any> = {
+  const playstyleMods: Record<string, PlaystyleMod> = {
     go_wide: { curve: { 1: 16, 2: 16, 3: 10, 4: 4 }, priorities: ["token"] },
     go_tall: {
       curve: { 1: 6, 2: 10, 3: 12, 4: 12 },
@@ -579,7 +595,7 @@ export default function ArchetypeGenerator() {
   const [maxPrice, setMaxPrice] = useState<number>(50);
 
   // Resultado
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ArchetypeResult | null>(null);
   const [activeTab, setActiveTab] = useState<"list" | "metrics" | "export">(
     "list"
   );
@@ -1249,7 +1265,7 @@ export default function ArchetypeGenerator() {
                         </CardTitle>
                         <CardDescription className="text-gray-400">
                           {result.deck?.reduce(
-                            (s: number, c: any) => s + c.quantity,
+                            (s: number, c: ArchetypeDeckCard) => s + c.quantity,
                             0
                           )}{" "}
                           cartas
@@ -1286,8 +1302,9 @@ export default function ArchetypeGenerator() {
                           ["commander", "land", "creature", "spell"] as const
                         ).map(role => {
                           const cards =
-                            result.deck?.filter((c: any) => c.role === role) ||
-                            [];
+                            result.deck?.filter(
+                              (c: ArchetypeDeckCard) => c.role === role
+                            ) || [];
                           if (cards.length === 0) return null;
                           const roleLabels = {
                             commander: "👑 Comandante",
@@ -1308,75 +1325,80 @@ export default function ArchetypeGenerator() {
                               >
                                 {roleLabels[role]} (
                                 {cards.reduce(
-                                  (s: number, c: any) => s + c.quantity,
+                                  (s: number, c: ArchetypeDeckCard) =>
+                                    s + c.quantity,
                                   0
                                 )}
                                 )
                               </p>
                               <div className="space-y-1">
-                                {cards.map((card: any, idx: number) => (
-                                  <div
-                                    key={idx}
-                                    className={`group flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border transition-colors ${
-                                      role === "commander"
-                                        ? "border-amber-500/50 bg-amber-950/20"
-                                        : "border-purple-500/10 hover:border-purple-500/30"
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                      {/* Miniatura da Imagem Real */}
-                                      <div className="w-10 h-10 rounded overflow-hidden bg-slate-700 border border-slate-600 shrink-0">
-                                        {card.imageUrl ? (
-                                          <img
-                                            src={card.imageUrl}
-                                            alt={card.name}
-                                            className="w-full h-full object-cover transition-transform group-hover:scale-125"
-                                            loading="lazy"
-                                          />
-                                        ) : (
-                                          <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-500">
-                                            No Art
-                                          </div>
+                                {cards.map(
+                                  (card: ArchetypeDeckCard, idx: number) => (
+                                    <div
+                                      key={idx}
+                                      className={`group flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border transition-colors ${
+                                        role === "commander"
+                                          ? "border-amber-500/50 bg-amber-950/20"
+                                          : "border-purple-500/10 hover:border-purple-500/30"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        {/* Miniatura da Imagem Real */}
+                                        <div className="w-10 h-10 rounded overflow-hidden bg-slate-700 border border-slate-600 shrink-0">
+                                          {card.imageUrl ? (
+                                            <img
+                                              src={card.imageUrl}
+                                              alt={card.name}
+                                              className="w-full h-full object-cover transition-transform group-hover:scale-125"
+                                              loading="lazy"
+                                            />
+                                          ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-500">
+                                              No Art
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-white text-sm font-medium truncate">
+                                            {card.name}
+                                          </p>
+                                          <p className="text-gray-500 text-xs truncate">
+                                            {card.type}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-3 ml-3 shrink-0">
+                                        {card.cmc != null && (
+                                          <span className="text-gray-500 text-xs">
+                                            CMC {card.cmc}
+                                          </span>
                                         )}
-                                      </div>
-
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-white text-sm font-medium truncate">
-                                          {card.name}
-                                        </p>
-                                        <p className="text-gray-500 text-xs truncate">
-                                          {card.type}
-                                        </p>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-3 ml-3 shrink-0">
-                                      {card.cmc != null && (
-                                        <span className="text-gray-500 text-xs">
-                                          CMC {card.cmc}
+                                        {card.colors &&
+                                          card.colors.length > 0 && (
+                                            <div className="flex gap-0.5">
+                                              {card.colors
+                                                .split("")
+                                                .map(
+                                                  (c: string, ci: number) => (
+                                                    <span
+                                                      key={ci}
+                                                      className="text-[10px] bg-slate-700 px-1 border border-slate-600 rounded text-gray-300"
+                                                    >
+                                                      {c}
+                                                    </span>
+                                                  )
+                                                )}
+                                            </div>
+                                          )}
+                                        <span className="text-purple-300 font-extrabold text-sm w-8 text-right bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                          {card.quantity}×
                                         </span>
-                                      )}
-                                      {card.colors &&
-                                        card.colors.length > 0 && (
-                                          <div className="flex gap-0.5">
-                                            {card.colors
-                                              .split("")
-                                              .map((c: string, ci: number) => (
-                                                <span
-                                                  key={ci}
-                                                  className="text-[10px] bg-slate-700 px-1 border border-slate-600 rounded text-gray-300"
-                                                >
-                                                  {c}
-                                                </span>
-                                              ))}
-                                          </div>
-                                        )}
-                                      <span className="text-purple-300 font-extrabold text-sm w-8 text-right bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                                        {card.quantity}×
-                                      </span>
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  )
+                                )}
                               </div>
                             </div>
                           );

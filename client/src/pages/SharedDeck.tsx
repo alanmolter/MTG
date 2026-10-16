@@ -26,8 +26,8 @@ interface DeckShareData {
 }
 
 export default function SharedDeck() {
-  const params = useParams();
-  const shareId = (params as any).shareId as string | undefined;
+  const params = useParams<{ shareId?: string }>();
+  const shareId = params.shareId;
 
   // Get shared deck data usando hook nativo do tRPC
   const {
@@ -165,7 +165,8 @@ export default function SharedDeck() {
               <CardHeader>
                 <CardTitle className="text-white">Decklist</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Clique em "Copiar Decklist" para copiar o deck completo
+                  Clique em &quot;Copiar Decklist&quot; para copiar o deck
+                  completo
                 </CardDescription>
               </CardHeader>
               <CardContent>

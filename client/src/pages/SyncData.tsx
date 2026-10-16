@@ -91,7 +91,7 @@ export default function SyncData() {
                   </Label>
                   <Select
                     value={format}
-                    onValueChange={(value: any) => setFormat(value)}
+                    onValueChange={value => setFormat(value as typeof format)}
                   >
                     <SelectTrigger className="bg-slate-800 border-purple-500/30 text-white">
                       <SelectValue />

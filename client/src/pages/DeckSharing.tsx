@@ -51,11 +51,11 @@ export default function DeckSharing() {
 
   // Create share mutation
   const createShareMutation = trpc.sharing.createShare.useMutation({
-    onSuccess: (data: any) => {
+    onSuccess: data => {
       setCreatedShare(data as DeckShareData);
       toast.success("Link de compartilhamento criado com sucesso!");
     },
-    onError: (error: any) => {
+    onError: error => {
       toast.error(`Erro ao criar compartilhamento: ${error.message}`);
     },
   });
@@ -335,9 +335,9 @@ export default function DeckSharing() {
 
                   {shareUrls && (
                     <div className="mt-3 space-y-2">
-                      {(shareUrls as any).twitter && (
+                      {shareUrls.twitter && (
                         <a
-                          href={(shareUrls as any).twitter}
+                          href={shareUrls.twitter}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm"
@@ -346,9 +346,9 @@ export default function DeckSharing() {
                           Compartilhar no Twitter/X
                         </a>
                       )}
-                      {(shareUrls as any).reddit && (
+                      {shareUrls.reddit && (
                         <a
-                          href={(shareUrls as any).reddit}
+                          href={shareUrls.reddit}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2 text-orange-400 hover:text-orange-300 text-sm"

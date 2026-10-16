@@ -21,14 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import {
-  LayoutDashboard,
-  LogOut,
-  PanelLeft,
-  Search,
-  Share2,
-  Sparkles,
-} from "lucide-react";
+import { LogOut, PanelLeft, Search, Share2, Sparkles } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";

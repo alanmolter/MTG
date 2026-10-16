@@ -18,10 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Search } from "lucide-react";
-import { useLocation } from "wouter";
 
 export default function CardSearch() {
-  const [, setLocation] = useLocation();
   const [filters, setFilters] = useState({
     name: "",
     type: "",

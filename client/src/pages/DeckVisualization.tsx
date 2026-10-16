@@ -58,11 +58,11 @@ export default function DeckVisualization() {
 
   // Generate single visualization
   const generateArtMutation = trpc.visualization.generateDeckArt.useMutation({
-    onSuccess: (data: any) => {
+    onSuccess: data => {
       setGeneratedImages(prev => [...prev, data as DeckArtisticVisualization]);
       toast.success("Arte gerada com sucesso!");
     },
-    onError: (error: any) => {
+    onError: error => {
       toast.error(`Erro ao gerar arte: ${error.message}`);
     },
   });
@@ -70,11 +70,11 @@ export default function DeckVisualization() {
   // Generate multiple visualizations
   const generateArtSetMutation =
     trpc.visualization.generateDeckArtSet.useMutation({
-      onSuccess: (data: any) => {
+      onSuccess: data => {
         setGeneratedImages(data as DeckArtisticVisualization[]);
         toast.success("Conjunto de artes gerado com sucesso!");
       },
-      onError: (error: any) => {
+      onError: error => {
         toast.error(`Erro ao gerar conjunto de artes: ${error.message}`);
       },
     });
@@ -172,7 +172,9 @@ export default function DeckVisualization() {
               </label>
               <Select
                 value={selectedStyle}
-                onValueChange={v => setSelectedStyle(v as any)}
+                onValueChange={value =>
+                  setSelectedStyle(value as typeof selectedStyle)
+                }
               >
                 <SelectTrigger className="bg-slate-800 border-purple-500/30 text-white">
                   <SelectValue />

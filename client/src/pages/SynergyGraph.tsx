@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +9,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Network, Search, Zap } from "lucide-react";
 import CytoscapeComponent from "react-cytoscapejs";
@@ -119,7 +117,10 @@ export default function SynergyGraph() {
       })),
     ];
 
-    const stylesheet: any = [
+    const stylesheet: Array<{
+      selector: string;
+      style: Record<string, string | number>;
+    }> = [
       {
         selector: "node",
         style: {
