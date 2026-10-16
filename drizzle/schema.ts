@@ -12,6 +12,7 @@ import {
   serial,
   text,
   timestamp,
+  uuid,
   varchar,
   real,
   uniqueIndex,
@@ -200,6 +201,14 @@ export type EmbeddingsCache = typeof embeddingsCache.$inferSelect;
 export type InsertEmbeddingsCache = typeof embeddingsCache.$inferInsert;
 
 // Decks competitivos importados de fontes externas (MTGGoldfish, MTGTop8)
+export const deckDownloadStatus = pgEnum("deck_download_status", [
+  "ok",
+  "empty",
+  "source_dropped",
+  "placeholder",
+  "failed",
+]);
+
 export const competitiveDecks = pgTable("competitive_decks", {
   id: serial("id").primaryKey(),
   sourceId: varchar("source_id", { length: 128 }).notNull().unique(),
@@ -222,6 +231,16 @@ export const competitiveDecks = pgTable("competitive_decks", {
   trainingRejectionReason: text("training_rejection_reason"),
   trainingQualityCheckedAt: timestamp("training_quality_checked_at"),
   importedAt: timestamp("imported_at").defaultNow().notNull(),
+  // Provenance / archive (F1). All nullable; backfilled separately.
+  downloadStatus: deckDownloadStatus("download_status"),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  archiveReason: text("archive_reason"),
+  sourceUrl: text("source_url"),
+  collectedAt: timestamp("collected_at", { withTimezone: true }),
+  contentHash: varchar("content_hash", { length: 64 }),
+  parserVersion: text("parser_version"),
+  lastFetchError: text("last_fetch_error"),
+  importRunId: uuid("import_run_id"),
 });
 
 export type CompetitiveDeck = typeof competitiveDecks.$inferSelect;
@@ -238,12 +257,19 @@ export const competitiveDeckCards = pgTable(
     cardName: varchar("card_name", { length: 255 }).notNull(),
     quantity: integer("quantity").notNull().default(1),
     section: varchar("section", { length: 20 }).default("mainboard"),
+    // Canonical card identity (Scryfall oracle_id). No FK until backfill ends.
+    oracleId: varchar("oracle_id", { length: 64 }),
+    rawName: text("raw_name"),
+    resolved: boolean("resolved"),
   },
   table => ({
     deckCardUnique: uniqueIndex(
       "competitive_deck_cards_deck_card_section_unique"
     ).on(table.deckId, table.cardName, table.section),
     deckIdIdx: index("competitive_deck_cards_deck_id_idx").on(table.deckId),
+    oracleIdIdx: index("competitive_deck_cards_oracle_id_idx").on(
+      table.oracleId
+    ),
   })
 );
 
