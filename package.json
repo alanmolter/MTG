@@ -12,7 +12,7 @@
     "test": "vitest run",
     "db:push": "npm run db:migrate",
     "db:generate": "drizzle-kit generate",
-    "db:check": "drizzle-kit check",
+    "db:check": "cross-env NODE_ENV=development tsx server/scripts/checkMigrations.ts && drizzle-kit check",
     "seed:scryfall": "cross-env NODE_ENV=development tsx server/seed-scryfall.ts",
     "test:model": "cross-env NODE_ENV=development tsx server/scripts/regressionTest.ts",
     "teach": "cross-env NODE_ENV=development tsx server/scripts/fullBrainTraining.ts",
