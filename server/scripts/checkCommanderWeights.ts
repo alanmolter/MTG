@@ -1,27 +1,43 @@
 import { getDb, closeDb } from "../db";
-import { cardLearning, cards } from "../../drizzle/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+
+type CommanderRow = {
+  name: string;
+  weight: number;
+  winCount: number;
+  lossCount: number;
+  type: string | null;
+  colors: string | null;
+};
 
 async function check() {
   const db = await getDb();
   if (!db) return;
 
-  // Buscar 100 resultados para compensar duplicatas de cartas double-faced
-  // e múltiplas versões do mesmo personagem (ex: Aang tem 5+ versões)
-  const rawCommanders = await db
-    .select({
-      name: cardLearning.cardName,
-      weight: cardLearning.weight,
-      winCount: cardLearning.winCount,
-      lossCount: cardLearning.lossCount,
-      type: cards.type,
-      colors: cards.colors,
-    })
-    .from(cardLearning)
-    .innerJoin(cards, eq(cardLearning.cardName, cards.name))
-    .where(sql`${cards.type} ILIKE '%Legendary%' AND ${cards.type} ILIKE '%Creature%'`)
-    .orderBy(desc(cardLearning.weight))
-    .limit(100);
+  // `cards` has one row per printing, while `card_learning` is keyed by card
+  // name. Use LATERAL to pick one representative card row per learned name so
+  // repeated printings cannot crowd out real commanders before deduplication.
+  const rawCommanders = (await db.execute(sql`
+    SELECT
+      cl.card_name AS name,
+      cl.weight,
+      cl.win_count AS "winCount",
+      cl.loss_count AS "lossCount",
+      c.type,
+      c.colors
+    FROM card_learning cl
+    JOIN LATERAL (
+      SELECT type, colors
+      FROM cards c
+      WHERE c.name = cl.card_name
+        AND c.type ILIKE '%Legendary%'
+        AND c.type ILIKE '%Creature%'
+      ORDER BY c.is_arena DESC, c.id ASC
+      LIMIT 1
+    ) c ON TRUE
+    ORDER BY cl.weight DESC, (cl.win_count + cl.loss_count) DESC, cl.card_name ASC
+    LIMIT 500
+  `)) as CommanderRow[];
 
   // Deduplicação em dois níveis:
   //   1. Cartas double-faced (com " // "): usar parte antes do " // "
@@ -30,7 +46,7 @@ async function check() {
   //      Isso evita mostrar cartas com peso inflado por decay mas sem partidas reais.
 
   // Primeiro passo: agrupar por personagem e escolher a melhor versão
-  const personagemMap = new Map<string, typeof rawCommanders[0]>();
+  const personagemMap = new Map<string, CommanderRow>();
 
   for (const c of rawCommanders) {
     const singleFaceName = c.name.includes(" // ")
@@ -66,7 +82,7 @@ async function check() {
   //   - premia winrate > 50% com ≥ 10 partidas (puxa score pra cima)
   //   - usa peso como desempate e para cartas sem partidas reais
   const MIN_GAMES_FOR_CONFIDENCE = 10;
-  const scoreOf = (c: typeof rawCommanders[0]): number => {
+  const scoreOf = (c: CommanderRow): number => {
     const total = (c.winCount ?? 0) + (c.lossCount ?? 0);
     const wr = total > 0 ? (c.winCount ?? 0) / total : 0;
 

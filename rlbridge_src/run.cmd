@@ -1,5 +1,5 @@
 @echo off
-REM Launch the Forge RL bridge. Run from any CWD — we anchor paths to this script's dir.
+REM Launch the Forge RL bridge. Run from any CWD - paths are anchored to this script's dir.
 setlocal
 set SCRIPT_DIR=%~dp0
 set FORGE_DIR=%SCRIPT_DIR%..\

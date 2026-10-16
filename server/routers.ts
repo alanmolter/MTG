@@ -239,13 +239,19 @@ export const appRouter = router({
         // de "validação" (voto popular), alimentando o cérebro da IA.
         // CORREÇÃO: Usa CardLearningQueue (fila serializada) para evitar race condition.
         // CORREÇÃO: source="user_generation" para rastreabilidade.
-        const queue = getCardLearningQueue();
-        for (const c of result.cards) {
-          queue.enqueue({
-            cardName: c.name,
-            delta: 0.01,
-            source: "user_generation",
-          });
+        if (validation.isValid) {
+          const queue = getCardLearningQueue();
+          for (const c of result.cards) {
+            queue.enqueue({
+              cardName: c.name,
+              delta: 0.01,
+              source: "user_generation",
+            });
+          }
+        } else {
+          // A generation request is not evidence. Invalid candidates must not
+          // reinforce their own cards merely because they reached the UI.
+          console.warn(`[DeckGeneration] learning skipped: ${validation.errors.join("; ")}`);
         }
         // Não aguarda flush — aprendizado é assíncrono e não bloqueia a resposta ao usuário
 

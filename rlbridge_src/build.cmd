@@ -1,5 +1,5 @@
 @echo off
-REM Maven-less build for the bridge — compiles against the Forge fat jar.
+REM Maven-less build for the bridge - compiles against the Forge fat jar.
 setlocal
 set SCRIPT_DIR=%~dp0
 set FORGE_DIR=%SCRIPT_DIR%..\
@@ -14,8 +14,11 @@ if not exist "%FORGE_JAR%" (
 if not exist "%SCRIPT_DIR%target\classes" mkdir "%SCRIPT_DIR%target\classes"
 if not exist "%SCRIPT_DIR%target\classes\META-INF" mkdir "%SCRIPT_DIR%target\classes\META-INF"
 
-echo [build.cmd] javac ForgeRLBridge.java...
-javac -cp "%FORGE_JAR%" -d "%SCRIPT_DIR%target\classes" "%SCRIPT_DIR%src\main\java\forge\rlbridge\ForgeRLBridge.java"
+echo [build.cmd] javac rlbridge sources...
+REM Compile the two production entry points explicitly. Do not glob the whole
+REM directory: local diagnostic helpers may live beside the bridge and must
+REM never become a build dependency for the training runtime.
+javac -cp "%FORGE_JAR%" -d "%SCRIPT_DIR%target\classes" "%SCRIPT_DIR%src\main\java\forge\rlbridge\ForgeRLBridge.java" "%SCRIPT_DIR%src\main\java\forge\rlbridge\VisualAutoMatch.java"
 if errorlevel 1 (
   echo [build.cmd] javac FAILED
   exit /b 1
@@ -32,4 +35,4 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [build.cmd] OK → %SCRIPT_DIR%target\rlbridge.jar
+echo [build.cmd] OK -^> %SCRIPT_DIR%target\rlbridge.jar

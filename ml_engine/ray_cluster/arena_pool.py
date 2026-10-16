@@ -156,13 +156,16 @@ _ARCHETYPE_RECIPES: Tuple[Tuple[str, str, Sequence[str]], ...] = (
     ("control_blue",    "U",  ("Island",)),
     ("midrange_black",  "B",  ("Swamp",)),
     ("ramp_green",      "G",  ("Forest",)),
-    # Two-color
+    # Two-color (all 10 colour pairs covered)
     ("control_uw",      "WU", ("Island", "Plains")),
-    ("midrange_bg",     "BG", ("Swamp", "Forest")),
+    ("midrange_wb",     "WB", ("Plains", "Swamp")),
     ("aggro_rw",        "WR", ("Mountain", "Plains")),
-    ("midrange_br",     "BR", ("Swamp", "Mountain")),
-    ("control_ub",      "UB", ("Island", "Swamp")),
     ("ramp_gw",         "WG", ("Forest", "Plains")),
+    ("control_ub",      "UB", ("Island", "Swamp")),
+    ("tempo_ur",        "UR", ("Island", "Mountain")),
+    ("ramp_ug",         "UG", ("Island", "Forest")),
+    ("midrange_br",     "BR", ("Swamp", "Mountain")),
+    ("midrange_bg",     "BG", ("Swamp", "Forest")),
     ("aggro_gr",        "GR", ("Mountain", "Forest")),
 )
 
@@ -171,7 +174,7 @@ def _build_decklist_from_rows(
     rows: Sequence[Tuple[str, Optional[str]]],
     basics: Sequence[str],
     *,
-    nonland_count: int = 24,
+    nonland_count: int = 36,
     land_count: int = 24,
 ) -> str:
     """Synthesize an MTGO-style decklist from DB rows.
@@ -181,11 +184,10 @@ def _build_decklist_from_rows(
     distinct names with 4-of each, and fill the remainder with basic lands.
     Forge's `parseDeck` is tolerant — it just reads "<count> <name>".
 
-    The total honors `nonland_count + land_count = 48` by default. We pad
-    with a 4-of "Llanowar Wastes"-style dual? No — keep it simple: 4-of
-    nonlands until we hit nonland_count, then fill with evenly-distributed
-    basics. Stays Arena-legal because we only emit names from `rows` (which
-    the caller already filtered with `AND is_arena = 1`) plus basics.
+    Defaults total = 36 nonland + 24 land = 60 cards (Standard/Arena legal
+    minimum). Was 48 originally — RegisteredPlayer in Forge accepts <60 but
+    the meta benchmarks always run 60-card decks, so smaller training decks
+    skew matchup variance. Bumped to 60 in the Arena curriculum revision.
     """
     nonlands = [
         name for (name, type_str) in rows
@@ -209,11 +211,17 @@ def _build_decklist_from_rows(
         distinct = []
 
     lines: list[str] = [f"4 {name}" for name in distinct]
-    # Land count: divide land_count across `basics` round-robin.
+    # A sparse / partially imported DB may not have enough legal spells for a
+    # recipe. Keep the deck tournament-sized anyway: replace each missing
+    # spell slot with a basic land rather than handing Forge an underfilled
+    # deck that cannot represent normal Arena games.
+    missing_spell_slots = max(0, nonland_count - (len(distinct) * 4))
+    total_land_count = land_count + missing_spell_slots
+    # Land count: divide total_land_count across `basics` round-robin.
     if not basics:
         basics = ("Plains",)
-    per_basic = max(1, land_count // len(basics))
-    remainder = land_count - per_basic * len(basics)
+    per_basic = max(1, total_land_count // len(basics))
+    remainder = total_land_count - per_basic * len(basics)
     for i, b in enumerate(basics):
         count = per_basic + (1 if i < remainder else 0)
         lines.append(f"{count} {b}")
@@ -246,23 +254,45 @@ def _query_arena_pool(
         _warn_fallback("psycopg2 not installed (run `pip install psycopg2-binary` in the venv)")
         return ()
 
-    # Colour-identity match: colors LIKE '%R%' for mono-red, both letters
-    # required for a pair. Using LIKE keeps us compatible with both the
-    # comma-style and concat-style colour storage in our cards table.
-    color_clauses = " AND ".join(
-        f"colors LIKE %s" for _ in primary_colors
-    ) if primary_colors else "TRUE"
-    color_params = [f"%{c}%" for c in primary_colors]
+    # Colour-identity SUBSET match: card.colors must be a subset of the
+    # archetype's primary_colors. Old behaviour used LIKE '%X%' which let any
+    # card *containing* the colour through, so a `control_blue` deck got
+    # 5-colour cards like `Bring to Light` and was unplayable in Forge —
+    # poisoning the training reward signal with deadlocked games. See the
+    # 2026-05-07 postmortem on `python -c "...resolve_decks_for_training..."`.
+    #
+    # Strategy: enumerate the colours forbidden by this archetype (WUBRG
+    # minus primary_colors) and require that none of them appear in the
+    # card's `colors` field. Colourless cards (NULL or empty) are always
+    # allowed — they fit any deck. We don't enforce that the card contains
+    # at least one of the allowed colours, because the artifact density in
+    # Standard is low (~5%) and adding utility artifacts/equipment is fine.
+    _ALL_COLOURS = ("W", "U", "B", "R", "G")
+    primary_set = set((primary_colors or "").upper())
+    forbidden = [c for c in _ALL_COLOURS if c not in primary_set]
+    if forbidden:
+        forbid_clauses = " AND ".join("colors NOT LIKE %s" for _ in forbidden)
+        forbid_params = [f"%{c}%" for c in forbidden]
+        colour_filter = (
+            "(colors IS NULL OR colors = '' OR ("
+            + forbid_clauses
+            + "))"
+        )
+    else:
+        # Five-colour archetype (not currently used) — accept any card.
+        colour_filter = "TRUE"
+        forbid_params = []
 
     sql = f"""
         SELECT name, type
         FROM cards
         WHERE is_arena = 1
-          AND ({color_clauses})
+          AND {colour_filter}
           AND (cmc IS NULL OR cmc <= 8)
         ORDER BY RANDOM()
         LIMIT %s
     """
+    color_params = forbid_params
 
     try:
         conn = psycopg2.connect(dsn, connect_timeout=5)
@@ -291,10 +321,57 @@ def _query_arena_pool(
             pass
 
 
+_ARCHETYPE_FILTER_ENV_VAR = "TRAINING_ARCHETYPES"
+
+
+def _archetype_allowlist() -> Optional[Tuple[str, ...]]:
+    """Return the operator-configured archetype subset, or None for all 15.
+
+    Honors `TRAINING_ARCHETYPES=aggro_red,control_uw,midrange_bg`. Unknown
+    names are silently dropped (warned once). Empty / unset → full catalog.
+    Used for curriculum: shrink the matchup space early, expand later.
+    """
+    raw = os.environ.get(_ARCHETYPE_FILTER_ENV_VAR)
+    if not raw:
+        return None
+    requested = [s.strip().lower() for s in raw.split(",") if s.strip()]
+    if not requested:
+        return None
+    valid = {r[0] for r in _ARCHETYPE_RECIPES}
+    # Deduplicate before sampling. Without this, a value such as
+    # "aggro_red,aggro_red" has two list entries and random.sample can choose
+    # the same deck twice, creating an accidental self-play-only curriculum.
+    kept = tuple(dict.fromkeys(name for name in requested if name in valid))
+    dropped = [name for name in requested if name not in valid]
+    if dropped:
+        print(
+            f"[arena_pool] WARN: ignoring unknown archetypes {dropped!r}; "
+            f"valid options: {sorted(valid)}",
+            file=sys.stderr,
+            flush=True,
+        )
+    if len(kept) < 2:
+        print(
+            f"[arena_pool] WARN: TRAINING_ARCHETYPES needs >=2 valid names; "
+            f"got {kept!r}, falling back to full 15-archetype catalog.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return None
+    return kept
+
+
 def _archetype_pair_for_seed(seed: Optional[int]) -> Tuple[str, str]:
-    """Pick two distinct archetypes for the matchup. Deterministic if seed set."""
+    """Pick two distinct archetypes for the matchup. Deterministic if seed set.
+
+    When `TRAINING_ARCHETYPES` is set to a comma-separated subset, only those
+    are eligible (curriculum mode). Otherwise the full 15-archetype catalog
+    is sampled, matching the original behavior.
+    """
     rng = random.Random(seed)
-    pair = rng.sample([r[0] for r in _ARCHETYPE_RECIPES], k=2)
+    allowlist = _archetype_allowlist()
+    pool = list(allowlist) if allowlist else [r[0] for r in _ARCHETYPE_RECIPES]
+    pair = rng.sample(pool, k=2)
     return pair[0], pair[1]
 
 
@@ -343,7 +420,20 @@ def resolve_decks_for_training(
             return ARENA_FALLBACK_AGGRO_RED
         return ARENA_FALLBACK_CONTROL
 
-    return _build(agent_archetype), _build(opp_archetype)
+    agent_deck = _build(agent_archetype)
+    opponent_deck = _build(opp_archetype)
+    # The no-DB fallback has only two representative decklists. Several
+    # non-aggro archetypes intentionally map to the control list, so a valid
+    # pair of different *names* could otherwise become an identical deck-vs-
+    # deck match. Preserve matchup diversity even on a fresh checkout.
+    if agent_deck == opponent_deck:
+        opponent_deck = (
+            ARENA_FALLBACK_AGGRO_RED
+            if agent_deck == ARENA_FALLBACK_CONTROL
+            else ARENA_FALLBACK_CONTROL
+        )
+
+    return agent_deck, opponent_deck
 
 
 __all__ = [

@@ -21,18 +21,21 @@ Features:
     card node features: [
         mana_value, power, toughness, loyalty,
         type_bitmap (creature/instant/sorcery/enchantment/artifact/land/planeswalker),
-        is_tapped, is_attacking, is_blocking, is_summoning_sick,
-        oracle_embedding (384-dim from card_oracle_embeddings table)
-    ]  → total: 11 + 384 = 395 dims
+        own_hand, is_tapped,
+        semantic_card_embedding (382 dims: supplied embedding or stable
+        name/Oracle-text hashing fallback)
+    ]  → total: 11 + 2 + 382 = 395 dims
 
     player features: [
         life, max_life_seen, mana_pool_total, mana_pool_colors (5),
         hand_size, library_size, graveyard_size, exile_size,
         turn_number, is_active_player, is_your_turn
-    ]  → 14 dims
+    ]  → 15 dims
 
 Output heads:
-    action_head(graph_embedding) → [batch, 512] logits
+    action scorer(graph_embedding, legal-action source card) → [batch, 512]
+    logits.  The source-card conditioning is essential because action slot 1
+    means a different spell in different hands.
     value_head(graph_embedding) → [batch, 1] scalar
 
 Register with Ray RLlib via:
@@ -61,12 +64,15 @@ except ImportError as e:  # pragma: no cover
 
 @dataclass
 class GNNConfig:
-    card_feat_dim: int = 395        # 11 scalar + 384 embedding
+    card_feat_dim: int = 400        # scalar, semantic, controller/zone/combat
     player_feat_dim: int = 15       # must match MtgForgeEnv.observation_space player_feats width
     hidden_dim: int = 128
     num_layers: int = 3
     num_heads: int = 4
     num_actions: int = 512
+    action_context_dim: int = 64
+    action_descriptor_dim: int = 32
+    num_action_kinds: int = 8
     dropout: float = 0.1
     use_edge_attr: bool = False     # keep simple; can layer on later
 
@@ -119,6 +125,21 @@ class GameStateGNN(nn.Module):
             nn.Dropout(cfg.dropout),
             nn.Linear(cfg.hidden_dim, cfg.num_actions),
         )
+        # A fixed action id is not a card identity: action 1 is merely the
+        # first *currently legal* source in Forge's canonical ordering.  Score
+        # it against the source-card node selected by action_source_indices so
+        # the policy can learn "cast this removal" rather than a spurious
+        # preference for a position in a dynamic list.
+        action_dim = min(cfg.action_context_dim, cfg.hidden_dim)
+        self.action_state_proj = nn.Linear(pool_dim, action_dim, bias=False)
+        self.action_source_proj = nn.Linear(cfg.hidden_dim, action_dim, bias=False)
+        self.action_target_card_proj = nn.Linear(cfg.hidden_dim, action_dim, bias=False)
+        self.action_target_player_proj = nn.Linear(cfg.hidden_dim, action_dim, bias=False)
+        self.action_kind_embedding = nn.Embedding(cfg.num_action_kinds, action_dim)
+        self.action_kind_bias = nn.Embedding(cfg.num_action_kinds, 1)
+        self.action_descriptor_proj = nn.Linear(cfg.action_descriptor_dim, action_dim, bias=False)
+        self.pass_action_key = nn.Parameter(torch.empty(action_dim))
+        nn.init.normal_(self.pass_action_key, mean=0.0, std=0.02)
         self.value_head = nn.Sequential(
             nn.Linear(pool_dim, cfg.hidden_dim),
             nn.ReLU(),
@@ -126,7 +147,14 @@ class GameStateGNN(nn.Module):
         )
 
     # ────────────────────────────────────────────────────────────────────────
-    def forward(self, data: "HeteroData") -> Dict[str, "torch.Tensor"]:
+    def forward(
+        self,
+        data: "HeteroData",
+        action_source_indices: Optional["torch.Tensor"] = None,
+        action_kinds: Optional["torch.Tensor"] = None,
+        action_target_indices: Optional["torch.Tensor"] = None,
+        action_descriptor_features: Optional["torch.Tensor"] = None,
+    ) -> Dict[str, "torch.Tensor"]:
         """
         Args:
             data: HeteroData with:
@@ -137,7 +165,9 @@ class GameStateGNN(nn.Module):
                 data[rel].edge_index    — [2, E_rel] for each rel in EDGE_RELATIONS
 
         Returns:
-            {"logits": [B, num_actions], "value": [B, 1]}
+            {"logits": [B, num_actions], "value": [B, 1]}.  When
+            ``action_source_indices`` is supplied, each action logit is
+            conditioned on the corresponding card-node embedding.
         """
         x_dict = {
             "card": F.relu(self.card_proj(data["card"].x)),
@@ -151,8 +181,10 @@ class GameStateGNN(nn.Module):
 
         for conv in self.convs:
             if edge_index_dict:
-                x_dict = conv(x_dict, edge_index_dict)
-            x_dict = {k: F.relu(v) for k, v in x_dict.items()}
+                updates = conv(x_dict, edge_index_dict)
+                x_dict = {k: F.relu(v + updates.get(k, 0)) for k, v in x_dict.items()}
+            else:
+                x_dict = {k: F.relu(v) for k, v in x_dict.items()}
 
         # Pool per-graph (batched). HeteroData batching keeps node-to-graph
         # assignment in `.batch`.
@@ -164,13 +196,147 @@ class GameStateGNN(nn.Module):
             card_batch = torch.zeros(x_dict["card"].size(0), dtype=torch.long, device=x_dict["card"].device)
             player_batch = torch.zeros(x_dict["player"].size(0), dtype=torch.long, device=x_dict["player"].device)
 
-        card_pool = global_mean_pool(x_dict["card"], card_batch)
+        # Padding is not a card. A naive mean over max_cards makes the value
+        # and policy heads depend on how much empty observation space remains.
+        card_valid = (data["card"].x.abs().sum(dim=-1, keepdim=True) > 0).float()
+        card_pool = global_mean_pool(x_dict["card"] * card_valid, card_batch)
+        valid_fraction = global_mean_pool(card_valid, card_batch).clamp(min=1.0 / max(1, data["card"].x.size(0)))
+        card_pool = card_pool / valid_fraction
         player_pool = global_mean_pool(x_dict["player"], player_batch)
 
         graph_emb = torch.cat([card_pool, player_pool], dim=-1)
         logits = self.action_head(graph_emb)
+        if action_source_indices is not None:
+            conditioned = self._conditioned_action_logits(
+                graph_emb,
+                x_dict["card"],
+                x_dict["player"],
+                action_source_indices,
+                action_kinds,
+                action_target_indices,
+                action_descriptor_features,
+            )
+            # A malformed auxiliary mapping must not crash a training job or
+            # silently invent a mapping; fall back to the legacy head.  The
+            # preflight/capability gate rejects bridges that omit this mapping.
+            if conditioned is not None:
+                logits = conditioned
         value = self.value_head(graph_emb)
         return {"logits": logits, "value": value}
+
+    def _conditioned_action_logits(
+        self,
+        graph_embedding: "torch.Tensor",
+        card_embeddings: "torch.Tensor",
+        player_embeddings: "torch.Tensor",
+        action_source_indices: "torch.Tensor",
+        action_kinds: Optional["torch.Tensor"],
+        action_target_indices: Optional["torch.Tensor"],
+        action_descriptor_features: Optional["torch.Tensor"] = None,
+    ) -> Optional["torch.Tensor"]:
+        """Score legal dynamic actions against their source card entity.
+
+        ``action_source_indices[b, a]`` is a local card-node index for the
+        a-th fixed policy output, or ``-1`` for pass/no source.  The env always
+        pads each graph to the same card count, allowing a cheap gather from
+        the batched node tensor.  Returning ``None`` deliberately preserves
+        backward-compatible inference for old snapshots, while training's
+        capability gate remains fail-closed about that old contract.
+        """
+        batch_size = graph_embedding.size(0)
+        if not torch.is_tensor(action_source_indices):
+            action_source_indices = torch.as_tensor(
+                action_source_indices, device=graph_embedding.device
+            )
+        else:
+            action_source_indices = action_source_indices.to(graph_embedding.device)
+        if action_source_indices.ndim == 1:
+            action_source_indices = action_source_indices.unsqueeze(0)
+        if (
+            action_source_indices.ndim != 2
+            or action_source_indices.shape[0] != batch_size
+            or action_source_indices.shape[1] != self.config.num_actions
+            or card_embeddings.shape[0] % max(batch_size, 1) != 0
+        ):
+            return None
+
+        cards_per_graph = card_embeddings.shape[0] // batch_size
+        if cards_per_graph <= 0:
+            return None
+        card_embeddings = card_embeddings.reshape(batch_size, cards_per_graph, -1)
+        source_indices = action_source_indices.long()
+        valid_source = (source_indices >= 0) & (source_indices < cards_per_graph)
+        safe_source = source_indices.clamp(min=0, max=cards_per_graph - 1)
+        gathered = torch.gather(
+            self.action_source_proj(card_embeddings),
+            dim=1,
+            index=safe_source.unsqueeze(-1).expand(-1, -1, self.action_state_proj.out_features),
+        )
+        pass_key = self.pass_action_key.view(1, 1, -1).expand_as(gathered)
+        source_key = torch.where(valid_source.unsqueeze(-1), gathered, pass_key)
+
+        if action_kinds is None:
+            kinds = valid_source.long()  # 0 pass/no source, 1 play source
+        else:
+            if not torch.is_tensor(action_kinds):
+                action_kinds = torch.as_tensor(action_kinds, device=graph_embedding.device)
+            else:
+                action_kinds = action_kinds.to(graph_embedding.device)
+            if action_kinds.ndim == 1:
+                action_kinds = action_kinds.unsqueeze(0)
+            if action_kinds.shape != source_indices.shape:
+                return None
+            kinds = action_kinds.long()
+        kinds = kinds.clamp(min=0, max=self.config.num_action_kinds - 1)
+
+        query = torch.tanh(self.action_state_proj(graph_embedding)).unsqueeze(1)
+        key = source_key + self.action_kind_embedding(kinds)
+        if action_descriptor_features is not None:
+            if not torch.is_tensor(action_descriptor_features):
+                descriptors = torch.as_tensor(action_descriptor_features, device=graph_embedding.device)
+            else:
+                descriptors = action_descriptor_features.to(graph_embedding.device)
+            if descriptors.ndim == 2:
+                descriptors = descriptors.unsqueeze(0)
+            if descriptors.shape != (batch_size, self.config.num_actions, self.config.action_descriptor_dim):
+                return None
+            key = key + self.action_descriptor_proj(descriptors.float())
+        if action_target_indices is not None:
+            if not torch.is_tensor(action_target_indices):
+                target_indices = torch.as_tensor(action_target_indices, device=graph_embedding.device)
+            else:
+                target_indices = action_target_indices.to(graph_embedding.device)
+            if target_indices.ndim == 1:
+                target_indices = target_indices.unsqueeze(0)
+            if target_indices.shape != source_indices.shape:
+                return None
+            target_indices = target_indices.long()
+            valid_card_target = (target_indices >= 0) & (target_indices < cards_per_graph)
+            safe_target = target_indices.clamp(min=0, max=cards_per_graph - 1)
+            card_targets = torch.gather(
+                self.action_target_card_proj(card_embeddings),
+                dim=1,
+                index=safe_target.unsqueeze(-1).expand(-1, -1, self.action_state_proj.out_features),
+            )
+            key = key + torch.where(valid_card_target.unsqueeze(-1), card_targets, torch.zeros_like(card_targets))
+
+            players_per_graph = player_embeddings.shape[0] // batch_size
+            if players_per_graph >= 2:
+                players = self.action_target_player_proj(
+                    player_embeddings.reshape(batch_size, players_per_graph, -1)
+                )
+                # Bridge contract: -2 names the policy player, -3 the opponent.
+                safe_player = torch.where(target_indices == -2, 0, 1)
+                player_targets = torch.gather(
+                    players,
+                    dim=1,
+                    index=safe_player.unsqueeze(-1).expand(-1, -1, self.action_state_proj.out_features),
+                )
+                player_mask = (target_indices == -2) | (target_indices == -3)
+                key = key + torch.where(player_mask.unsqueeze(-1), player_targets, torch.zeros_like(player_targets))
+        key = torch.tanh(key)
+        scale = float(self.action_state_proj.out_features) ** -0.5
+        return (query * key).sum(dim=-1) * scale + self.action_kind_bias(kinds).squeeze(-1)
 
     # ────────────────────────────────────────────────────────────────────────
     def act(self, data: "HeteroData", action_mask: Optional["torch.Tensor"] = None):
@@ -318,7 +484,11 @@ def register_with_rllib():
             else:
                 data = _batched_dict_to_hetero(obs, GameStateGNN.EDGE_RELATIONS)
             try:
-                out = self.gnn(data)
+                action_sources = obs.get("action_source_indices") if isinstance(obs, dict) else None
+                action_kinds = obs.get("action_kinds") if isinstance(obs, dict) else None
+                action_targets = obs.get("action_target_indices") if isinstance(obs, dict) else None
+                action_descriptors = obs.get("action_descriptor_features") if isinstance(obs, dict) else None
+                out = self.gnn(data, action_sources, action_kinds, action_targets, action_descriptors)
             except RuntimeError as e:
                 # CUBLAS_STATUS_EXECUTION_FAILED / cublasSgemm etc. typically
                 # mean the CUDA context got corrupted by a prior reshape/OOM
@@ -344,10 +514,13 @@ def register_with_rllib():
                 mask = obs["action_mask"]
                 if mask.shape[-1] == logits.shape[-1]:
                     mask = mask.to(dtype=torch.bool)
-                    # Guard: if every action is masked for some row, leave logits untouched
-                    # for that row to avoid -inf softmax → nan.
+                    # Terminal/dummy rows may have no legal action. Give only
+                    # the inert pass slot a finite logit; never unmask 512
+                    # invalid actions just to avoid a NaN.
                     all_masked = ~mask.any(dim=-1, keepdim=True)
-                    effective_mask = mask | all_masked
+                    pass_only = torch.zeros_like(mask)
+                    pass_only[..., 0] = True
+                    effective_mask = mask | (all_masked & pass_only)
                     logits = logits.masked_fill(~effective_mask, float("-1e9"))
             self._value_out = out["value"].squeeze(-1)
             return logits, state

@@ -1,6 +1,7 @@
 import { getDb } from "../db";
 import { cardSynergies, CardSynergy } from "../../drizzle/schema";
 import { eq, and, or } from "drizzle-orm";
+import { isValidSynergyObservation } from "./trainingQuality";
 
 interface SynergyNode {
   cardId: number;
@@ -168,6 +169,9 @@ export async function updateSynergy(
   coOccurrenceRate: number
 ): Promise<CardSynergy | null> {
   if (circuitTripped) return null;
+  // A card cannot provide evidence of synergy with itself. Previous self-play
+  // loops could emit these rows, which amplified arbitrary card weights.
+  if (!isValidSynergyObservation(card1Id, card2Id, coOccurrenceRate)) return null;
   const db = await getDb();
   if (!db) return null;
 

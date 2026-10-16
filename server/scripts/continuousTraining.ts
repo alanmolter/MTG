@@ -41,6 +41,9 @@ const SOURCE           = getString(cliArgs, 'source', 'self_play') as
   'commander_train' | 'forge_reality' | 'self_play' | 'rl_policy' | 'user_generation';
 const INJECT_RANDOM    = getFloat(cliArgs, 'inject-random-pct', 0.0);
 const ITERATIONS       = getInt(cliArgs, 'iterations', 100);
+// The built-in ModelEvaluator is a fast heuristic, not Forge. It may rank
+// candidates, but must never manufacture labels that alter card_learning.
+const ALLOW_HEURISTIC_FEEDBACK = getBool(cliArgs, 'allow-heuristic-feedback', false);
 
 const ARCHETYPES       = ['aggro', 'control', 'midrange', 'combo', 'ramp'];
 const DECKS_PER_ARCH   = 20;
@@ -233,13 +236,14 @@ async function main() {
   console.log(`  Exploração      : ${EXPLORATION_MODE}`);
   console.log(`  Injeção aleat.  : ${(INJECT_RANDOM * 100).toFixed(0)}% a cada 20 it`);
   console.log(`  Iterações       : ${ITERATIONS}`);
+  console.log(`  Escrita de pesos: ${ALLOW_HEURISTIC_FEEDBACK ? 'ATENÇÃO: heurística explicitamente autorizada' : 'BLOQUEADA (somente resultados Forge podem ensinar)'}`);
   console.log('────────────────────────────────────────────────────────');
 
   // ── Global weight decay (anti-saturação) ────────────────────────
   // Multiplica todos os pesos por 0.97 antes de cada run.
   // Cartas que pararam de aparecer nos decks regridem naturalmente a 1.0.
   // Garante que o sistema nunca sature: há sempre headroom para aprender.
-  {
+  if (ALLOW_HEURISTIC_FEEDBACK) {
     const db = await getDb();
     if (db) {
       const MIN_WEIGHT = 0.1;
@@ -333,7 +337,7 @@ async function main() {
       source: SOURCE,
       win: delta > 0 ? true : delta < 0 ? false : undefined,
     }));
-    if (updates.length > 0) {
+    if (ALLOW_HEURISTIC_FEEDBACK && updates.length > 0) {
       await queue.enqueueBatch(updates);
     }
 
@@ -341,7 +345,7 @@ async function main() {
     // A cada 5 iterações, amostra pares do deck vencedor e reforça
     // o co-occurrence weight na tabela cardSynergies. Isso garante que o
     // sistema aprenda não só quais cartas são boas, mas quais COMBINAÇÕES ganham.
-    if (it % 5 === 0) {
+    if (ALLOW_HEURISTIC_FEEDBACK && it % 5 === 0) {
       const bestDeck = elite[0];
       if (bestDeck && bestDeck.length >= 4) {
         let pairsUpdated = 0;
@@ -422,7 +426,7 @@ async function main() {
   }
 
   // ── Flush da queue ────────────────────────────────────────────
-  await queue.flush();
+  if (ALLOW_HEURISTIC_FEEDBACK) await queue.flush();
 
   printForgeTrainingComplete(
     totalMatches,
@@ -435,7 +439,7 @@ async function main() {
   console.log(`  Decks gerados       : ${ITERATIONS * population.length}`);
   console.log(`  Melhor score visto  : ${bestScore.toFixed(4)}`);
   console.log(`  Pool offset usado   : ${POOL_OFFSET}`);
-  console.log(`  Fonte gravada       : ${SOURCE}`);
+  console.log(`  Fonte gravada       : ${ALLOW_HEURISTIC_FEEDBACK ? SOURCE : 'nenhuma (execução de avaliação segura)'}`);
   console.log('════════════════════════════════════════════════════════');
 
   await closeDb();

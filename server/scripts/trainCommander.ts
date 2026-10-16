@@ -37,6 +37,10 @@ const SOURCE                         = getString(cliArgs, 'source', 'commander_t
 const MUTATION_RATE: number          = getFloat(cliArgs, 'mutation-rate', 0.15);
 const ITERATIONS: number             = getInt(cliArgs, 'iterations', 300);
 const MATCHES_PER_IT: number         = 5;
+// ModelEvaluator is a heuristic evaluator. It can explore deck candidates but
+// it is not a Forge outcome and therefore cannot be allowed to change weights
+// unless an operator opts in for an experiment.
+const ALLOW_HEURISTIC_FEEDBACK        = getBool(cliArgs, 'allow-heuristic-feedback', false);
 
 // ── Tipo local alinhado com o schema real do banco ───────────────
 // O banco usa: id, name, type (string), colors (string), cmc (int)
@@ -247,6 +251,7 @@ async function main() {
   console.log(`  Modo exploração : ${EXPLORATION_MODE}`);
   console.log(`  Taxa de mutação : ${MUTATION_RATE}`);
   console.log(`  Iterações       : ${ITERATIONS}`);
+  console.log(`  Escrita de pesos: ${ALLOW_HEURISTIC_FEEDBACK ? 'ATENÇÃO: heurística explicitamente autorizada' : 'BLOQUEADA (somente resultados Forge ensinam)'}`);
   console.log('────────────────────────────────────────────────────────');
 
   // ── Anomaly-2 fix (2026-04-23): Global weight decay ─────────────
@@ -261,7 +266,7 @@ async function main() {
   // Decay 3% por run + applyDecay quadrático da CardLearningQueue juntos
   // garantem que cartas que param de aparecer (ou que aparecem e perdem)
   // regridem naturalmente para 1.0 em algumas dezenas de runs.
-  {
+  if (ALLOW_HEURISTIC_FEEDBACK) {
     const db = await getDb();
     if (db) {
       const MIN_WEIGHT = 0.1;
@@ -334,12 +339,14 @@ async function main() {
 
         // Atualizar pesos via queue
         const delta = won ? 0.05 : -0.02;
-        await queue.enqueueBatch(deck.map(c => ({
-          cardName: c.name,
-          delta,
-          source: SOURCE,
-          win: won,
-        })));
+        if (ALLOW_HEURISTIC_FEEDBACK) {
+          await queue.enqueueBatch(deck.map(c => ({
+            cardName: c.name,
+            delta,
+            source: SOURCE,
+            win: won,
+          })));
+        }
       }
     }
 
@@ -358,7 +365,7 @@ async function main() {
   }
 
   // Flush da queue
-  await queue.flush();
+  if (ALLOW_HEURISTIC_FEEDBACK) await queue.flush();
 
   printForgeTrainingComplete(
     totalMatches,

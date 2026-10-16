@@ -1,5 +1,5 @@
 @echo off
-REM Maven-less test runner for the bridge — compiles + executes the
+REM Maven-less test runner for the bridge - compiles and executes the
 REM reflection-based unit tests against the built classes.
 setlocal
 set SCRIPT_DIR=%~dp0

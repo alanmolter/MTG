@@ -1,0 +1,268 @@
+Treino geral completo 
+
+
+Tudo pronto na máquina local. **Status completo:**
+
+## 📋 Comandos semanais — Windows PowerShell
+
+Salve esta rotina. **Abra o PowerShell no diretório `C:\Users\alanr\OneDrive\Desktop\mtg-deck-mvp\` e rode:**
+
+### 🔄 Segunda-feira — Sync + sanity check (5 min)
+
+```powershell
+# 1. Puxar mudanças recentes
+git pull --ff-only origin main
+
+# 2. Garantir Docker Postgres rodando
+docker compose up -d
+docker compose ps             # precisa estar "healthy"
+
+# 3. Re-rodar setup (idempotente — detecta o que já está OK)
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -SkipEmbeddings
+
+# 4. Sanity de todos os testes
+.\.venv\Scripts\python.exe -m pytest ml_engine/
+npx vitest run
+cd forge\rlbridge ; .\test.cmd ; cd ..\..
+```
+
+### 🧠 Diário — Treino leve (9 min, CPU)
+
+```powershell
+npm run teach                 # Commander specialist + self-play
+npm run check:learn           # Relatório de evolução dos pesos
+npm run teach:20              #roda o teach 20 vezes em sequencia
+```
+
+### 🔥 Quando sentar pra sessão longa — Treino pesado (GPU)
+
+```powershell
+# Smoke test de 72s antes de compromisso de horas
+npm run train:ray:smoke
+
+# Treino sério com 24h de budget:
+.\train.ps1 -NumWorkers 4 -NumTrials 4 -BudgetHours 24
+
+# Em outro terminal, acompanhar:
+.\.venv\Scripts\python.exe -m ml_engine.scripts.check_learning_progress
+```
+
+### 🧪 Quando quiser experimentar a Phase 3 autoregressive
+
+```powershell
+$env:MTG_USE_AUTOREGRESSIVE="1"
+.\train.ps1 -NumWorkers 2 -NumTrials 2 -BudgetHours 4
+```
+
+(a flag é lida no orchestrator; se não estiver lendo ainda, `train.ps1` pode expor `-Autoregressive`)
+
+### 💾 Semanal — Calibração + backup
+
+```powershell
+
+npm run calibrate:llm         # ~$0.50 Haiku, corrige drift (domingo)
+
+docker exec mtg-pgvector pg_dump -U postgres -d mtg > "backups\mtg-$(Get-Date -Format 'yyyy-MM-dd').sql"
+```
+
+### 🔧 Se algo quebrar
+
+```powershell
+# 1. Rebuild venv do zero
+.\setup.ps1 -ForceVenv
+
+# 2. Rebuild Forge fat jar (só precisa se forge/ foi atualizado)
+cd forge ; mvn package -pl forge-gui-desktop -am -DskipTests ; cd ..
+
+# 3. Rebuild rlbridge jar
+cd forge\rlbridge ; .\build.cmd ; .\test.cmd ; cd ..\..
+
+# 4. Recriar Docker DB (DESTRÓI DADOS — só como último recurso)
+docker compose down -v ; .\migrate-to-docker.ps1 -SkipDump
+```
+
+### 📊 Checks rápidos de saúde
+
+```powershell
+# DB alive + contagens
+docker exec mtg-pgvector psql -U postgres -d mtg -c "SELECT (SELECT COUNT(*) FROM cards) AS cards, (SELECT COUNT(*) FROM card_learning) AS weights, (SELECT COUNT(*) FROM rl_decisions WHERE processed=false) AS rl_pending;"
+
+# Ver commits recentes
+git log --oneline -10
+
+# Estado do working tree
+git status --short
+```
+
+---
+
+**Tudo que você precisa pra usar a partir de agora está no `main`. Na próxima vez que você ligar o PC, só `git pull` + `.\setup.ps1 -SkipEmbeddings` e já roda.**
+
+
+
+
+Comandos para você rodar no PC
+
+Treino com filtro Arena (novos)
+
+# Treino completo Ray + IMPALA + PBT, restrito ao pool Arena
+npm run train:ray:arena
+
+# Smoke rápido do orchestrator com Arena (~1 minuto)
+npm run train:ray:smoke:arena
+
+# Smoke do env Forge (1 episódio) com decks Arena
+npm run forge:smoke:arena
+
+# Smoke multi-episódio Forge com decks Arena
+npm run forge:smoke:multi:arena
+
+Treino full-catalog (já existiam, sem mudança)
+
+npm run train:ray            # full catalog
+
+npm run train:ray:smoke      # full catalog smoke
+
+npm run forge:smoke          # full catalog (decks paper-Modern hardcoded)
+
+npm run forge:smoke:multi    # full catalog multi-episode
+
+Já existia e continua funcionando
+
+npm run teach                # full catalog (Node-side)
+
+npm run teach:arena          # arena-only (Node-side)
+
+npm run teach:arena:20       # 20 iterações arena
+
+Comando de treino pesado com horas configuráveis
+Opção 1 — Forma mais limpa (PowerShell), passando horas direto pro orchestrator
+$hours = 1
+.venv\Scripts\python.exe -m ml_engine.ray_cluster.orchestrator `
+  --arena-only `
+  --budget-hours $hours `
+  --num-workers 4 `
+  --num-trials 4 `
+  --batch-size 2000 `
+  --checkpoint-freq 10 `
+  --perturbation-interval 20
+Só troca o valor de $hours (aceita decimal — 0.5 = 30 minutos, 12 = 12 horas, 24 = 1 dia, etc.).
+
+Opção 2 — Via npm script com a env var, passando horas como flag extra
+O npm run train:ray:arena já garante o TRAINING_POOL_ARENA_ONLY=1 e o --arena-only. Você só precisa passar --budget-hours extra com --:
+
+npm run train:ray:arena -- --budget-hours 8 --num-workers 4 --num-trials 4 --batch-size 2000
+O -- separador faz o npm repassar tudo pro Python (o jeito que cross-env propaga args).
+
+Referência rápida das flags relevantes
+Flag	Default	O que faz
+--budget-hours
+24.0
+Para após N horas (aceita decimal: 0.5 = 30min)
+--num-workers
+4
+Rollout workers por trial PBT (mais = mais Forge JVMs em paralelo)
+--num-trials
+4
+Tamanho da população PBT (mais = mais hyperparams explorados)
+--batch-size
+500 (CLI)
+Train batch size IMPALA (auto-aligned pra ser múltiplo de rollout-fragment-length)
+--checkpoint-freq
+10
+Salva checkpoint a cada N iterações
+--perturbation-interval
+20
+PBT muta hparams a cada N iterações
+--max-cards
+64
+Cap de nodes na obs (lower = menos RAM)
+--arena-only
+(env var)
+Força Arena pool (ignora env var)
+--deck-seed
+None
+Seed pra archetype matchup (deterministico)
+Recomendações por hardware
+Notebook 8–16 GB RAM, sem GPU dedicada (CPU only):
+
+.venv\Scripts\python.exe -m ml_engine.ray_cluster.orchestrator `
+  --arena-only --budget-hours 4 `
+  --num-workers 2 --num-trials 2 `
+  --batch-size 1000 --max-cards 64
+
+Desktop com RTX 2070S 8GB / 32 GB RAM (4 trials × 4 workers padrão):
+
+.venv\Scripts\python.exe -m ml_engine.ray_cluster.orchestrator `
+  --arena-only --budget-hours 12 `
+  --num-workers 4 --num-trials 4 `
+  --batch-size 2000 --max-cards 64
+Sessão noturna 24h, máquina dedicada:
+
+
+.venv\Scripts\python.exe -m ml_engine.ray_cluster.orchestrator `
+  --arena-only --budget-hours 24 `
+  --num-workers 4 --num-trials 4 `
+  --batch-size 2000 --max-cards 64 `
+  --checkpoint-freq 10 --perturbation-interval 20
+
+Dica: setar a GPU explicitamente
+Se quiser forçar fração de GPU por trial (default = 0.25 quando CUDA disponível):
+
+$env:MTG_GPU_PER_TRIAL = "0.5"   # cada trial pega metade da GPU (max 2 trials simultâneos)
+.venv\Scripts\python.exe -m ml_engine.ray_cluster.orchestrator --arena-only --budget-hours 8 --num-workers 2 --num-trials 2
+
+Para CPU forçada:
+
+$env:MTG_GPU_PER_TRIAL = "0"
+
+
+
+
+# 1. Importar decks competitivos com filtro Arena (~10-15 min)
+npm run import:competitive:arena
+Saída esperada na seção do tournament signal:
+
+SINAL DE TORNEIO → card_learning
+  Pool scope         : Arena-only
+  (cartas não-Arena serão registradas mas não receberão delta)
+  Decks recentes (últimas 48h): 60-120
+  Cartas únicas identificadas: ~3500
+  Filtrados (não-Arena)      : ~1800   ← cartas Modern/Legacy/etc descartadas
+  Cartas Arena restantes     : ~1700
+  Cartas reforçadas : ~1700
+
+# 2. Treinar 20 ciclos no pool Arena (drena bias herdado)
+npm run teach:arena:20
+
+# 3. Calibrar via LLM no pool Arena
+npm run calibrate:llm
+
+# 4. (Opcional pesado) Ray IMPALA Arena
+npm run train:ray:smoke:arena    # valida em 2 min
+npm run train:ray:arena          # treino completo
+
+npm run train:visual:historic:auto   # demonstração visual
+
+
+
+$env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5434/mtg"
+.venv\Scripts\python.exe -m ml_engine.ray_cluster.orchestrator --arena-only --budget-hours 1 --num-workers 2 --num-trials 2
+
+
+.venv\Scripts\python.exe -m ml_engine.ray_cluster.orchestrator --arena-only --budget-hours 1 --num-workers 1 --num-trials 4
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+Antes de iniciar, vale rodar         .\scripts\purge-stale-pbt.ps1
+
+
+$env:TRAINING_POOL_ARENA_ONLY="1"; .\train.ps1 -NumWorkers 4 -NumTrials 4 -BudgetHours 8 -BatchSize 1000 -RolloutFragmentLength 50 -MaxCards 48 -CheckpointFreq 10 -PerturbationInterval 10
+
+
+.\pipeline.ps1       valida com 1 partida Forge + diagnóstico.
+
+npm run teach:arena:12h
+
+

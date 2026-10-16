@@ -24,6 +24,7 @@ Run locally:
 from __future__ import annotations
 
 import importlib
+import csv
 
 import pytest
 
@@ -81,6 +82,17 @@ def test_align_batch_size_warns_on_stderr(capsys):
     assert "TRAINING_TROUBLESHOOTING.md" in captured.err
 
 
+def test_read_metric_supports_ray_flat_and_nested_result_shapes():
+    assert orchestrator._read_metric(
+        {"env_runners/episode_return_mean": 0.25},
+        "env_runners/episode_return_mean",
+    ) == 0.25
+    assert orchestrator._read_metric(
+        {"env_runners": {"episode_return_mean": 0.5}},
+        "env_runners/episode_return_mean",
+    ) == 0.5
+
+
 # ── build_impala_config contract ───────────────────────────────────────────
 
 
@@ -109,6 +121,31 @@ def test_build_config_plumbs_max_cards_into_env_config():
     assert env_cfg.get("max_cards") == 32, (
         "max_cards must reach the env so the obs dim stays bounded."
     )
+    assert env_cfg.get("use_autoregressive_actions") is False
+    assert env_cfg.get("require_policy_control") is True
+
+
+def test_stable_trial_selection_uses_tail_mean_not_single_peak(tmp_path):
+    class Trial:
+        def __init__(self, trial_id, values):
+            self.trial_id = trial_id
+            self.local_path = str(tmp_path / trial_id)
+            path = tmp_path / trial_id
+            path.mkdir()
+            with (path / "progress.csv").open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["env_runners/episode_return_mean"])
+                writer.writeheader()
+                for value in values:
+                    writer.writerow({"env_runners/episode_return_mean": value})
+
+    spiky = Trial("spiky", [5.0, -1.0, -1.0, -1.0])
+    stable = Trial("stable", [0.6, 0.7, 0.8, 0.9])
+    best, score, summaries = orchestrator._select_stable_trial(
+        [spiky, stable], ["env_runners/episode_return_mean"]
+    )
+    assert best.trial_id == "stable"
+    assert score == pytest.approx(0.75)
+    assert {entry["trial_id"] for entry in summaries} == {"spiky", "stable"}
 
 
 def test_build_config_default_max_cards_is_memory_safe():

@@ -28,6 +28,8 @@ State is also persisted to `league_state` table in Postgres (mirror of JSON).
 from __future__ import annotations
 
 import argparse
+import csv
+import json
 import os
 import random
 import sys
@@ -43,7 +45,40 @@ except ImportError as e:  # pragma: no cover
     raise ImportError(f"ray + tune required: install via requirements.txt ({e})")
 
 
-def _gpu_per_trial() -> float:
+def _available_gpu_count() -> int:
+    """Return CUDA devices visible to this Python process, never raising."""
+    try:
+        import torch  # noqa: WPS433 - lazy import keeps CPU-only envs cheap
+        return torch.cuda.device_count() if torch.cuda.is_available() else 0
+    except ImportError:
+        return 0
+
+
+def _unsupported_cuda_devices() -> List[str]:
+    """Describe visible GPUs whose compute capability has no PyTorch kernel.
+
+    Allocating such a device to Ray makes the learner die much later with the
+    opaque `cudaErrorNoKernelImageForDevice`.  Detect it before Ray starts so
+    the terminal tells the operator exactly which CUDA_VISIBLE_DEVICES value to
+    use while upgrading PyTorch.
+    """
+    try:
+        import torch  # noqa: WPS433
+        if not torch.cuda.is_available():
+            return []
+        supported = set(torch.cuda.get_arch_list())
+        bad: List[str] = []
+        for idx in range(torch.cuda.device_count()):
+            major, minor = torch.cuda.get_device_capability(idx)
+            arch = f"sm_{major}{minor}"
+            if arch not in supported:
+                bad.append(f"cuda:{idx} {torch.cuda.get_device_name(idx)} ({arch}; torch supports {sorted(supported)})")
+        return bad
+    except (ImportError, RuntimeError):
+        return []
+
+
+def _gpu_per_trial(num_trials: Optional[int] = None) -> float:
     """Return the GPU fraction each PBT trial requests from Ray.
 
     Priority:
@@ -64,12 +99,14 @@ def _gpu_per_trial() -> float:
             return max(0.0, min(1.0, float(env_override)))
         except ValueError:
             pass
-    try:
-        import torch  # noqa: WPS433 - lazy import keeps CPU-only envs cheap
-        if torch.cuda.is_available():
-            return 0.25
-    except ImportError:
-        pass
+    gpu_count = _available_gpu_count()
+    if gpu_count:
+        # One complete GPU per trial is the safest default when the population
+        # fits the available devices. For a larger PBT population Ray receives
+        # an honest fractional request and schedules it across all devices.
+        if num_trials and num_trials > gpu_count:
+            return max(0.25, min(1.0, gpu_count / num_trials))
+        return 1.0
     return 0.0
 
 
@@ -149,6 +186,9 @@ def _validate_batch_alignment(train_batch_size: int, rollout_fragment_length: in
         )
 
 
+DEFAULT_TURN_LIMIT_FOR_TRAINING = 50
+
+
 def build_impala_config(
     num_workers: int,
     train_batch_size: int,
@@ -157,6 +197,8 @@ def build_impala_config(
     max_cards: int = DEFAULT_MAX_CARDS_FOR_TRAINING,
     arena_only: Optional[bool] = None,
     deck_seed: Optional[int] = None,
+    turn_limit: int = DEFAULT_TURN_LIMIT_FOR_TRAINING,
+    gpu_per_trial: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Compose an IMPALA config with our custom env + GNN model + PBT-friendly hparams.
 
@@ -198,12 +240,20 @@ def build_impala_config(
 
     env_config: Dict[str, Any] = {
         "opponent_pool_path": opponent_pool_path,
-        "turn_limit": 50,
+        "turn_limit": turn_limit,
         "step_timeout": 10.0,
         # Cap obs size to avoid the 40 MiB×N_workers dummy-batch
         # allocation storm on memory-constrained systems. See
         # TRAINING_TROUBLESHOOTING.md → "Unable to allocate 40 MiB".
         "max_cards": max_cards,
+        # A reward is meaningful only when the Ray policy controls Forge.
+        # Train on the dynamically masked discrete action set for now: pass
+        # plus the spell abilities Forge exposes as legal at this decision.
+        # It is dramatically more sample-efficient than an unmasked 65k
+        # autoregressive Cartesian product. The native triple remains
+        # available for the future combat/target-aware policy.
+        "use_autoregressive_actions": False,
+        "require_policy_control": True,
     }
 
     if arena_only:
@@ -235,9 +285,7 @@ def build_impala_config(
             num_env_runners=num_workers,
             rollout_fragment_length=rollout_fragment_length,
         )
-        .resources(
-            num_gpus=_gpu_per_trial(),
-        )
+        .resources(num_gpus=_gpu_per_trial() if gpu_per_trial is None else gpu_per_trial)
         .training(
             train_batch_size=train_batch_size,
             lr=3e-4,
@@ -301,6 +349,69 @@ class LeagueManager:
 # ── Main entrypoint ─────────────────────────────────────────────────────────
 
 
+def _is_under_onedrive(path: str) -> bool:
+    """Return True if `path` resolves into a OneDrive-synced directory.
+
+    OneDrive holds files open during sync, which races Ray Tune's PBT exploit
+    step (copy + reopen of result.json) and crashes the orchestrator with
+    WinError 32 / Errno 13. We detect by looking for "OneDrive" anywhere in
+    the path components and by checking the documented OneDrive env vars.
+    """
+    try:
+        norm = os.path.normcase(os.path.abspath(path))
+    except Exception:
+        return False
+    parts = norm.replace("\\", "/").split("/")
+    if any("onedrive" in p for p in parts):
+        return True
+    for var in ("OneDrive", "OneDriveCommercial", "OneDriveConsumer"):
+        root = os.environ.get(var)
+        if not root:
+            continue
+        try:
+            root_norm = os.path.normcase(os.path.abspath(root))
+        except Exception:
+            continue
+        if norm == root_norm or norm.startswith(root_norm + os.sep):
+            return True
+    return False
+
+
+def _resolve_storage_path() -> str:
+    """Pick a Ray Tune storage_path that is safe from OneDrive file locks.
+
+    Priority:
+      1. RAY_RESULTS_DIR env var (explicit override always wins, but we warn
+         loudly if the user pointed it back into OneDrive).
+      2. If cwd is under OneDrive on Windows, default to
+         %LOCALAPPDATA%\\mtg-deck-mvp\\ray_results (outside any sync root).
+      3. Otherwise ./ray_results next to the project.
+    """
+    override = os.getenv("RAY_RESULTS_DIR")
+    if override:
+        resolved = os.path.abspath(override)
+        if _is_under_onedrive(resolved):
+            print(
+                f"[orchestrator] WARNING: RAY_RESULTS_DIR={resolved!r} is under "
+                "OneDrive. PBT runs WILL crash mid-training when OneDrive locks "
+                "result.json (WinError 32). Move it outside any synced folder.",
+                file=sys.stderr,
+            )
+        return resolved
+
+    default = os.path.abspath("./ray_results")
+    if sys.platform == "win32" and _is_under_onedrive(default):
+        local_app = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
+        safe = os.path.join(local_app, "mtg-deck-mvp", "ray_results")
+        print(
+            f"[orchestrator] cwd is under OneDrive; redirecting ray_results to "
+            f"{safe} to avoid sync-induced file locks. Override with RAY_RESULTS_DIR.",
+            file=sys.stderr,
+        )
+        return safe
+    return default
+
+
 def _align_batch_size(train_batch_size: int, rollout_fragment_length: int) -> int:
     """Bump train_batch_size up to the next multiple of rollout_fragment_length.
 
@@ -320,6 +431,90 @@ def _align_batch_size(train_batch_size: int, rollout_fragment_length: int) -> in
     return aligned
 
 
+def _find_latest_experiment(storage_path: str) -> Optional[str]:
+    """Return the newest `pbt_mtg_*` experiment dir name under storage_path.
+
+    Used by `--resume latest` so the user doesn't have to copy-paste a
+    timestamp. Returns None if storage_path doesn't exist or has no matches.
+    """
+    root = Path(storage_path)
+    if not root.is_dir():
+        return None
+    candidates = [p for p in root.iterdir() if p.is_dir() and p.name.startswith("pbt_mtg_")]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0].name
+
+
+def _read_metric(result: Dict[str, Any], key: str) -> Optional[float]:
+    """Read a Ray metric stored either as a flattened slash-key or nested dict."""
+    value: Any = result.get(key)
+    if value is None:
+        value = result
+        for part in key.split("/"):
+            if not isinstance(value, dict):
+                value = None
+                break
+            value = value.get(part)
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _trial_metric_history(trial: Any, metric_keys: List[str]) -> List[float]:
+    """Read a trial's recorded reward history, independent of Ray version."""
+    local_path = getattr(trial, "local_path", None) or getattr(trial, "logdir", None)
+    if not local_path:
+        return []
+    progress = Path(str(local_path)) / "progress.csv"
+    if not progress.is_file():
+        return []
+    values: List[float] = []
+    try:
+        with progress.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                for key in metric_keys:
+                    raw = row.get(key)
+                    try:
+                        if raw not in (None, ""):
+                            values.append(float(raw))
+                            break
+                    except (TypeError, ValueError):
+                        continue
+    except OSError:
+        return []
+    return values
+
+
+def _stable_tail_score(history: List[float], window: int = 20) -> Optional[float]:
+    """Conservative score: mean of the latest completed reward windows."""
+    if not history:
+        return None
+    tail = history[-max(1, window):]
+    return sum(tail) / len(tail)
+
+
+def _select_stable_trial(trials: List[Any], metric_keys: List[str]) -> tuple[Any, Optional[float], List[Dict[str, Any]]]:
+    """Return the trial with the best sustained tail, plus audit summaries."""
+    best_trial: Any = None
+    best_score: Optional[float] = None
+    summaries: List[Dict[str, Any]] = []
+    for trial in trials:
+        history = _trial_metric_history(trial, metric_keys)
+        score = _stable_tail_score(history)
+        summaries.append({
+            "trial_id": getattr(trial, "trial_id", "unknown"),
+            "observations": len(history),
+            "tail_score": score,
+            "last_reward": history[-1] if history else None,
+        })
+        if score is not None and (best_score is None or score > best_score):
+            best_trial, best_score = trial, score
+    return best_trial, best_score, summaries
+
+
 def run(
     num_workers: int = 4,
     num_trials: int = 4,
@@ -331,11 +526,41 @@ def run(
     max_cards: int = DEFAULT_MAX_CARDS_FOR_TRAINING,
     arena_only: Optional[bool] = None,
     deck_seed: Optional[int] = None,
+    resume: Optional[str] = None,
+    turn_limit: int = DEFAULT_TURN_LIMIT_FOR_TRAINING,
+    archetypes: Optional[str] = None,
+    gpu_per_trial: Optional[float] = None,
 ):
     """Kick off the PBT + IMPALA job."""
+    unsupported = _unsupported_cuda_devices()
+    if unsupported:
+        raise SystemExit(
+            "[orchestrator] refusing unsafe GPU allocation:\n  - "
+            + "\n  - ".join(unsupported)
+            + "\nSet CUDA_VISIBLE_DEVICES to a compatible GPU or install a PyTorch build "
+              "that supports this compute capability before training."
+        )
     # Auto-align the batch size BEFORE ray.init so the user sees the warning
     # before any subprocesses spin up.
     train_batch_size = _align_batch_size(train_batch_size, rollout_fragment_length)
+    available_gpus = _available_gpu_count()
+    allocated_gpu = _gpu_per_trial(num_trials) if gpu_per_trial is None else gpu_per_trial
+    print(
+        f"[orchestrator] GPU plan: visible={available_gpus}, trials={num_trials}, "
+        f"gpu_per_trial={allocated_gpu}. "
+        + ("Ray will schedule across the visible CUDA devices." if allocated_gpu > 0 else
+           "CPU fallback; install a CUDA-enabled PyTorch build to enable GPUs."),
+        file=sys.stderr,
+    )
+
+    # Curriculum: --archetypes feeds the env var that arena_pool reads.
+    # Done here (not in main()) so programmatic callers benefit too.
+    if archetypes:
+        os.environ["TRAINING_ARCHETYPES"] = archetypes
+        print(
+            f"[orchestrator] curriculum mode: restricting archetypes to {archetypes}",
+            file=sys.stderr,
+        )
 
     # Surface the active pool BEFORE ray spins up so a misconfigured run is
     # obvious in the first 10 lines of stdout. We import here (not at module
@@ -367,19 +592,28 @@ def run(
     register_env()
     register_gnn()
 
-    storage_path = os.path.abspath(os.getenv("RAY_RESULTS_DIR", "./ray_results"))
+    storage_path = _resolve_storage_path()
     Path(storage_path).mkdir(parents=True, exist_ok=True)
     opponent_pool_path = os.path.join(storage_path, "league_state.json")
 
     # Ray 2.11+ exposes episode rewards under `env_runners/episode_reward_mean`
     # (nested metric name), not the legacy top-level `episode_reward_mean`.
+    # Ray 2.40+ further renamed `*_reward_mean` to `*_return_mean` in IMPALA's
+    # progress.csv (visible in trial result tables). PBT still resolves the old
+    # name internally, so we keep `metric_key` as the PBT contract; for the
+    # post-run print we read both keys (see _read_best_reward below).
     metric_key = "env_runners/episode_reward_mean"
+    metric_key_alt = "env_runners/episode_return_mean"
+    # A two-member population should immediately replace a persistently losing
+    # member with a mutated copy of the leader. Larger populations retain more
+    # exploration rather than collapsing into the first apparent winner.
+    pbt_resample_probability = 1.0 if num_trials <= 2 else 0.25
     pbt = PopulationBasedTraining(
         time_attr="training_iteration",
         metric=metric_key,
         mode="max",
         perturbation_interval=perturbation_interval,
-        resample_probability=0.25,
+        resample_probability=pbt_resample_probability,
         hyperparam_mutations=PBT_MUTATIONS,
     )
 
@@ -391,11 +625,35 @@ def run(
         max_cards=max_cards,
         arena_only=arena_only,
         deck_seed=deck_seed,
+        turn_limit=turn_limit,
+        gpu_per_trial=allocated_gpu,
     )
 
-    analysis = tune.run(
-        "IMPALA",
-        name=f"pbt_mtg_{int(time.time())}",
+    if resume:
+        if resume == "latest":
+            experiment_name = _find_latest_experiment(storage_path)
+            if experiment_name is None:
+                raise SystemExit(
+                    f"[orchestrator] --resume latest: no pbt_mtg_* experiments under "
+                    f"{storage_path}. Start a fresh run or copy an existing experiment "
+                    f"directory there first."
+                )
+        else:
+            experiment_name = resume
+            if not (Path(storage_path) / experiment_name).is_dir():
+                raise SystemExit(
+                    f"[orchestrator] --resume {experiment_name!r}: directory not found "
+                    f"under {storage_path}. Did you copy the old experiment over?"
+                )
+        print(
+            f"[orchestrator] resuming experiment {experiment_name} from {storage_path}",
+            file=sys.stderr,
+        )
+    else:
+        experiment_name = f"pbt_mtg_{int(time.time())}"
+
+    tune_kwargs: Dict[str, Any] = dict(
+        name=experiment_name,
         scheduler=pbt,
         num_samples=num_trials,
         config=config,
@@ -406,12 +664,63 @@ def run(
         verbose=1,
         max_failures=2,
     )
+    if resume:
+        tune_kwargs["resume"] = "AUTO"
 
-    best = analysis.get_best_trial(metric_key, mode="max")
+    analysis = tune.run("IMPALA", **tune_kwargs)
+
+    metric_keys = [metric_key, metric_key_alt, "episode_reward_mean", "episode_return_mean"]
+    best, stable_score, trial_summaries = _select_stable_trial(list(analysis.trials), metric_keys)
     if best:
-        reward = best.last_result.get(metric_key) or 0.0
-        print(f"[orchestrator] best trial: {best.trial_id} reward={reward:.3f}")
-        print(f"[orchestrator] checkpoint: {best.checkpoint}")
+        # Ray reports the metric under different keys depending on version
+        # (reward_mean -> return_mean rename). Try both before falling back to
+        # 0.0 so the print isn't a misleading "reward=0.000" when the trial
+        # actually returned non-zero (e.g. the +0.229 we saw on trial 00003
+        # while the print said 0.000).
+        last = best.last_result or {}
+        reward = stable_score
+        if reward is None:
+            reward = _read_metric(last, metric_key)
+        if reward is None:
+            reward = _read_metric(last, metric_key_alt)
+        if reward is None:
+            reward = 0.0
+        checkpoint = str(best.checkpoint) if best.checkpoint else None
+        print(f"[orchestrator] stable best trial: {best.trial_id} tail_reward={reward:.3f}")
+        print(f"[orchestrator] checkpoint: {checkpoint}")
+
+        # A champion is only a *candidate* for serving. The Node quality gate
+        # additionally requires clean deck data and recorded Forge labels.
+        champion_path = Path(storage_path) / "ray_champion.json"
+        previous = {}
+        try:
+            previous = json.loads(champion_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            pass
+        baseline = float(previous.get("reward", 0.0) or 0.0)
+        promoted = checkpoint is not None and reward > 0.0 and reward > baseline
+        report = {
+            "trial_id": best.trial_id,
+            "reward": reward,
+            "selection_metric": "mean_of_last_20_recorded_reward_windows",
+            "trial_summaries": trial_summaries,
+            "baseline_reward": baseline,
+            "checkpoint": checkpoint,
+            "promoted": promoted,
+            "reason": "strictly_beats_positive_stable_baseline" if promoted else "did_not_beat_positive_stable_baseline",
+            "visible_gpus": available_gpus,
+            "gpu_per_trial": allocated_gpu,
+            "pbt_resample_probability": pbt_resample_probability,
+            "created_at": time.time(),
+        }
+        (Path(storage_path) / experiment_name / "promotion_report.json").write_text(
+            json.dumps(report, indent=2), encoding="utf-8"
+        )
+        if promoted:
+            champion_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+            print("[orchestrator] PROMOTED: checkpoint passed Ray baseline gate; run training quality gate before serving.")
+        else:
+            print("[orchestrator] NOT PROMOTED: checkpoint retained only as an experiment artifact.")
     else:
         print("[orchestrator] no trials finished successfully", file=sys.stderr)
 
@@ -432,6 +741,12 @@ def main():
         type=int,
         default=500,
         help="train batch size (must be multiple of rollout-fragment-length; auto-bumped if not)",
+    )
+    p.add_argument(
+        "--gpu-per-trial",
+        type=float,
+        default=None,
+        help="Ray GPU reservation per trial. Default: one GPU per trial when possible; use 0 for CPU.",
     )
     p.add_argument("--checkpoint-freq", type=int, default=10)
     p.add_argument("--perturbation-interval", type=int, default=20)
@@ -474,6 +789,30 @@ def main():
         default=None,
         help="seed for the Arena-only archetype matchup picker (deterministic when set)",
     )
+    p.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        metavar="EXPERIMENT",
+        help="resume a previous PBT run by experiment dir name (e.g. pbt_mtg_1778128357), "
+             "or 'latest' to pick the newest under storage_path",
+    )
+    p.add_argument(
+        "--turn-limit",
+        type=int,
+        default=DEFAULT_TURN_LIMIT_FOR_TRAINING,
+        help="max turns per episode before truncation (default: 50). "
+             "Lower (e.g. 30) reduces episode-length variance and speeds throughput.",
+    )
+    p.add_argument(
+        "--archetypes",
+        type=str,
+        default=None,
+        metavar="LIST",
+        help="comma-separated curriculum subset of arena archetypes "
+             "(e.g. aggro_red,control_uw,midrange_bg). Sets TRAINING_ARCHETYPES; "
+             "default samples all 15.",
+    )
     args = p.parse_args()
     run(
         num_workers=args.num_workers,
@@ -486,6 +825,10 @@ def main():
         max_cards=args.max_cards,
         arena_only=args.arena_only,
         deck_seed=args.deck_seed,
+        resume=args.resume,
+        turn_limit=args.turn_limit,
+        archetypes=args.archetypes,
+        gpu_per_trial=args.gpu_per_trial,
     )
 
 

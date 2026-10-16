@@ -7,10 +7,10 @@ detected and punished, or training wastes GPU hours grinding a zero-info loop.
 
 Strategy — three-layered:
 
-  1. State-hash counter: if the canonical-hash (life_totals, battlefield,
-     graveyards, hand_sizes, phase) repeats >`loop_threshold` times within
-     a window, we flag the last action as toxic and terminate the game with
-     a strong negative reward.
+  1. State-hash counter: after meaningful actions, if the canonical-hash
+     (life_totals, battlefield, graveyards, hand_sizes, phase) repeats
+     `loop_threshold` times within a window, we flag the last action as toxic.
+     Priority passes and other no-op decisions are not evidence of a loop.
 
   2. Toxic action ledger: persist (card_id, action_type, context_hash) →
      `toxic_actions` table so future PBT generations inherit the aversion
@@ -63,6 +63,8 @@ class LoopState:
     state_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     state_window: Deque[str] = field(default_factory=lambda: deque(maxlen=50))
     action_history: Deque[Mapping[str, Any]] = field(default_factory=lambda: deque(maxlen=200))
+    action_sequence: int = 0
+    observed_action_sequence: int = 0
     flagged: bool = False
     flagged_action: Optional[Mapping[str, Any]] = None
 
@@ -110,6 +112,7 @@ class LoopGuard:
     def record_action(self, action: Mapping[str, Any]) -> None:
         """Append an action to the rolling history. Use before observe()."""
         self._loop_state.action_history.append(action)
+        self._loop_state.action_sequence += 1
 
     def observe(self, state: Mapping[str, Any]) -> Tuple[bool, Optional[ToxicAction]]:
         """Record a state and check for loops.
@@ -118,6 +121,17 @@ class LoopGuard:
             (is_loop, toxic_action_or_None)
             is_loop = True means terminate episode with toxic_penalty.
         """
+        tracker = self._loop_state
+        # Forge may issue several legitimate priority/target callbacks without
+        # changing any of the fields in canonical_state_hash. Only a fresh,
+        # meaningful action can provide evidence that the policy is looping.
+        if tracker.observed_action_sequence == tracker.action_sequence:
+            return False, None
+        tracker.observed_action_sequence = tracker.action_sequence
+        latest_action = tracker.action_history[-1]
+        if latest_action.get("type") in ("pass", "priority", "noop"):
+            return False, None
+
         state_hash = canonical_state_hash(state)
 
         # Trim oldest state from the counter if our window is full

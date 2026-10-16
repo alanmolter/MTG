@@ -44,6 +44,8 @@ import {
   cards,
   competitiveDecks,
   competitiveDeckCards,
+  forgeMatches,
+  trainingRuns,
 } from "../../drizzle/schema";
 import { closeDb, getDb } from "../db";
 import { getCardLearningQueue } from "../services/cardLearningQueue";
@@ -61,6 +63,9 @@ const DECK_TARGET_SIZE = 60;
 const MAX_BASIC_PAD = 4;
 const PREFLIGHT_ONLY = process.argv.includes("--preflight-only");
 const AUTO_VISUAL_MATCH = process.argv.includes("--auto") || process.env.VISUAL_AUTO_MATCH === "1";
+const APPLY_LEARNING_SIGNAL = process.argv.includes("--apply-learning-signal");
+const candidateCheckpointArg = process.argv.indexOf("--candidate-checkpoint");
+const CANDIDATE_CHECKPOINT = candidateCheckpointArg >= 0 ? process.argv[candidateCheckpointArg + 1] : undefined;
 const MIN_FORGE_GUI_LIFETIME_MS = 8_000;
 const VISUAL_AUTO_RESULT_PREFIX = "VISUAL_AUTO_MATCH_RESULT ";
 const FORGE_JVM_OPENS = [
@@ -84,6 +89,13 @@ const FORGE_JVM_OPENS = [
 // Reward signal — same magnitudes as applyTournamentSignal, just per-card here.
 const DELTA_WIN = 0.10;
 const DELTA_LOSS = -0.04;
+
+function normalizeCheckpoint(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const embedded = /path=([^)]+)/.exec(value)?.[1];
+  const raw = (embedded ?? value).trim();
+  return raw ? path.normalize(path.resolve(raw)) : null;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -257,6 +269,7 @@ async function preflight(db: any): Promise<{ arenaCards: number; eligibleDecks: 
     .from(competitiveDecks)
     .where(and(
       eq(competitiveDecks.isSynthetic, false),
+      eq(competitiveDecks.isTrainingEligible, true),
       inArray(competitiveDecks.format, HISTORIC_COMPATIBLE_SOURCE_FORMATS),
     ));
 
@@ -671,6 +684,7 @@ async function pickTwoArenaDecksFromImports(db: any): Promise<PickedDeck[]> {
     .from(competitiveDecks)
     .where(and(
       eq(competitiveDecks.isSynthetic, false),
+      eq(competitiveDecks.isTrainingEligible, true),
       inArray(competitiveDecks.format, HISTORIC_COMPATIBLE_SOURCE_FORMATS),
     ))
     .orderBy(sql`RANDOM()`)
@@ -897,7 +911,52 @@ async function launchForgeGui(jarPath: string, deckFiles?: string[]): Promise<Fo
 
 // ── Learning signal ──────────────────────────────────────────────────────────
 
-async function applyMatchSignal(winnerDeck: PickedDeck | null, loserDeck: PickedDeck | null) {
+async function recordForgeMatch(
+  db: any,
+  winnerDeck: PickedDeck | null,
+  loserDeck: PickedDeck | null,
+  result?: ForgeLaunchResult["autoResult"],
+) {
+  // Evaluation is immutable evidence. It is intentionally recorded before any
+  // optional update and carries the candidate identity used by promotion.
+  await db.insert(forgeMatches).values({
+    winner: winnerDeck?.id ?? null,
+    turns: result?.turns ?? null,
+    rawJson: JSON.stringify({
+      engine: "forge_gui",
+      winnerDeckId: winnerDeck?.id ?? null,
+      loserDeckId: loserDeck?.id ?? null,
+      winnerName: winnerDeck?.name ?? null,
+      loserName: loserDeck?.name ?? null,
+      outcome: result?.outcome ?? null,
+      evaluationMode: APPLY_LEARNING_SIGNAL ? "post_promotion_learning" : "pre_promotion_evaluation",
+      candidateCheckpoint: normalizeCheckpoint(CANDIDATE_CHECKPOINT),
+      // ForgeRLBridge currently drives both sides with Forge AI. This match is
+      // valuable deck evidence, but it is NOT evidence that a Ray checkpoint
+      // chose the actions. Promotion must not confuse the two.
+      policyControlled: false,
+      policyControlReason: "forge_rlbridge_external_actions_not_wired",
+      learningSignalApplied: APPLY_LEARNING_SIGNAL,
+      recordedAt: new Date().toISOString(),
+    }),
+  });
+}
+
+async function candidateIsApproved(db: any, candidate: string): Promise<boolean> {
+  const normalized = normalizeCheckpoint(candidate);
+  if (!normalized) return false;
+  const runs = await db.select({ artifactPath: trainingRuns.artifactPath })
+    .from(trainingRuns)
+    .where(eq(trainingRuns.status, "approved_for_policy_evaluation"));
+  return runs.some((run: { artifactPath: string | null }) => normalizeCheckpoint(run.artifactPath) === normalized);
+}
+
+async function applyMatchSignal(
+  db: any,
+  winnerDeck: PickedDeck | null,
+  loserDeck: PickedDeck | null,
+) {
+
   const queue = getCardLearningQueue();
   let plus = 0;
   let minus = 0;
@@ -1054,11 +1113,24 @@ async function main() {
   console.log(`  Formato da partida    : ${HISTORIC_TABLE_FORMAT}`);
   console.log(`  Forge mode            : GUI desktop (não-headless, visual)`);
   console.log(`  Quantidade de partidas: 1`);
+  console.log(`  Modo                  : ${APPLY_LEARNING_SIGNAL ? "aprendizado pós-promoção" : "avaliação pré-promoção (somente evidência)"}`);
+  console.log(`  Candidato             : ${normalizeCheckpoint(CANDIDATE_CHECKPOINT) ?? "não vinculado (não conta para promoção)"}`);
+  if (CANDIDATE_CHECKPOINT && !APPLY_LEARNING_SIGNAL) {
+    console.log("  Nota: Forge GUI ainda usa IA interna; esta partida não valida a política Ray e não conta para promoção.");
+  }
 
   const db = await getDb();
   if (!db) {
     console.error("\n[ERRO] Banco de dados indisponível. Verifique Postgres.");
     process.exit(1);
+  }
+  if (APPLY_LEARNING_SIGNAL) {
+    if (!CANDIDATE_CHECKPOINT) {
+      throw new Error("--apply-learning-signal exige --candidate-checkpoint <checkpoint aprovado>");
+    }
+    if (!(await candidateIsApproved(db, CANDIDATE_CHECKPOINT))) {
+      throw new Error("o checkpoint informado não foi aprovado; sinais de aprendizado permanecem bloqueados");
+    }
   }
 
   // 1. Pre-flight ────────────────────────────────────────────────────────────
@@ -1172,15 +1244,21 @@ async function main() {
   }
 
   if (winnerIdx === -2) {
-    console.log("  Empate registrado — nenhum sinal aplicado.");
+    await recordForgeMatch(db, null, null, forgeRun.autoResult);
+    console.log("  Empate registrado como evidência — nenhum sinal aplicado.");
   } else {
     const winnerDeck = decks[winnerIdx];
     const loserDeck = decks[1 - winnerIdx];
     console.log(`  Vencedor : ${winnerDeck.name}`);
     console.log(`  Perdedor : ${loserDeck.name}`);
     console.log("");
-    console.log("  Aplicando sinal de aprendizado em card_learning...");
-    await applyMatchSignal(winnerDeck, loserDeck);
+    await recordForgeMatch(db, winnerDeck, loserDeck, forgeRun.autoResult);
+    if (APPLY_LEARNING_SIGNAL) {
+      console.log("  Checkpoint aprovado: aplicando sinal em card_learning...");
+      await applyMatchSignal(db, winnerDeck, loserDeck);
+    } else {
+      console.log("  Evidência registrada; card_learning não foi alterado (gate pré-promoção).");
+    }
   }
 
   // 6. Report learning level ─────────────────────────────────────────────────

@@ -1,18 +1,7 @@
-"""
-Phase 3 regression — MtgForgeEnv emits native autoregressive JSON.
+"""The Forge discrete action mask is a complete, fail-closed contract.
 
-The pre-fix code packed MultiDiscrete([4, 128, 128]) triples into a flat int
-via `flat = type*S*T + source*T + target` and then `flat % 512`. With 65_536
-possible triples mapping onto 512 flat slots, ~99% of distinct triples
-collided to the same Forge action — catastrophic for training.
-
-These tests lock in the new contract:
-
-1. use_autoregressive_actions=True → {"cmd":"step_autoregressive",
-   "action_base":..., "source_id":..., "target_id":...} with NO modulo.
-2. use_autoregressive_actions=False → legacy {"cmd":"step", "action":<int>}.
-3. Triples that previously collided now travel intact (no mod 512).
-4. Scalar sent in AR mode → defensive fallback to (3, 0, 0) "pass", no crash.
+The bridge's autoregressive endpoint currently supports only pass.  Training
+must reject that action space until conditional legal masks exist there.
 """
 from __future__ import annotations
 
@@ -23,8 +12,6 @@ import numpy as np
 import pytest
 
 from ml_engine.ray_cluster.env import MtgForgeEnv
-from ml_engine.forge_worker.loop_guard import LoopGuard
-from ml_engine.forge_worker.reward_shaper import RewardShaper
 
 
 # ── Fakes ────────────────────────────────────────────────────────────────────
@@ -53,6 +40,8 @@ class _FakeProc:
 def _minimal_state(**overrides) -> Dict[str, Any]:
     s: Dict[str, Any] = {
         "terminal": False, "outcome": None, "illegal_action": False,
+        "policy_controlled": True,
+        "policy_action_applied": True,
         "turn": 1, "life_you": 20, "life_opp": 20,
         "hand_you_size": 7, "hand_opp_size": 7,
         "power_you": 0, "power_opp": 0, "mana_value_played": 0,
@@ -65,13 +54,16 @@ def _minimal_state(**overrides) -> Dict[str, Any]:
         "cards": [],
         "controlled_by_edges": [], "in_zone_edges": [],
         "synergy_edges": [], "attacks_edges": [],
-        "action_mask": [1] * 512,
+        "action_mask": [1] + [0] * 511,
+        "action_source_indices": [-1] * 512,
+        "action_target_indices": [-1] * 512,
+        "action_kinds": [0] * 512,
     }
     s.update(overrides)
     return s
 
 
-def _make_env(*, autoregressive: bool) -> MtgForgeEnv:
+def _make_env(*, autoregressive: bool = False) -> MtgForgeEnv:
     """Build an env without spawning a Forge subprocess. Tests inject
     their own _FakeProc directly onto env._proc."""
     env = MtgForgeEnv(config={
@@ -88,93 +80,270 @@ def _make_env(*, autoregressive: bool) -> MtgForgeEnv:
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
-def test_autoregressive_emits_native_triple():
-    env = _make_env(autoregressive=True)
+def test_autoregressive_configuration_is_rejected_until_masked_by_bridge():
+    with pytest.raises(ValueError, match="autoregressive.*legal mask"):
+        _make_env(autoregressive=True)
+
+
+def test_discrete_payload_and_pass_classification():
+    env = _make_env()
     env._proc = _FakeProc([_minimal_state(turn=2)])
 
-    env.step(np.array([2, 17, 64], dtype=np.int64))
-
-    assert len(env._proc.stdin.written) == 1
-    payload = json.loads(env._proc.stdin.written[0])
-    assert payload["cmd"] == "step_autoregressive"
-    assert payload["action_base"] == 2
-    assert payload["source_id"]   == 17
-    assert payload["target_id"]   == 64
-    # No flat action field — nothing that could be modded
-    assert "action" not in payload
-
-
-def test_autoregressive_preserves_triples_that_previously_collided():
-    """Regression: in the old `flat % 512` scheme, (3, 127, 127) would
-    produce flat = 3*128*128 + 127*128 + 127 = 65_279 → 65_279 % 512 = 127.
-    And (0, 0, 127) → 127. Same Forge action. Here we verify the triple
-    is forwarded intact so Forge sees distinct actions."""
-    env = _make_env(autoregressive=True)
-    env._proc = _FakeProc([_minimal_state(turn=2), _minimal_state(turn=3)])
-
-    env.step(np.array([3, 127, 127], dtype=np.int64))
-    env.step(np.array([0,   0, 127], dtype=np.int64))
-
-    p1 = json.loads(env._proc.stdin.written[0])
-    p2 = json.loads(env._proc.stdin.written[1])
-    assert (p1["action_base"], p1["source_id"], p1["target_id"]) == (3, 127, 127)
-    assert (p2["action_base"], p2["source_id"], p2["target_id"]) == (0,   0, 127)
-    # Distinct triples → distinct payloads
-    assert p1 != p2
-
-
-def test_autoregressive_no_modulo_on_payload():
-    """Every boundary value (3, 127, 127) must round-trip unchanged — the
-    old code would return `flat % num_actions` turning large triples into
-    small ints."""
-    env = _make_env(autoregressive=True)
-    env._proc = _FakeProc([_minimal_state(turn=2)])
-
-    env.step(np.array([3, 127, 127], dtype=np.int64))
-    payload = json.loads(env._proc.stdin.written[0])
-    assert payload["action_base"] == 3
-    assert payload["source_id"]   == 127
-    assert payload["target_id"]   == 127
-    # Sanity: these values exceed num_actions=512, proving we don't mod.
-    assert payload["source_id"] >= 128 - 1
-    assert payload["target_id"] >= 128 - 1
-
-
-def test_legacy_discrete_payload_unchanged():
-    env = _make_env(autoregressive=False)
-    env._proc = _FakeProc([_minimal_state(turn=2)])
-
-    env.step(42)
+    env.step(0)
     payload = json.loads(env._proc.stdin.written[0])
     assert payload["cmd"]    == "step"
-    assert payload["action"] == 42
+    assert payload["action"] == 0
+    assert env.loop_guard._loop_state.action_history[-1]["type"] == "pass"
     # AR fields must not leak into legacy path
     for k in ("action_base", "source_id", "target_id"):
         assert k not in payload
 
 
-def test_scalar_in_autoregressive_mode_falls_back_to_pass():
-    """Defensive: if a caller passes a scalar while AR mode is on, the env
-    must map to (3, 0, 0) "pass" instead of raising."""
-    env = _make_env(autoregressive=True)
+@pytest.mark.parametrize("page_action", [510, 511])
+def test_page_navigation_is_not_meaningful_loop_action(page_action):
+    env = _make_env()
     env._proc = _FakeProc([_minimal_state(turn=2)])
-
-    env.step(7)  # scalar, not an array
-    payload = json.loads(env._proc.stdin.written[0])
-    assert payload["cmd"]         == "step_autoregressive"
-    assert payload["action_base"] == 3
-    assert payload["source_id"]   == 0
-    assert payload["target_id"]   == 0
+    env.step(page_action)
+    assert env.loop_guard._loop_state.action_history[-1]["type"] == "noop"
 
 
 def test_illegal_action_flag_from_bridge_is_respected():
     """If the Java bridge emits illegal_action=true (e.g. fail-safe for an
     out-of-range triple), the Python shaper must receive it and produce a
     negative reward."""
-    env = _make_env(autoregressive=True)
+    env = _make_env()
     env._proc = _FakeProc([_minimal_state(turn=2, illegal_action=True)])
 
-    _, reward, _, _, info = env.step(np.array([0, 0, 0], dtype=np.int64))
+    _, reward, _, _, info = env.step(0)
     # illegal_action in state → shaper applies penalty_illegal_action (negative)
     assert info["state"]["illegal_action"] is True
     assert reward <= 0.0
+
+
+def test_policy_control_loss_terminates_episode_fail_closed():
+    env = _make_env()
+    env._proc = _FakeProc([_minimal_state(turn=2, policy_controlled=False)])
+
+    _, _, terminated, _, info = env.step(0)
+
+    assert terminated is True
+    assert info["error"] == "forge_policy_control_lost"
+
+
+def test_unapplied_policy_action_is_penalized():
+    env = _make_env()
+    env._proc = _FakeProc([_minimal_state(turn=2, policy_action_applied=False)])
+
+    _, reward, _, _, info = env.step(0)
+
+    assert info["state"]["illegal_action"] is True
+    assert reward <= 0.0
+
+
+def test_discrete_observation_links_action_to_visible_card_identity():
+    """The same slot can name different hand cards across different states."""
+    env = _make_env()
+    card_a = {
+        "name": "Lightning Bolt", "oracle_text": "Deal 3 damage to any target.",
+        "zone": "hand", "is_instant": True,
+    }
+    card_b = {
+        "name": "Island", "oracle_text": "Tap: Add blue mana.",
+        "zone": "hand", "is_land": True,
+    }
+    first_state = _minimal_state(
+        cards=[card_a, card_b],
+        action_mask=[1, 1] + [0] * 510,
+        action_source_indices=[-1, 0] + [-1] * 510,
+        action_target_indices=[-1] * 512,
+        action_kinds=[0, 1] + [0] * 510,
+    )
+    second_state = _minimal_state(
+        cards=[card_a, card_b],
+        action_mask=[1, 1] + [0] * 510,
+        action_source_indices=[-1, 1] + [-1] * 510,
+        action_target_indices=[-1] * 512,
+        action_kinds=[0, 1] + [0] * 510,
+    )
+
+    first = env._encode_observation(first_state)
+    second = env._encode_observation(second_state)
+
+    assert first["action_source_indices"][1] == 0
+    assert second["action_source_indices"][1] == 1
+    assert first["action_kinds"][1] == 1
+    assert not np.array_equal(first["card_feats"][0, 13:], first["card_feats"][1, 13:])
+    assert env.observation_space.contains(first)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["action_mask", "action_source_indices", "action_target_indices", "action_kinds"],
+)
+def test_active_policy_state_rejects_missing_action_contract(field):
+    env = _make_env()
+    state = _minimal_state()
+    state.pop(field)
+    with pytest.raises(ValueError, match=field):
+        env._encode_observation(state)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["action_mask", "action_source_indices", "action_target_indices", "action_kinds"],
+)
+@pytest.mark.parametrize("length", [0, 511, 513])
+def test_active_policy_state_rejects_wrong_length_action_contract(field, length):
+    env = _make_env()
+    state = _minimal_state()
+    state[field] = state[field][:length] if length <= 512 else state[field] + [0]
+    with pytest.raises(ValueError, match=field):
+        env._encode_observation(state)
+
+
+def _state_with_legal_action(kind: int, source: int, target: int, slot: int = 1):
+    state = _minimal_state(cards=[{"name": "Grizzly Bears"}])
+    state["action_mask"][slot] = 1
+    state["action_source_indices"][slot] = source
+    state["action_target_indices"][slot] = target
+    state["action_kinds"][slot] = kind
+    return state
+
+
+@pytest.mark.parametrize("kind", [1, 2, 3, 4, 5])
+def test_legal_non_page_action_requires_visible_source(kind):
+    env = _make_env()
+    state = _state_with_legal_action(kind, -1, -3)
+    with pytest.raises(ValueError, match="source"):
+        env._encode_observation(state)
+
+
+def test_legal_source_beyond_truncated_card_observation_is_rejected():
+    env = _make_env()
+    state = _state_with_legal_action(1, 128, -1)
+    state["cards"] = [{"name": "Forest"} for _ in range(129)]
+    with pytest.raises(ValueError, match="source"):
+        env._encode_observation(state)
+
+
+@pytest.mark.parametrize("kind", [2, 3, 4])
+def test_targeted_action_requires_visible_target_or_player(kind):
+    env = _make_env()
+    state = _state_with_legal_action(kind, 0, -1)
+    with pytest.raises(ValueError, match="target"):
+        env._encode_observation(state)
+
+
+@pytest.mark.parametrize("kind,target", [(2, -3), (3, 0), (4, -2), (4, -3)])
+def test_targeted_actions_accept_card_or_player_indices(kind, target):
+    env = _make_env()
+    state = _state_with_legal_action(kind, 0, target)
+    assert env.observation_space.contains(env._encode_observation(state))
+
+
+@pytest.mark.parametrize("kind", [-1, 8, 10])
+def test_active_policy_state_rejects_invalid_action_kind(kind):
+    env = _make_env()
+    state = _state_with_legal_action(kind, 0, -1)
+    with pytest.raises(ValueError, match="kind"):
+        env._encode_observation(state)
+
+
+@pytest.mark.parametrize("page_slot,page_kind", [(510, 6), (511, 7)])
+def test_legal_page_actions_have_distinct_kinds(page_slot, page_kind):
+    env = _make_env()
+    state = _minimal_state()
+    state["action_mask"][page_slot] = 1
+    state["action_kinds"][page_slot] = page_kind
+    observation = env._encode_observation(state)
+    assert observation["action_kinds"][page_slot] == page_kind
+    state["action_kinds"][page_slot] = 0
+    with pytest.raises(ValueError, match="page"):
+        env._encode_observation(state)
+
+
+def test_active_state_without_any_legal_action_is_rejected():
+    env = _make_env()
+    state = _minimal_state(action_mask=[0] * 512)
+    with pytest.raises(ValueError, match="legal action"):
+        env._encode_observation(state)
+
+
+def test_action_mask_values_are_binary():
+    env = _make_env()
+    state = _minimal_state()
+    state["action_mask"][1] = 2
+    with pytest.raises(ValueError, match="action_mask"):
+        env._encode_observation(state)
+
+
+def test_terminal_and_dummy_observations_have_no_legal_actions():
+    env = _make_env()
+    state = _minimal_state(terminal=True)
+    state.pop("action_mask")
+    state.pop("action_source_indices")
+    state.pop("action_target_indices")
+    state.pop("action_kinds")
+    terminal_obs = env._encode_observation(state)
+    dummy_obs = env._dummy_obs()
+    assert not terminal_obs["action_mask"].any()
+    assert not dummy_obs["action_mask"].any()
+    assert env.observation_space.contains(terminal_obs)
+    assert env.observation_space.contains(dummy_obs)
+
+
+def test_action_descriptors_are_deterministic_and_distinguish_same_source_options():
+    env = _make_env()
+    state = _state_with_legal_action(5, 0, -1)
+    state["action_mask"][2] = 1
+    state["action_source_indices"][2] = 0
+    state["action_kinds"][2] = 5
+    state["action_descriptors"] = {
+        "1": "Tap: Deal 1 damage to any target.",
+        "2": "Pay two mana: Draw a card.",
+    }
+    first = env._encode_observation(state)
+    second = env._encode_observation(state)
+    assert np.array_equal(
+        first["action_descriptor_features"], second["action_descriptor_features"]
+    )
+    assert np.linalg.norm(first["action_descriptor_features"][1]) > 0
+    assert not np.array_equal(
+        first["action_descriptor_features"][1],
+        first["action_descriptor_features"][2],
+    )
+    assert not first["action_descriptor_features"][3].any()
+    assert env.observation_space.contains(first)
+
+
+def test_invalid_or_masked_off_action_descriptor_is_rejected():
+    env = _make_env()
+    state = _minimal_state(action_descriptors={"1": "not a legal slot"})
+    with pytest.raises(ValueError, match="action_descriptors"):
+        env._encode_observation(state)
+
+
+def test_card_controller_zone_and_combat_state_are_visible():
+    env = _make_env()
+    state = _minimal_state(cards=[
+        {"name": "Bear", "controller": "you", "zone": "battlefield", "is_attacking": True},
+        {"name": "Bolt", "controller": "opp", "zone": "graveyard"},
+        {"name": "Relic", "controller": "opp", "zone": "exile"},
+        {"name": "Spell", "controller": "you", "zone": "stack"},
+    ])
+    observation = env._encode_observation(state)
+    cards = observation["card_feats"]
+    assert cards.shape == (env.max_cards, 400)
+    assert cards[0, 395] == 1 and cards[0, 399] == 1
+    assert cards[1, 395] == 0 and cards[1, 396] == 1
+    assert cards[2, 397] == 1 and cards[3, 398] == 1
+
+
+def test_malformed_active_response_kills_forge_worker():
+    env = _make_env()
+    state = _minimal_state(turn=2)
+    state.pop("action_mask")
+    env._proc = _FakeProc([state])
+    with pytest.raises(ValueError, match="action_mask"):
+        env.step(0)
+    assert env._proc is None

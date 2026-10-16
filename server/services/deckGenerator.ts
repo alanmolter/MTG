@@ -50,8 +50,8 @@ export function validateDeck(
     }
   } else {
     // Standard, Modern, Legacy
-    if (totalCards < 60) {
-      errors.push(`Deck deve ter no mínimo 60 cartas, tem ${totalCards}`);
+    if (totalCards !== 60) {
+      errors.push(`Deck deve ter exatamente 60 cartas, tem ${totalCards}`);
     }
 
     // Máximo 4 cópias de cada carta (exceto básicas)
@@ -106,12 +106,14 @@ export async function generateInitialDeck(
       deck.set(cardId, current + 1);
     }
   }
+  let currentSize = Array.from(deck.values()).reduce((a, b) => a + b, 0);
 
   // Se não temos seed, gerar cartas aleatórias iniciais
   if (seedCards.length === 0) {
-    for (let i = 1; i <= Math.min(20, targetSize / 3); i++) {
-      const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies);
+    for (let i = 1; i <= Math.min(20, targetSize / 3) && currentSize < targetSize; i++) {
+      const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies, targetSize - currentSize);
       deck.set(i, quantity);
+      currentSize += quantity;
     }
   }
 
@@ -119,7 +121,6 @@ export async function generateInitialDeck(
   const learningWeights = await modelLearningService.getCardWeights();
 
   const deckCardIds = Array.from(deck.keys());
-  let currentSize = Array.from(deck.values()).reduce((a, b) => a + b, 0);
 
   // Coletar vizinhos sinérgicos das cartas já no deck
   // Permite que a seleção subsequente prefira cartas com histórico de co-ocorrência
@@ -150,7 +151,7 @@ export async function generateInitialDeck(
       const chance = Math.random() * (weight * synergyBoost);
 
       if (!deck.has(card.id) && chance > 0.5) {
-        const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies);
+        const quantity = Math.min(Math.floor(Math.random() * maxCopies) + 1, maxCopies, targetSize - currentSize);
         deck.set(card.id, quantity);
         deckCardIds.push(card.id);
         currentSize += quantity;
@@ -173,10 +174,18 @@ export async function generateInitialDeck(
   const cardIds = Array.from(deck.keys());
   const cards = await getCardsByIds(cardIds);
 
-  return cards.map((card) => ({
+  const generated = cards.map((card) => ({
     ...card,
     quantity: deck.get(card.id) || 1,
   }));
+  const validation = validateDeck(generated, options.format);
+  if (!validation.isValid) {
+    // Returning a deck that cannot be played is worse than surfacing the
+    // unavailable candidate pool. Callers can retry with seeds or a richer
+    // imported pool, but never train on this invalid output.
+    throw new Error(`[DeckGenerator] rejected generated deck: ${validation.errors.join("; ")}`);
+  }
+  return generated;
 }
 
 /**

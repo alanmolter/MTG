@@ -407,9 +407,7 @@ export async function generateDeckWithLLM(
   const validation = validateDeck(cardsForValidation, dbFormat);
 
   if (!validation.isValid) {
-    console.warn(
-      `[LLMGenerator] Deck com erros de validação: ${validation.errors.join("; ")}`
-    );
+    throw new Error(`[LLMGenerator] candidate rejected by deck gate: ${validation.errors.join("; ")}`);
   }
 
   // 5. Enriquecer com pesos aprendidos (Meta Scorer)

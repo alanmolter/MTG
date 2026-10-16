@@ -44,6 +44,8 @@ def main():
         "opponent_deck": opponent_deck,
         "turn_limit": 40,
         "step_timeout": 30.0,
+        "use_autoregressive_actions": False,
+        "require_policy_control": True,
     }
     print("[smoke_env] constructing env...", flush=True)
     env = MtgForgeEnv(cfg)
@@ -54,17 +56,21 @@ def main():
         steps = 0
         total_reward = 0.0
         while steps < 400:
-            action = steps % 512  # arbitrary — Forge AI drives both sides regardless
+            # Priority pass is a supported external-policy action. It advances
+            # a complete game without asking Forge AI to choose for the agent.
+            action = 0
+            started_step = time.time()
             obs, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
             steps += 1
-            if steps % 20 == 0:
-                s = info.get("state", {})
-                print(
-                    f"[smoke_env] step={steps} turn={s.get('turn')} life={s.get('life_you')}-{s.get('life_opp')} "
-                    f"term={terminated} trunc={truncated} reward={reward:+.3f}",
-                    flush=True,
-                )
+            s = info.get("state", {})
+            print(
+                f"[smoke_env] step={steps} elapsed={time.time()-started_step:.1f}s "
+                f"turn={s.get('turn')} life={s.get('life_you')}-{s.get('life_opp')} "
+                f"controlled={s.get('policy_controlled')} applied={s.get('policy_action_applied')} "
+                f"illegal={s.get('illegal_action')} term={terminated} trunc={truncated} reward={reward:+.3f}",
+                flush=True,
+            )
             if terminated or truncated:
                 s = info.get("state", {})
                 print(

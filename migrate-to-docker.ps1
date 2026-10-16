@@ -125,7 +125,7 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 2
 }
 if (-not $healthy) {
-    Fail "container never reported healthy within 60s. Check 'docker compose logs db'"
+    Fail "container never reported healthy within 60s. Check 'docker compose logs postgres'"
     exit 1
 }
 OK "container healthy"
@@ -161,7 +161,7 @@ if ($SkipRestore -or $SkipDump) {
     # so we don't trust the exit code. Instead we sanity check a known table.
     $cardsCount = & docker exec mtg-pgvector psql -U postgres -d mtg -tAc "SELECT COUNT(*) FROM cards"
     if ($LASTEXITCODE -ne 0) {
-        Warn "post-restore sanity query failed. Check 'docker compose logs db'."
+        Warn "post-restore sanity query failed. Check 'docker compose logs postgres'."
     } else {
         OK "restore complete. cards table has $($cardsCount.Trim()) rows."
     }

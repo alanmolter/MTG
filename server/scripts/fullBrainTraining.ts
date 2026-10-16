@@ -1,12 +1,7 @@
 import { getDb, closeDb } from "../db";
-import { cardLearning, cards as cardsTable } from "../../drizzle/schema";
+import { cardLearning, cards as cardsTable, forgeMatches } from "../../drizzle/schema";
 import { count, gt, gte, lt, and, eq, sql } from "drizzle-orm";
 import { spawn } from "child_process";
-import {
-  printForgeStartupBanner,
-  printForgeConnectionStatus,
-  printForgeRulesLearning,
-} from "../services/forgeStatus";
 import { describeTrainingPool, isArenaOnlyTraining } from "./utils/poolFilter";
 
 /**
@@ -158,8 +153,7 @@ async function launchMasterTraining() {
   console.log(`  Inicio: ${timestamp()}`);
   console.log("═".repeat(52));
 
-  // ── 1. Banner de inicialização do Forge ───────────────────────────────────
-  printForgeStartupBanner();
+  console.log("  Modo de integridade: pesos só podem mudar após resultado gravado em forge_matches.");
 
   const db = await getDb();
   if (!db) {
@@ -168,14 +162,13 @@ async function launchMasterTraining() {
     return;
   }
 
-  // ── 2. Status de conexão do Forge e dados forge_reality no banco ──────────
-  await printForgeConnectionStatus();
-
-  // ── 3. Regras MTG que o Forge está ensinando ao modelo ────────────────────
-  printForgeRulesLearning();
-
-  // ── 4. Status completo do banco de inteligência ───────────────────────────
-  await reportBrainDataStatus(db);
+  // Fonte de rótulos verificável. Não inferimos procedência olhando apenas
+  // win_count/loss_count, porque bancos antigos misturavam self-play e Forge.
+  const [{ value: forgeMatchCount }] = await db.select({ value: count() }).from(forgeMatches);
+  console.log(`  Partidas Forge auditáveis: ${forgeMatchCount}`);
+  if (Number(forgeMatchCount) === 0) {
+    console.log("  [PENDENTE] Rode `npm run train:visual:historic:auto` para iniciar a coleta de rótulos reais.");
+  }
 
   // ── 4b. Escopo do pool de treinamento (Arena vs full catalog) ─────────────
   // O env var TRAINING_POOL_ARENA_ONLY=1 restringe os trainers ao subset
@@ -210,15 +203,18 @@ async function launchMasterTraining() {
     .select({ value: count() })
     .from(cardLearning);
 
-  const runScript = (name: string, path: string): Promise<number> => {
+  const runScript = (name: string, path: string, args: string[] = []): Promise<number> => {
     return new Promise((resolve) => {
       divider(`Modulo: ${name}`);
-      console.log(`  Script : npx tsx ${path}`);
-      console.log(`  Forge  : ativo — regras MTG aplicadas em cada partida`);
+      console.log(`  Script : npx tsx ${path} ${args.join(" ")}`);
       console.log(`  Status : executando...\n`);
 
-      const child = spawn("npx", ["tsx", path], {
-        shell: true,
+      const childCommand = process.platform === "win32" ? "cmd.exe" : "npx";
+      const childArgs = process.platform === "win32"
+        ? ["/d", "/s", "/c", "npx", "tsx", path, ...args]
+        : ["tsx", path, ...args];
+      const child = spawn(childCommand, childArgs, {
+        shell: false,
         stdio: "inherit",
       });
 
@@ -239,7 +235,6 @@ async function launchMasterTraining() {
         const dur = ((Date.now() - tStart) / 1000).toFixed(1);
         if (code === 0) {
           console.log(`\n  [OK] Modulo "${name}" concluido em ${dur}s`);
-          console.log(`  [Forge] Dados de partidas gravados em forge_reality.`);
         } else {
           console.warn(`\n  [AVISO] Modulo "${name}" terminou com codigo ${code} (${dur}s)`);
         }
@@ -248,11 +243,20 @@ async function launchMasterTraining() {
     });
   };
 
-  // ── 5. Commander Intelligence ─────────────────────────────────────────────
-  await runScript("Commander Intelligence (Forge)", "server/scripts/trainCommander.ts");
-
-  // ── 6. Archetype Continuous Training ─────────────────────────────────────
-  await runScript("Archetype Self-Play (Forge)", "server/scripts/continuousTraining.ts");
+  // ── 5. Gate de dados (falha fechada) ───────────────────────────────────────
+  // Os antigos loops chamavam ModelEvaluator e gravavam o resultado como se
+  // fosse uma partida Forge. Isso foi a origem de pesos auto-reforçados. O
+  // comando mestre agora prepara dados e só aceita feedback do Forge visual.
+  const qualityExit = await runScript(
+    "Quality Gate (dados competitivos)",
+    "server/scripts/sanitizeTrainingData.ts",
+    ["--apply", "--require-ready"],
+  );
+  if (qualityExit !== 0) {
+    throw new Error("Quality gate bloqueou o treino; corrija/importa dados antes de gerar novos pesos.");
+  }
+  console.log("\n  [Safety] Loops heurísticos foram colocados em modo somente-avaliação.");
+  console.log("  [Next] Rode `npm run train:visual:historic:auto` para registrar uma partida Forge observável.");
 
   // ── 7. Resultado Final ────────────────────────────────────────────────────
   const [{ value: finalCount }] = await db
@@ -268,7 +272,7 @@ async function launchMasterTraining() {
   console.log(`  Cartas antes do treino  : ${initialCount}`);
   console.log(`  Cartas apos o treino    : ${finalCount}`);
   console.log(`  Novas entradas criadas  : ${Number(finalCount) - Number(initialCount)}`);
-  console.log(`  Motor de regras         : Forge (forge_reality)`);
+  console.log(`  Motor de regras         : Forge visual (única fonte aceita de rótulos)`);
   console.log(`  Fim: ${timestamp()}`);
   console.log("═".repeat(52) + "\n");
 

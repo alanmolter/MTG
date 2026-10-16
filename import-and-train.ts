@@ -9,10 +9,10 @@ import { applyTournamentSignal } from "./server/scripts/applyTournamentSignal.ts
  * Pipeline de importação de decks competitivos + treinamento de embeddings.
  *
  * FORMATOS IMPORTADOS (10 decks cada):
- *   MTGGoldfish : standard, modern, legacy, pioneer, pauper, vintage
+ *   MTGGoldfish : standard, historic, modern, legacy, pioneer, pauper, vintage
  *   MTGTop8     : standard, modern, legacy, pioneer, pauper, vintage
  *
- * Total máximo: 120 decks (60 por fonte × 2 fontes)
+ * Total máximo: 130 decks (70 MTGGoldfish + 60 MTGTop8)
  *
  * ESTRATÉGIA:
  *   - 1 deck por arquétipo = máxima diversidade de estratégias
@@ -47,13 +47,13 @@ async function main() {
   console.log(`  Inicio: ${timestamp()}`);
   console.log("═".repeat(56));
   console.log("  Fontes  : MTGGoldfish + MTGTop8");
-  console.log("  Formatos: standard, modern, legacy, pioneer, pauper, vintage");
-  console.log("  Volume  : 10 decks por formato por fonte (máx. 120 decks)");
+  console.log("  Formatos: MTGGoldfish inclui historic; MTGTop8 usa formatos paper disponíveis");
+  console.log("  Volume  : 10 decks por formato por fonte (máx. 130 decks)");
   console.log("  Método  : 1 deck/arquétipo → máxima diversidade de estratégias");
   console.log("─".repeat(56));
 
   // ─── 1. MTGGoldfish — todos os formatos ───────────────────────────────────
-  divider("1/3  MTGGoldfish — 6 Formatos (10 decks cada)");
+  divider("1/3  MTGGoldfish — 7 Formatos (10 decks cada)");
   const t1 = Date.now();
   let goldfishTotal = { decksImported: 0, cardsImported: 0, decksSkipped: 0, errors: [] as string[] };
   try {

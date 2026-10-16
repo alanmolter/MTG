@@ -20,18 +20,25 @@
 #      restarts. To nuke it:  docker compose down -v
 #
 #  Usage:
-#      docker compose up -d          # start (daemon mode)
-#      docker compose logs -f db     # tail logs
-#      docker compose ps             # check health
-#      docker compose down           # stop (keep data)
-#      docker compose down -v        # stop + wipe data
+#      docker compose up -d postgres    # start the database (daemon mode)
+#      docker compose logs -f postgres  # tail logs
+#      docker compose ps                # check health
+#      docker compose down              # stop (keep data)
+#      docker compose down -v           # stop + wipe data
+#
+#  Note: the service was renamed from `db` → `postgres` on 2026-04-23.
+#  All docs (TRAINING_TROUBLESHOOTING.md, migrate-to-docker.ps1) now use
+#  the new name. If a personal script still says `db`, replace with
+#  `postgres`.
 #
 #  After starting, update .env:
 #      DATABASE_URL=postgresql://postgres:postgres@localhost:5434/mtg
 #  ...and re-run:  .\setup.ps1
 # ────────────────────────────────────────────────────────────────────────────
 services:
-  db:
+  # Primary service name. The training runbook (TRAINING_TROUBLESHOOTING.md)
+  # and all external docs reference `postgres`.
+  postgres:
     image: pgvector/pgvector:pg18
     container_name: mtg-pgvector
     restart: unless-stopped

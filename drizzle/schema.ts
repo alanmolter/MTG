@@ -181,6 +181,10 @@ export const competitiveDecks = pgTable("competitive_decks", {
    *  Decks sintéticos são excluídos do treinamento de embeddings para evitar
    *  contaminação com co-ocorrências que não existem em decks reais. */
   isSynthetic: boolean("is_synthetic").notNull().default(false),
+  /** Set only by the deterministic training-data sanitiser. */
+  isTrainingEligible: boolean("is_training_eligible").notNull().default(false),
+  trainingRejectionReason: text("training_rejection_reason"),
+  trainingQualityCheckedAt: timestamp("training_quality_checked_at"),
   importedAt: timestamp("imported_at").defaultNow().notNull(),
 });
 
@@ -223,6 +227,38 @@ export const trainingJobs = pgTable("training_jobs", {
 
 export type TrainingJob = typeof trainingJobs.$inferSelect;
 export type InsertTrainingJob = typeof trainingJobs.$inferInsert;
+
+/** Immutable audit trail for dataset gates and candidate model promotion. */
+export const trainingRuns = pgTable("training_runs", {
+  id: serial("id").primaryKey(),
+  runKind: varchar("run_kind", { length: 64 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  datasetFingerprint: varchar("dataset_fingerprint", { length: 64 }),
+  validDecks: integer("valid_decks").notNull().default(0),
+  rejectedDecks: integer("rejected_decks").notNull().default(0),
+  realMatchCount: integer("real_match_count").notNull().default(0),
+  invalidSynergyCount: integer("invalid_synergy_count").notNull().default(0),
+  baselineMetric: real("baseline_metric"),
+  candidateMetric: real("candidate_metric"),
+  artifactPath: text("artifact_path"),
+  gateReport: jsonb("gate_report").notNull().default({}),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
+export type TrainingRun = typeof trainingRuns.$inferSelect;
+
+/** Recorded Forge outcomes are the only trusted online labels. */
+export const forgeMatches = pgTable("forge_matches", {
+  id: serial("id").primaryKey(),
+  winner: integer("winner"),
+  turns: integer("turns"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  rawJson: text("raw_json"),
+  comboSummaryJson: text("combo_summary_json"),
+});
+
+export type ForgeMatch = typeof forgeMatches.$inferSelect;
 
 export const deckShares = pgTable("deck_shares", {
   id: serial("id").primaryKey(),

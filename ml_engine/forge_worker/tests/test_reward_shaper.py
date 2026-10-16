@@ -109,6 +109,14 @@ class TestRewardShaper:
         r = shaper.shape(prev, curr)
         assert r == pytest.approx(0.03, abs=1e-6)
 
+    def test_mana_efficiency_uses_pre_payment_capacity(self):
+        """Tapped lands after casting cannot erase the spent-mana signal."""
+        shaper = RewardShaper(ShapingConfig(zeta_efficiency=0.03, step_cap=1.0))
+        prev = _snap(mana_available_you=4)
+        curr = _snap(mana_value_played=4, mana_available_you=0)
+
+        assert shaper.shape(prev, curr) == pytest.approx(0.03, abs=1e-6)
+
     def test_mana_efficiency_partial_use(self):
         """Spending 1 of 4 available mana → ~25% of the bonus."""
         shaper = RewardShaper(ShapingConfig(zeta_efficiency=0.04, step_cap=1.0))

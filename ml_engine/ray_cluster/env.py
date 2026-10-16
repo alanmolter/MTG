@@ -12,22 +12,20 @@ the box without needing to understand MTG-specific gotchas.
 
 Observation space:
     Dict({
-        "card_feats":   Box(N_cards, 395),
-        "player_feats": Box(2, 14),
+        "card_feats":   Box(N_cards, 400),
+        "player_feats": Box(2, 15),
         "controlled_by_edges": Box(2, E1, int64),
         "in_zone_edges":       Box(2, E2, int64),
         "synergy_edges":       Box(2, E3, int64),
         "attacks_edges":       Box(2, E4, int64),
         "action_mask":  MultiBinary(num_actions),
+        "action_descriptor_features": Box(num_actions, 32),
     })
 
 Action space:
-    Discrete(num_actions=512)                          — legacy default.
-    MultiDiscrete([4, 128, 128])                       — Phase 3 autoregressive,
-        enabled by config["use_autoregressive_actions"]=True. The env forwards
-        the triple (action_base, source_id, target_id) natively to Forge via
-        the {"cmd":"step_autoregressive", ...} protocol message. No packing,
-        no modulo, no hash collisions.
+    Discrete(num_actions=512), with a legal mask and per-action metadata.
+    The old MultiDiscrete path is rejected until the Java bridge implements
+    conditional masks for all autoregressive action branches.
 
 The env is robust to Forge crashes (process dies → env.reset() respawns) and
 hung games (turn cap + timeout per step).
@@ -54,6 +52,7 @@ except ImportError as e:  # pragma: no cover
 
 from ml_engine.forge_worker.loop_guard import LoopGuard
 from ml_engine.forge_worker.reward_shaper import GameStateSnapshot, RewardShaper
+from ml_engine.ray_cluster.card_features import hashed_oracle_vector, semantic_card_vector
 
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -75,13 +74,12 @@ DEFAULT_STEP_TIMEOUT = 10.0    # seconds — if Forge doesn't respond, we abort
 # `max_cards=64` is a safe default for training (halves obs). Inference/eval
 # can keep 128 if you've got the headroom — pass max_cards in env_config.
 
-# Phase 3 — autoregressive MultiDiscrete action mode. Disabled by default; opt
-# in via config["use_autoregressive_actions"] = True. The head emits a triple
-# (action_type, source, target); the env packs it into a flat int before
-# forwarding to the Java Forge bridge so the legacy protocol stays intact.
+# Retained solely to recognise/reject legacy autoregressive configurations.
 AR_NUM_TYPES = 4
 AR_NUM_SOURCES = 128
 AR_NUM_TARGETS = 128
+ACTION_DESCRIPTOR_DIM = 32
+MAX_ACTION_KIND = 7
 
 
 class MtgForgeEnv(gym.Env):
@@ -116,6 +114,14 @@ class MtgForgeEnv(gym.Env):
         self.max_cards: int = int(config.get("max_cards", DEFAULT_MAX_CARDS))
         self.turn_limit: int = int(config.get("turn_limit", DEFAULT_TURN_LIMIT))
         self.step_timeout: float = float(config.get("step_timeout", DEFAULT_STEP_TIMEOUT))
+        # Never train against an observational bridge. The first snapshot must
+        # prove that the agent-side PlayerController was installed in Forge.
+        self.require_policy_control: bool = bool(config.get("require_policy_control", True))
+        self.agent_policy: str = str(config.get("agent_policy", "external"))
+        if self.agent_policy not in ("external", "forge_ai"):
+            raise ValueError("agent_policy must be external or forge_ai")
+        if self.agent_policy == "forge_ai" and self.require_policy_control:
+            raise ValueError("Forge AI baseline cannot be used as a policy-controlled training environment")
         self.agent_deck: Optional[str] = config.get("agent_deck")
         self.opponent_deck: Optional[str] = config.get("opponent_deck")
         # Archetype of the agent's deck — forwarded to the reward shaper so
@@ -134,12 +140,16 @@ class MtgForgeEnv(gym.Env):
         self.arena_only: bool = bool(config.get("arena_only", False))
         self._episode_count: int = 0
 
-        # Phase 3: autoregressive action space (opt-in, default OFF). When
-        # True, the agent emits MultiDiscrete([type, source, target]); we
-        # pack it into a single int before sending to Forge.
+        # Phase 3: autoregressive action space (opt-in for compatibility).
+        # Production training enables this in orchestrator.build_impala_config.
         self.use_autoregressive_actions: bool = bool(
             config.get("use_autoregressive_actions", False)
         )
+        if self.use_autoregressive_actions:
+            raise ValueError(
+                "autoregressive actions lack a complete conditional legal mask "
+                "in Forge; use discrete masked actions for training"
+            )
         self.ar_num_types: int = int(config.get("ar_num_types", AR_NUM_TYPES))
         self.ar_num_sources: int = int(config.get("ar_num_sources", AR_NUM_SOURCES))
         self.ar_num_targets: int = int(config.get("ar_num_targets", AR_NUM_TARGETS))
@@ -153,15 +163,10 @@ class MtgForgeEnv(gym.Env):
         self._last_snapshot: Optional[GameStateSnapshot] = None
 
         # Spaces
-        if self.use_autoregressive_actions:
-            self.action_space = spaces.MultiDiscrete(
-                [self.ar_num_types, self.ar_num_sources, self.ar_num_targets]
-            )
-        else:
-            self.action_space = spaces.Discrete(self.num_actions)
+        self.action_space = spaces.Discrete(self.num_actions)
         self.observation_space = spaces.Dict({
             "card_feats": spaces.Box(
-                low=-1e3, high=1e3, shape=(self.max_cards, 395), dtype=np.float32
+                low=-1e3, high=1e3, shape=(self.max_cards, 400), dtype=np.float32
             ),
             "player_feats": spaces.Box(
                 low=-1e3, high=1e3, shape=(2, 15), dtype=np.float32
@@ -179,6 +184,23 @@ class MtgForgeEnv(gym.Env):
                 low=0, high=max(self.max_cards, 2) - 1, shape=(2, self.max_cards), dtype=np.int64
             ),
             "action_mask": spaces.MultiBinary(self.num_actions),
+            # Each legal action is linked to its source entity.  An action
+            # slot alone has no stable meaning across different hands.
+            "action_source_indices": spaces.Box(
+                low=-1, high=self.max_cards - 1,
+                shape=(self.num_actions,), dtype=np.int64,
+            ),
+            "action_target_indices": spaces.Box(
+                low=-3, high=self.max_cards - 1,
+                shape=(self.num_actions,), dtype=np.int64,
+            ),
+            "action_kinds": spaces.Box(
+                low=0, high=MAX_ACTION_KIND, shape=(self.num_actions,), dtype=np.int64,
+            ),
+            "action_descriptor_features": spaces.Box(
+                low=-1.0, high=1.0,
+                shape=(self.num_actions, ACTION_DESCRIPTOR_DIM), dtype=np.float32,
+            ),
         })
 
     # ── Gym API ─────────────────────────────────────────────────────────────
@@ -188,7 +210,7 @@ class MtgForgeEnv(gym.Env):
         self._ensure_subprocess()
 
         # Per-episode deck rotation when Arena mode is on. Each reset() draws
-        # a fresh archetype pair from arena_pool's catalog (12 archetypes), so
+        # a fresh archetype pair from arena_pool's catalog (15 archetypes), so
         # the agent sees varied matchups instead of one fixed Aggro vs Control.
         # Deck seed combines the caller's gym seed with an internal counter so
         # back-to-back resets always rotate, even if Ray reuses the same seed.
@@ -207,13 +229,29 @@ class MtgForgeEnv(gym.Env):
                 pass
         self._episode_count += 1
 
-        self._send_command({"cmd": "new_game", "agent_deck": self.agent_deck, "opponent_deck": self.opponent_deck, "seed": seed})
+        self._send_command({"cmd": "new_game", "agent_deck": self.agent_deck,
+                            "opponent_deck": self.opponent_deck, "seed": seed,
+                            "agent_policy": self.agent_policy})
         # Forge's cold-start (card DB load) takes ~5s. Give new_game a generous
         # one-time budget so the first reset survives the warm-up.
         first_state = self._read_state(timeout_override=max(self.step_timeout, 60.0))
+        if self.agent_policy == "forge_ai":
+            if not first_state.get("terminal") or first_state.get("policy_contract_violation"):
+                self._kill_subprocess()
+                raise RuntimeError("Forge AI baseline did not complete cleanly")
+        if self.require_policy_control and not bool(first_state.get("policy_controlled", False)):
+            self._kill_subprocess()
+            raise RuntimeError(
+                "Forge bridge did not confirm external policy control; refusing "
+                "to train on AI-vs-AI observational rewards. Rebuild rlbridge.jar."
+            )
         self.loop_guard.reset()
         self._last_snapshot = self._state_to_snapshot(first_state)
-        obs = self._encode_observation(first_state)
+        try:
+            obs = self._encode_observation(first_state)
+        except ValueError:
+            self._kill_subprocess()
+            raise
         info = {"state": first_state}
         return obs, info
 
@@ -222,35 +260,17 @@ class MtgForgeEnv(gym.Env):
             # Subprocess died — force reset next call
             return self._dummy_obs(), 0.0, True, False, {"error": "forge_subprocess_dead"}
 
-        if self.use_autoregressive_actions:
-            # Phase 3 — native autoregressive payload. No flat packing, no
-            # modulo. The Java bridge unpacks (action_base, source_id,
-            # target_id) directly into the Forge API.
-            try:
-                a_type = int(action[0])
-                a_src  = int(action[1])
-                a_tgt  = int(action[2])
-            except (TypeError, IndexError):
-                # Defensive: legacy caller sent a scalar in AR mode. Map to
-                # pass/special (action_base=3) so we never raise.
-                a_type, a_src, a_tgt = 3, 0, 0
-            # Clamp defensively — out-of-range indices will be flagged as
-            # illegal by the bridge (fail-safe) and the reward shaper applies
-            # penalty_illegal_action on the returned snapshot.
-            self.loop_guard.record_action({
-                "type": "action",
-                "action_id": (a_type, a_src, a_tgt),
-            })
-            self._send_command({
-                "cmd": "step_autoregressive",
-                "action_base": a_type,
-                "source_id":   a_src,
-                "target_id":   a_tgt,
-            })
-        else:
-            flat_action = int(action)
-            self.loop_guard.record_action({"type": "action", "action_id": flat_action})
-            self._send_command({"cmd": "step", "action": flat_action})
+        flat_action = int(action)
+        action_type = (
+            "pass" if flat_action == 0 else
+            "noop" if flat_action in (self.num_actions - 2, self.num_actions - 1) else
+            "action"
+        )
+        self.loop_guard.record_action({
+            "type": action_type,
+            "action_id": flat_action,
+        })
+        self._send_command({"cmd": "step", "action": flat_action})
         try:
             state = self._read_state()
         except subprocess.TimeoutExpired:
@@ -261,6 +281,20 @@ class MtgForgeEnv(gym.Env):
         is_terminal = bool(state.get("terminal", False))
         outcome = state.get("outcome")
         illegal = bool(state.get("illegal_action", False))
+        if self.require_policy_control and not bool(state.get("policy_controlled", False)):
+            self._kill_subprocess()
+            return self._dummy_obs(), self.shaper.config.penalty_illegal_action, True, False, {
+                "error": "forge_policy_control_lost",
+                "state": state,
+            }
+        # The bridge reports whether the external controller actually consumed
+        # a legal action. Treat failed selections as illegal instead of giving
+        # the learner a neutral reward for an AI/no-op transition. Old bridges
+        # omit this field, so compatibility is preserved until control itself
+        # is made mandatory by the reset gate above.
+        if "policy_action_applied" in state and not bool(state["policy_action_applied"]):
+            illegal = True
+            state["illegal_action"] = True
 
         # Loop detection — may force terminate with toxic penalty
         looped, toxic = self.loop_guard.observe(state)
@@ -281,7 +315,11 @@ class MtgForgeEnv(gym.Env):
             state["turn_limit_reached"] = True
 
         self._last_snapshot = curr_snapshot
-        obs = self._encode_observation(state)
+        try:
+            obs = self._encode_observation(state)
+        except ValueError:
+            self._kill_subprocess()
+            raise
         truncated = state.get("turn_limit_reached", False)
         return obs, reward, is_terminal and not truncated, truncated, {"state": state}
 
@@ -430,14 +468,107 @@ class MtgForgeEnv(gym.Env):
             illegal_action=illegal,
         )
 
-    # ── Phase 3: autoregressive actions are now emitted natively in step().
-    # The previous _encode_action() method packed a triple into a flat int
-    # with `flat % num_actions`, which collided 49_152 / 65_536 unique triples
-    # down onto 512 flat slots (~99% collision). It has been removed.
+    def _encode_action_contract(
+        self, state: Dict[str, Any], visible_card_count: int
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Validate Forge's legal actions before they reach a training policy.
+
+        A missing mask must never become an all-ones mask.  In particular, a
+        legal source/target that was truncated out of the card observation
+        would make the action appear legal but semantically invisible to the
+        policy, so that state is rejected rather than silently clipped.
+        """
+        mask = np.zeros(self.num_actions, dtype=np.int8)
+        sources = np.full(self.num_actions, -1, dtype=np.int64)
+        targets = np.full(self.num_actions, -1, dtype=np.int64)
+        kinds = np.zeros(self.num_actions, dtype=np.int64)
+        descriptors = np.zeros(
+            (self.num_actions, ACTION_DESCRIPTOR_DIM), dtype=np.float32
+        )
+        if bool(state.get("terminal", False)):
+            return mask, sources, targets, kinds, descriptors
+
+        fields = (
+            "action_mask", "action_source_indices", "action_target_indices", "action_kinds"
+        )
+        raw = {}
+        for field in fields:
+            values = state.get(field)
+            if not isinstance(values, (list, tuple)) or len(values) != self.num_actions:
+                raise ValueError(
+                    f"Forge {field} must contain exactly {self.num_actions} entries "
+                    "for an active policy decision"
+                )
+            raw[field] = values
+
+        for i in range(self.num_actions):
+            mask_value = raw["action_mask"][i]
+            if not isinstance(mask_value, (bool, int, np.integer)) or int(mask_value) not in (0, 1):
+                raise ValueError(f"Forge action_mask[{i}] must be binary")
+            mask[i] = int(mask_value)
+            for field, output, lower, upper in (
+                ("action_source_indices", sources, -1, visible_card_count - 1),
+                ("action_target_indices", targets, -3, visible_card_count - 1),
+                ("action_kinds", kinds, 0, MAX_ACTION_KIND),
+            ):
+                value = raw[field][i]
+                if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+                    raise ValueError(f"Forge {field}[{i}] must be an integer")
+                if not lower <= int(value) <= upper:
+                    raise ValueError(f"Forge {field}[{i}] is outside the visible range")
+                output[i] = int(value)
+
+        if not mask.any():
+            raise ValueError("Forge active decision has no legal action")
+
+        for i in np.flatnonzero(mask):
+            kind = int(kinds[i])
+            source = int(sources[i])
+            target = int(targets[i])
+            if i == 0:
+                if kind != 0 or source != -1 or target != -1:
+                    raise ValueError("Forge pass/skip action has invalid metadata")
+            elif i == self.num_actions - 2:
+                if kind != 6 or source != -1 or target != -1:
+                    raise ValueError("Forge previous-page action has invalid page metadata")
+            elif i == self.num_actions - 1:
+                if kind != 7 or source != -1 or target != -1:
+                    raise ValueError("Forge next-page action has invalid page metadata")
+            elif kind not in (1, 2, 3, 4, 5):
+                raise ValueError(f"Forge legal action {i} has invalid kind {kind}")
+            elif source < 0:
+                raise ValueError(f"Forge legal action {i} has no visible source")
+            elif kind == 2 and target == -1:
+                raise ValueError(f"Forge attack action {i} has no visible target")
+            elif kind == 2 and target == -2:
+                raise ValueError(f"Forge attack action {i} targets the acting player")
+            elif kind == 3 and target < 0:
+                raise ValueError(f"Forge block action {i} has no visible target card")
+            elif kind == 4 and target == -1:
+                raise ValueError(f"Forge target action {i} has no visible target")
+
+        raw_descriptors = state.get("action_descriptors", {})
+        if raw_descriptors is not None:
+            if not isinstance(raw_descriptors, dict):
+                raise ValueError("Forge action_descriptors must be a slot-to-text object")
+            for raw_slot, description in raw_descriptors.items():
+                try:
+                    slot = int(raw_slot)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("Forge action_descriptors has a nonnumeric slot") from exc
+                if str(slot) != str(raw_slot) or not 0 <= slot < self.num_actions:
+                    raise ValueError("Forge action_descriptors has an invalid slot")
+                if not mask[slot] or not isinstance(description, str):
+                    raise ValueError("Forge action_descriptors must describe legal slots with text")
+                descriptors[slot] = hashed_oracle_vector(
+                    "", description, dim=ACTION_DESCRIPTOR_DIM
+                )
+
+        return mask, sources, targets, kinds, descriptors
 
     def _encode_observation(self, state: Dict[str, Any]) -> Dict[str, np.ndarray]:
         """Pack Forge's JSON state into the Box/Dict observation we promised."""
-        card_feats = np.zeros((self.max_cards, 395), dtype=np.float32)
+        card_feats = np.zeros((self.max_cards, 400), dtype=np.float32)
         cards = state.get("cards", [])[: self.max_cards]
         for i, c in enumerate(cards):
             card_feats[i, :11] = [
@@ -451,9 +582,19 @@ class MtgForgeEnv(gym.Env):
                 int(c.get("is_land", False)),
                 int(c.get("is_planeswalker", False)),
             ]
-            emb = c.get("oracle_embedding") or []
-            if emb and len(emb) == 384:
-                card_feats[i, 11:395] = emb
+            card_feats[i, 13:395] = semantic_card_vector(c)
+            # A fixed action id is meaningful only if the policy can see which
+            # cards are candidate spells.  Slots 11/12 are intentionally part
+            # of the formerly unused embedding region: own hand is private
+            # information, battlefield is public, opponent hand is omitted.
+            zone = str(c.get("zone", "battlefield"))
+            card_feats[i, 11] = 1.0 if zone == "hand" else 0.0
+            card_feats[i, 12] = float(bool(c.get("is_tapped", False)))
+            card_feats[i, 395] = float(c.get("controller") == "you")
+            card_feats[i, 396] = float(zone == "graveyard")
+            card_feats[i, 397] = float(zone == "exile")
+            card_feats[i, 398] = float(zone == "stack")
+            card_feats[i, 399] = float(bool(c.get("is_attacking", False)))
 
         player_feats = np.zeros((2, 15), dtype=np.float32)
         for pi, key in enumerate(("you", "opp")):
@@ -484,10 +625,10 @@ class MtgForgeEnv(gym.Env):
         synergy = pad_edges(state.get("synergy_edges", []), 4 * self.max_cards)
         attacks = pad_edges(state.get("attacks_edges", []), self.max_cards)
 
-        mask_list = state.get("action_mask") or [1] * self.num_actions
-        action_mask = np.zeros(self.num_actions, dtype=np.int8)
-        for i, v in enumerate(mask_list[: self.num_actions]):
-            action_mask[i] = 1 if v else 0
+        (
+            action_mask, action_source_indices, action_target_indices,
+            action_kinds, action_descriptor_features,
+        ) = self._encode_action_contract(state, len(cards))
 
         return {
             "card_feats": card_feats,
@@ -497,18 +638,28 @@ class MtgForgeEnv(gym.Env):
             "synergy_edges": synergy,
             "attacks_edges": attacks,
             "action_mask": action_mask,
+            "action_source_indices": action_source_indices,
+            "action_target_indices": action_target_indices,
+            "action_kinds": action_kinds,
+            "action_descriptor_features": action_descriptor_features,
         }
 
     def _dummy_obs(self) -> Dict[str, np.ndarray]:
         """Zero observation for edge cases (subprocess dead, etc.)."""
         return {
-            "card_feats": np.zeros((self.max_cards, 395), dtype=np.float32),
+            "card_feats": np.zeros((self.max_cards, 400), dtype=np.float32),
             "player_feats": np.zeros((2, 15), dtype=np.float32),
             "controlled_by_edges": np.zeros((2, 2 * self.max_cards), dtype=np.int64),
             "in_zone_edges": np.zeros((2, 2 * self.max_cards), dtype=np.int64),
             "synergy_edges": np.zeros((2, 4 * self.max_cards), dtype=np.int64),
             "attacks_edges": np.zeros((2, self.max_cards), dtype=np.int64),
-            "action_mask": np.ones(self.num_actions, dtype=np.int8),
+            "action_mask": np.zeros(self.num_actions, dtype=np.int8),
+            "action_source_indices": np.full(self.num_actions, -1, dtype=np.int64),
+            "action_target_indices": np.full(self.num_actions, -1, dtype=np.int64),
+            "action_kinds": np.zeros(self.num_actions, dtype=np.int64),
+            "action_descriptor_features": np.zeros(
+                (self.num_actions, ACTION_DESCRIPTOR_DIM), dtype=np.float32
+            ),
         }
 
 

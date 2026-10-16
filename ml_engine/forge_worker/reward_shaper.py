@@ -200,7 +200,7 @@ class RewardShaper:
         r_cards = self.config.gamma_cards * d_hand
         r_board = self.config.delta_board * d_power
         r_progress = self._progress_bonus(curr)
-        r_efficiency = self._mana_efficiency_bonus(curr)
+        r_efficiency = self._mana_efficiency_bonus(prev, curr)
         r_archetype = self._archetype_modifier(curr)
 
         r_shape = (
@@ -244,7 +244,9 @@ class RewardShaper:
         turns_to_lethal = max(1.0, curr.life_opp / max(1, curr.power_you))
         return self.config.epsilon_progress / turns_to_lethal
 
-    def _mana_efficiency_bonus(self, curr: GameStateSnapshot) -> float:
+    def _mana_efficiency_bonus(
+        self, prev: GameStateSnapshot, curr: GameStateSnapshot
+    ) -> float:
         """Reward **using the mana you had**, not just casting expensive cards.
 
         efficiency = mana_value_played / max(1, mana_available_you)
@@ -254,7 +256,13 @@ class RewardShaper:
         - Floating 3 of 4 mana → bonus ≈ zeta_efficiency * 0.25
         - No mana_available info → falls back to 0 (no spurious reward)
         """
-        avail = max(0, curr.mana_available_you)
+        # Forge snapshots are captured *after* a chosen spell pays its cost.
+        # Measuring only the current untapped-land count would often produce
+        # zero precisely when the agent spent all its mana.  Use the amount
+        # available before the action as the opportunity budget.  The current
+        # snapshot remains a fallback for callbacks that add mana during the
+        # same transition.
+        avail = max(0, prev.mana_available_you, curr.mana_available_you)
         if avail <= 0:
             return 0.0
         used = max(0, curr.mana_value_played)

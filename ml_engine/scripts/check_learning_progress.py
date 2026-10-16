@@ -96,6 +96,23 @@ def _find_experiments(results_dir: Path, tail: Optional[int]) -> List[Path]:
     return exps
 
 
+def _default_results_dir() -> Path:
+    """Resolve the same OneDrive-safe default used by the Ray orchestrator."""
+    configured = os.getenv("RAY_RESULTS_DIR")
+    if configured:
+        return Path(configured).expanduser()
+
+    local_app_data = os.getenv("LOCALAPPDATA")
+    safe_dir = (
+        Path(local_app_data) / "mtg-deck-mvp" / "ray_results"
+        if local_app_data
+        else None
+    )
+    if safe_dir and safe_dir.exists():
+        return safe_dir
+    return Path("./ray_results")
+
+
 def _summarize_config(params_json: Optional[Dict[str, Any]]) -> str:
     if not params_json:
         return "(config unavailable)"
@@ -152,8 +169,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1].strip())
     parser.add_argument(
         "--results-dir",
-        default=os.getenv("RAY_RESULTS_DIR", "./ray_results"),
-        help="where PBT experiments live (default: ./ray_results or $RAY_RESULTS_DIR)",
+        default=str(_default_results_dir()),
+        help="where PBT experiments live (default: the active OneDrive-safe Ray results directory)",
     )
     parser.add_argument(
         "--experiment",

@@ -290,3 +290,38 @@ def test_build_decklist_produces_basics_when_input_empty():
     for line in lines:
         # Each line should be "<n> Forest" or "<n> Mountain" only.
         assert "Forest" in line or "Mountain" in line
+
+
+def test_build_decklist_keeps_a_60_card_total_when_pool_is_sparse():
+    """A partial DB import must not send an underfilled deck to Forge."""
+    text = arena_pool._build_decklist_from_rows(
+        rows=[("Lightning Strike", "Instant")],
+        basics=("Mountain",),
+    )
+    total = sum(
+        int(line.split(" ", 1)[0])
+        for line in text.splitlines()
+        if line.strip()
+    )
+    assert total == 60
+
+
+def test_archetype_allowlist_dedupes_and_normalizes_names(monkeypatch):
+    monkeypatch.setenv("TRAINING_ARCHETYPES", "AGGRO_RED, aggro_red, CONTROL_UW")
+    assert arena_pool._archetype_allowlist() == ("aggro_red", "control_uw")
+
+
+def test_duplicate_only_curriculum_falls_back_to_distinct_archetypes(monkeypatch):
+    """Repeated names must not make the match picker sample self-play."""
+    monkeypatch.setenv("TRAINING_ARCHETYPES", "aggro_red,aggro_red")
+    agent, opponent = arena_pool._archetype_pair_for_seed(7)
+    assert agent != opponent
+
+
+def test_fallback_decks_are_distinct_for_every_sampled_pair(monkeypatch):
+    """The two-list fallback must not collapse non-aggro pairs into mirror matches."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("POSTGRES_URL", raising=False)
+    for seed in range(100):
+        agent, opponent = arena_pool.resolve_decks_for_training(arena_only=True, seed=seed)
+        assert agent != opponent

@@ -57,6 +57,7 @@ class TestLoopGuard:
     def test_unique_states_no_loop(self):
         guard = LoopGuard()
         for life in range(20, 10, -1):
+            guard.record_action({"type": "action"})
             looped, _ = guard.observe(_state(life_you=life))
             assert not looped
 
@@ -65,6 +66,7 @@ class TestLoopGuard:
         s = _state(life_you=15)
         loop_detected = False
         for _ in range(5):
+            guard.record_action({"type": "action"})
             looped, toxic = guard.observe(s)
             if looped:
                 loop_detected = True
@@ -75,8 +77,11 @@ class TestLoopGuard:
     def test_flag_set_only_once(self):
         guard = LoopGuard(LoopGuardConfig(loop_threshold=2))
         s = _state()
+        guard.record_action({"type": "action"})
         guard.observe(s)
+        guard.record_action({"type": "action"})
         _, toxic1 = guard.observe(s)  # trips
+        guard.record_action({"type": "action"})
         _, toxic2 = guard.observe(s)  # already flagged, no new toxic
         assert toxic1 is not None
         assert toxic2 is None
@@ -85,40 +90,72 @@ class TestLoopGuard:
     def test_reset_clears_state(self):
         guard = LoopGuard(LoopGuardConfig(loop_threshold=2))
         s = _state()
+        guard.record_action({"type": "action"})
         guard.observe(s)
+        guard.record_action({"type": "action"})
         guard.observe(s)
         assert guard.is_flagged()
         guard.reset()
         assert not guard.is_flagged()
+        guard.record_action({"type": "action"})
         looped, _ = guard.observe(s)
         assert not looped
 
     def test_action_history_tracked_in_toxic(self):
         guard = LoopGuard(LoopGuardConfig(loop_threshold=2))
         guard.record_action({"type": "cast", "card_id": 42})
-        guard.record_action({"type": "pass"})
         s = _state()
         guard.observe(s)
+        guard.record_action({"type": "pass"})
+        assert guard.observe(s) == (False, None)
+        guard.record_action({"type": "cast", "card_id": 42})
         _, toxic = guard.observe(s)
         assert toxic is not None
         # Should prefer the non-pass action for attribution
         assert toxic.card_id == 42
         assert toxic.action_type == "cast"
 
-    def test_action_attribution_falls_back_to_last(self):
-        """If every action is a pass, fall back to the most recent."""
+    def test_repeated_passes_are_not_toxic(self):
+        """Priority handoffs often return an identical canonical state."""
         guard = LoopGuard(LoopGuardConfig(loop_threshold=2))
-        guard.record_action({"type": "pass", "card_id": None})
         s = _state()
-        guard.observe(s)
-        _, toxic = guard.observe(s)
-        assert toxic is not None
-        assert toxic.action_type == "pass"
+        for action_type in ("pass", "priority", "noop") * 5:
+            guard.record_action({"type": action_type, "card_id": None})
+            assert guard.observe(s) == (False, None)
+        assert not guard.is_flagged()
+        assert guard.pending_toxic() == []
+        assert guard._loop_state.state_counts == {}
+
+    def test_duplicate_snapshot_without_new_action_is_not_toxic(self):
+        guard = LoopGuard(LoopGuardConfig(loop_threshold=2))
+        s = _state()
+        guard.record_action({"type": "cast", "card_id": 42})
+        assert guard.observe(s) == (False, None)
+        for _ in range(5):
+            assert guard.observe(s) == (False, None)
+        assert not guard.is_flagged()
+
+    def test_meaningful_same_state_actions_still_toxic_after_passes(self):
+        guard = LoopGuard(LoopGuardConfig(loop_threshold=3))
+        s = _state()
+        for attempt in range(3):
+            guard.record_action({"type": "action", "card_id": 42})
+            looped, toxic = guard.observe(s)
+            if attempt < 2:
+                assert not looped
+                guard.record_action({"type": "pass"})
+                assert guard.observe(s) == (False, None)
+            else:
+                assert looped
+                assert toxic is not None
+                assert toxic.action_type == "action"
+                assert toxic.detected_count == 3
 
     def test_window_size_bounds_memory(self):
         """State counter should evict old entries as window fills."""
         guard = LoopGuard(LoopGuardConfig(window_size=10, loop_threshold=100))
         for turn in range(50):
+            guard.record_action({"type": "action"})
             guard.observe(_state(life_you=turn, turn=turn))
         # After 50 distinct states with window=10, we should have ≤10 tracked
         assert len(guard._loop_state.state_counts) <= 11
@@ -126,7 +163,9 @@ class TestLoopGuard:
     def test_pending_toxic_accumulates(self):
         guard = LoopGuard(LoopGuardConfig(loop_threshold=2))
         s = _state()
+        guard.record_action({"type": "action"})
         guard.observe(s)
+        guard.record_action({"type": "action"})
         guard.observe(s)
         assert len(guard.pending_toxic()) == 1
         guard.clear_pending()
@@ -136,6 +175,7 @@ class TestLoopGuard:
         guard = LoopGuard(LoopGuardConfig(loop_threshold=3))
         s = _state(life_you=17, turn=5)
         for _ in range(4):
+            guard.record_action({"type": "action"})
             looped, toxic = guard.observe(s)
             if looped:
                 assert toxic.context_hash == canonical_state_hash(s)
