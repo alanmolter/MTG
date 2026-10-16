@@ -3,8 +3,9 @@
  * migrator oficial do drizzle, que registra cada uma em
  * drizzle.__drizzle_migrations (o mesmo ledger usado por `drizzle-kit migrate`).
  *
- * Antes de migrar, faz o baseline de bancos que já tinham 0003–0010 aplicadas
- * por outro caminho (ver migrationBaseline.ts e docs/migrations.md).
+ * Antes de migrar: pg_advisory_lock, auditoria do ledger (hash/ordem) e baseline
+ * verificado de bancos que já tinham 0003–0010 aplicadas por outro caminho
+ * (ver migrationBaseline.ts e docs/migrations.md).
  *
  * Uso:
  *   npm run db:migrate                                  # baseline automático + migrate
@@ -19,18 +20,18 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import {
-  applyBaseline,
   DRIZZLE_SCHEMA,
   DRIZZLE_TABLE,
   migrationHash,
-  planBaseline,
+  readLedger,
+  runMigrations,
   type JournalMigration,
   type MigrationDb,
 } from "./migrationBaseline";
 
 type Sql = ReturnType<typeof postgres>;
 
-function adapt(sql: Sql | postgres.TransactionSql): MigrationDb {
+export function adapt(sql: Sql | postgres.TransactionSql): MigrationDb {
   return {
     async query(sqlText, params) {
       const rows =
@@ -83,34 +84,51 @@ async function main() {
   }
 
   const migrationsFolder = path.join(process.cwd(), "drizzle");
-  const client = postgres(dbUrl, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
-
   try {
-    const journal = readJournal(migrationsFolder);
-    const db = adapt(client);
-    const plan = await planBaseline(db, journal, { through: args.through });
-    const stamped = await applyBaseline(db, plan);
-    if (stamped.length > 0) {
-      console.log(`[Migration] baseline (${plan.kind === "stamp" ? plan.source : ""}): ${stamped.join(", ")}`);
+    const result = await migrateDatabase(dbUrl, migrationsFolder, args);
+    if (result.stamped.length > 0) {
+      const source = result.plan.kind === "stamp" ? result.plan.source : "";
+      console.log(`[Migration] baseline (${source}): ${result.stamped.join(", ")}`);
     }
-    if (args.baselineOnly) {
-      console.log(`[Migration] --baseline-only: migrator não executado (plano: ${plan.kind}).`);
-      return;
-    }
-    await migrate(drizzle(client), {
-      migrationsFolder,
-      migrationsSchema: DRIZZLE_SCHEMA,
-      migrationsTable: DRIZZLE_TABLE,
-    });
-    const [last] = await client.unsafe(
-      `SELECT count(*)::int AS n, max(created_at) AS last FROM "${DRIZZLE_SCHEMA}"."${DRIZZLE_TABLE}"`,
+    console.log(
+      result.migrated
+        ? `[Migration] ok. ${result.ledgerSize} migrações no ledger; última: ${result.lastTag}`
+        : `[Migration] --baseline-only: migrator não executado (plano: ${result.plan.kind}).`,
     );
-    const lastTag = journal.find((entry) => String(entry.when) === String(last?.last))?.tag ?? "(nenhuma)";
-    console.log(`[Migration] ok. ${last?.n ?? 0} migrações no ledger; última: ${lastTag}`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[Migration] Erro fatal:", message);
     process.exitCode = 1;
+  }
+}
+
+/**
+ * Uma conexão só (max: 1): o pg_advisory_lock é por sessão, então lock,
+ * baseline e a transação do migrator precisam rodar na mesma conexão.
+ */
+export async function migrateDatabase(
+  dbUrl: string,
+  migrationsFolder: string,
+  opts: { through?: string; baselineOnly?: boolean } = {},
+) {
+  const client = postgres(dbUrl, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
+  try {
+    const journal = readJournal(migrationsFolder);
+    const result = await runMigrations(
+      adapt(client),
+      journal,
+      () =>
+        migrate(drizzle(client), {
+          migrationsFolder,
+          migrationsSchema: DRIZZLE_SCHEMA,
+          migrationsTable: DRIZZLE_TABLE,
+        }),
+      opts,
+    );
+    const ledger = await readLedger(adapt(client));
+    const last = ledger.at(-1)?.created_at;
+    const lastTag = journal.find((entry) => entry.when === last)?.tag ?? "(nenhuma)";
+    return { ...result, ledgerSize: ledger.length, lastTag };
   } finally {
     await client.end({ timeout: 3 }).catch(() => undefined);
   }
