@@ -57,6 +57,13 @@
       "when": 1775000007000,
       "tag": "0010_forge_match_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792193457051,
+      "tag": "20261016233057_competitive_decks_provenance",
+      "breakpoints": true
     }
   ]
 }
