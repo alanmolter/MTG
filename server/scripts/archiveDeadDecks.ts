@@ -6,6 +6,8 @@
  *   npx tsx server/scripts/archiveDeadDecks.ts --apply --expect 333
  *
  * --expect N aborts (no writes) unless exactly N candidates are found.
+ * --apply requires migration 20261016233057_competitive_decks_provenance
+ * (download_status / archived_at / archive_reason); it refuses otherwise.
  */
 import "dotenv/config";
 import { closeDb, getRawClient } from "../db";
@@ -45,6 +47,11 @@ async function main() {
 
   if (expected !== undefined && candidates.length !== expected) {
     console.error(`[archive] expected ${expected} candidates, found ${candidates.length}; aborting without writes`);
+    process.exitCode = 1;
+    return;
+  }
+  if (apply && !plan.statusColumnsPresent) {
+    console.error("[archive] download_status/archived_at missing: run `npm run db:migrate` first; nothing written");
     process.exitCode = 1;
     return;
   }

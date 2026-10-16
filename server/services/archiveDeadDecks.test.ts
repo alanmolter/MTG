@@ -35,6 +35,8 @@ describe("archive dead decks", () => {
     const plan = planArchive([c(1, "placeholder"), c(2, "source_dropped")], ["download_status", "archived_at", "archive_reason"]);
     expect(plan.statements).toHaveLength(3);
     expect(plan.statements.slice(1).every((s) => s.sql.includes("archived_at IS NULL"))).toBe(true);
+    expect(plan.statements[1].sql).toContain("download_status = $2::deck_download_status");
+    expect(plan.statements.slice(1).map((s) => s.params[1])).toEqual(["source_dropped", "placeholder"]);
     expect(plan.pending).toHaveLength(0);
   });
 });
