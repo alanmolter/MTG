@@ -8,7 +8,7 @@
 ## 📋 Pré-requisitos
 
 - ✅ Node.js 22.13.0+
-- ✅ npm ou pnpm
+- ✅ npm
 - ✅ PostgreSQL 14+ rodando em `192.168.56.1:5432`
 - ✅ Database `MTG` criado
 - ✅ Usuário `postgres` com senha `alan7474`
@@ -21,9 +21,7 @@
 
 ```bash
 cd /tmp/MTG
-npm install
-# ou
-pnpm install
+npm install --legacy-peer-deps
 ```
 
 ### 2. Verificar Conexão com Banco

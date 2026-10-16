@@ -10,7 +10,7 @@
       1. Bypasses ExecutionPolicy for its own session (no Set-ExecutionPolicy needed)
       2. Detects .venv, creates it if missing, activates it safely
       3. Installs Python deps from ml_engine/requirements.txt
-      4. Installs Node deps via pnpm (or npm as fallback)
+      4. Installs Node deps via npm
       5. Loads .env into $env:* so DATABASE_URL etc. are visible to child procs
       6. Creates pgvector extension + runs Drizzle migrations
       7. (Optional) backfills card oracle embeddings
@@ -25,7 +25,7 @@
 
     # Flags:
     .\setup.ps1 -SkipEmbeddings    # skip the slow embeddings backfill
-    .\setup.ps1 -SkipNode          # skip pnpm install (already done)
+    .\setup.ps1 -SkipNode          # skip npm install (already done)
     .\setup.ps1 -PythonBin python3.11
 
 .NOTES
@@ -192,20 +192,13 @@ if ($pyExe) {
 # 4. Node deps
 # ---------------------------------------------------------------------------
 if (-not $SkipNode) {
-    Step "4" "Installing Node deps (pnpm or npm)"
+    Step "4" "Installing Node deps (npm)"
     $hasNode = (Get-Command node -ErrorAction SilentlyContinue) -ne $null
     if (-not $hasNode) {
         Fail "node not on PATH - install Node 20+ from nodejs.org"
     } else {
-        $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
-        if ($pnpm) {
-            & pnpm install
-            if ($LASTEXITCODE -ne 0) { Fail "pnpm install failed" } else { OK "pnpm install done" }
-        } else {
-            Write-Host "    pnpm not found, falling back to npm..." -ForegroundColor DarkGray
-            & npm install --legacy-peer-deps
-            if ($LASTEXITCODE -ne 0) { Fail "npm install failed" } else { OK "npm install done" }
-        }
+        & npm install --legacy-peer-deps
+        if ($LASTEXITCODE -ne 0) { Fail "npm install failed" } else { OK "npm install done" }
     }
 } else {
     Write-Host "    skipping Node install (-SkipNode)" -ForegroundColor DarkGray

@@ -13,8 +13,8 @@
 
 **Run Commands:**
 ```bash
-pnpm test              # Run all server unit tests (vitest run)
-pnpm test:model        # Regression test script via tsx
+npm test               # Run all server unit tests (vitest run)
+npm run test:model     # Regression test script via tsx
 ```
 
 **Vitest configuration:**
@@ -238,7 +238,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
 
 **View Coverage:**
 ```bash
-pnpm vitest run --coverage
+npx vitest run --coverage
 ```
 
 ## Test Types

@@ -414,7 +414,7 @@ em partidas reais** — não há divergência de regras.
 ```powershell
 # 1. Clonar + instalar deps Node
 git clone <repo> ; cd mtg-deck-mvp
-pnpm install        # ou npm install
+npm install --legacy-peer-deps
 
 # 2. Criar venv Python 3.12 + deps ML
 py -3.12 -m venv .venv
