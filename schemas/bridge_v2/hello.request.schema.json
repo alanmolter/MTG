@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mtg.local/schemas/bridge_v2/hello.request.schema.json",
+  "title": "hello (cliente→bridge)",
+  "type": "object",
+  "required": [
+    "cmd",
+    "request_id",
+    "protocol"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "cmd": {
+      "const": "hello"
+    },
+    "request_id": {
+      "$ref": "common.schema.json#/$defs/request_id"
+    },
+    "protocol": {
+      "$ref": "common.schema.json#/$defs/protocol"
+    },
+    "client": {
+      "type": "string"
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    }
+  }
+}

@@ -185,11 +185,19 @@ def record_match(
                 "opponent_id": opponent_id,
                 "split": split,
                 "action": action,
+                "decision_id": state.get("decision_id"),
+                "chosen_action": state.get("chosen_action"),
+                "protocol": 2,
+                "label_version": 2,
                 "obs": _encode(state),
             })
         if state.get("terminal"):
             break
-        state = bridge.command({"cmd": "step", "action": 0})
+        state = bridge.command({
+            "cmd": "step",
+            "action": 0 if action is None else action,
+            "decision_id": state.get("decision_id", 0),
+        })
     outcome = 0
     if isinstance(state, dict) and state.get("outcome") in (-1, 0, 1):
         outcome = int(state["outcome"])

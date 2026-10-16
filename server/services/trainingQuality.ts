@@ -76,6 +76,8 @@ export interface PromotionMetrics {
   validDecks: number;
   rejectedDecks: number;
   realMatchCount: number;
+  /** Matches whose bridge reported policy_controlled. The gate counts only these. */
+  policyControlledMatchCount?: number;
   invalidSynergyCount: number;
   baselineMetric?: number | null;
   candidateMetric?: number | null;
@@ -289,7 +291,8 @@ export function evaluatePromotionGates(
   metrics: PromotionMetrics
 ): PromotionGateResult {
   const failures = evaluateDataReadiness(metrics).failures;
-  if (metrics.realMatchCount < 10)
+  const policyControlledMatches = metrics.policyControlledMatchCount ?? 0;
+  if (policyControlledMatches < 10)
     failures.push("need_at_least_10_recorded_forge_matches");
   if (!metrics.hasCheckpoint) failures.push("candidate_checkpoint_missing");
 

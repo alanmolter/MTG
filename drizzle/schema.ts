@@ -375,6 +375,10 @@ export const forgeMatches = pgTable("forge_matches", {
   poolVersion: text("pool_version"),
   /** rlbridge build that produced the match. */
   bridgeVersion: text("bridge_version"),
+  /** True when the agent seat was the external controller for this match. */
+  policyControlled: boolean("policy_controlled"),
+  /** Bridge protocol. Phase 1 writes 2. */
+  protocolVersion: integer("protocol_version"),
 });
 
 export type ForgeMatch = typeof forgeMatches.$inferSelect;

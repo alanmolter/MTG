@@ -79,7 +79,7 @@ jobs:
       - name: 📚 Install CPU dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest numpy gymnasium psycopg2-binary
+          python -m pip install pytest numpy gymnasium psycopg2-binary jsonschema referencing
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install torch-geometric
 
@@ -90,6 +90,12 @@ jobs:
           # is fixed in a separate PR.
           FORGE_MATCH_RECORD: "0"
         run: python -m pytest ml_engine -q
+
+      - name: 🧪 bridge_v2 schemas
+        run: python schemas/bridge_v2/validate.py
+
+      - name: 🧪 Java rlbridge protocol tests
+        run: bash rlbridge_src/test-protocol.sh
 
   # ============================================================================
   # JOB 2: BUILD E ANÁLISE

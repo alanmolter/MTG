@@ -1,0 +1,11 @@
+{
+ "cmd": "hello",
+ "request_id": 1,
+ "protocol": 2,
+ "client": "ml_engine/env.py",
+ "required_capabilities": [
+  "policy_control",
+  "seed",
+  "legal_mask"
+ ]
+}

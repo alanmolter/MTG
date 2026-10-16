@@ -18,7 +18,7 @@ echo [build.cmd] javac rlbridge sources...
 REM Compile the two production entry points explicitly. Do not glob the whole
 REM directory: local diagnostic helpers may live beside the bridge and must
 REM never become a build dependency for the training runtime.
-javac -cp "%FORGE_JAR%" -d "%SCRIPT_DIR%target\classes" "%SCRIPT_DIR%src\main\java\forge\rlbridge\ForgeRLBridge.java" "%SCRIPT_DIR%src\main\java\forge\rlbridge\VisualAutoMatch.java"
+javac -cp "%FORGE_JAR%" -d "%SCRIPT_DIR%target\classes" "%SCRIPT_DIR%src\main\java\forge\rlbridge\ProtocolV2.java" "%SCRIPT_DIR%src\main\java\forge\rlbridge\DecisionHandoff.java" "%SCRIPT_DIR%src\main\java\forge\rlbridge\ExternalPlayerController.java" "%SCRIPT_DIR%src\main\java\forge\rlbridge\ForgeRLBridge.java" "%SCRIPT_DIR%src\main\java\forge\rlbridge\VisualAutoMatch.java"
 if errorlevel 1 (
   echo [build.cmd] javac FAILED
   exit /b 1

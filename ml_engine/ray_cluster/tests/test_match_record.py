@@ -53,6 +53,7 @@ def test_forge_match_params_keep_provenance_and_drop_bad_numbers():
     )
     assert params == (
         1, 40, "burn", "control", 11, "checkpoints/bc.pt", "2", "rlbridge-fase0",
+        None, None,
     )
     blank = forge_match_params(
         agent_deck_id="  ",
@@ -64,10 +65,11 @@ def test_forge_match_params_keep_provenance_and_drop_bad_numbers():
         winner="draw",
         turns=None,
     )
-    assert blank == (None, None, None, None, None, None, None, None)
+    assert blank == (None, None, None, None, None, None, None, None, None, None)
     for column in (
         "agent_deck_id", "opponent_deck_id", "seed",
         "policy_version", "pool_version", "bridge_version",
+        "policy_controlled", "protocol_version",
     ):
         assert column in INSERT_FORGE_MATCH
 

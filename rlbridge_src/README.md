@@ -50,33 +50,48 @@ cmd /c forge\rlbridge\build.cmd
 `scripts\e2e-preflight.ps1` does this copy and build and FAILs the rlbridge
 stage when the Forge jar is absent.
 
-Snapshots now include the Discrete(512) contract (`action_mask`,
-`action_source_indices`, `action_target_indices`, `action_kinds`) and
-`chosen_action`. `chosen_action` is the slot of the card that left the
-agent's hand since the previous snapshot, `0` for an inferred pass, or `-1`
-when the AI decision does not map. `policy_controlled` stays false until a
-controller actually applies `step`.
+Protocol v2 (`rlbridge-v2.0.0`, `PROTOCOL_VERSION=2`). The agent seat is an
+`ExternalPlayerController` when `agent_policy` is `external`. The opponent
+stays `LobbyPlayerAi`. `policy_controlled` is true only while that controller
+is installed. `agent_policy=forge_ai` still plays the match out inside
+`new_game` and returns one terminal state with `policy_controlled` false.
+
+`step` applies a legal mask bit and blocks until the next agent decision.
+An illegal bit returns the same `decision_id` and `state_hash` and does not
+call Forge. A `step_timeout` discards the match so a late state cannot be
+served under the next request id. Replies without `request_id` are rejected.
+
+`chosen_action` is the slot the Forge AI would have taken for that decision
+(`exact_ai_labels`), or `-1` when it could not be mapped. It is not inferred
+from a hand diff.
+
+## Rebuild and test on Windows
+
+```powershell
+New-Item -ItemType Directory -Force forge\rlbridge | Out-Null
+Copy-Item -Recurse -Force rlbridge_src\src\* forge\rlbridge\src\
+Copy-Item -Force rlbridge_src\build.cmd,rlbridge_src\test.cmd forge\rlbridge\
+cmd /c forge\rlbridge\build.cmd
+cmd /c forge\rlbridge\test.cmd
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e-preflight.ps1
+# Full phase-1 sample (the smoke default is 2 episodes):
+$env:POLICY_CONTROL_EPISODES = "200"
+python -m ml_engine.scripts.e2e_preflight --stage policy_control
+```
+
+CI runs `rlbridge_src/test-protocol.sh` (no Forge jar) and
+`python schemas/bridge_v2/validate.py`.
 
 ## Seed
 
-`new_game.seed` is applied with `MyRandom.setRandom(new java.util.Random(seed))`
-before `match.createGame()`. Forge documents that hook for deterministic
-simulation. It covers shuffles and coin flips that later call
-`MyRandom.getRandom()`.
+Before `createGame`, the bridge derives a seed for each RNG source: Java,
+Forge shuffles (`MyRandom.setRandom`), and Forge AI static `Random` fields.
+Python seeds `random`, `PYTHONHASHSEED`, NumPy, and PyTorch from the same
+match seed in `MtgForgeEnv.reset`.
 
-Limits, so the same seed is not a full replay:
-
-- Code that does `new Random()` or `new SecureRandom()` (some AI heuristics)
-  does not see this seed. `setSeed` on the default `SecureRandom` is not used,
-  because that is not a portable replay.
-- Wall-clock timeouts and thread scheduling still vary.
-- `MyRandom` is process-global. Run one game per JVM.
-- The bridge still lets Forge AI play both sides. A repeated seed repeats
-  opening hands when those shuffles go through `MyRandom`. It does not prove
-  the whole game is identical.
-
-A missing seed leaves Forge's `SecureRandom` in place. Python may send a
-seed larger than `Integer.MAX_VALUE`; the bridge reads it as a long.
+`MyRandom` is process-global. Run one game per JVM. Wall-clock timeouts can
+still diverge; phase 1 asks for identical hashes on at least 95% of paired
+replays. A missing seed leaves Forge's `SecureRandom` in place.
 
 ## Atualizar os fontes
 

@@ -33,8 +33,9 @@ MAX_QUEUED = 4096
 INSERT_FORGE_MATCH = """
 INSERT INTO forge_matches (
     winner, turns, agent_deck_id, opponent_deck_id, seed,
-    policy_version, pool_version, bridge_version
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    policy_version, pool_version, bridge_version,
+    policy_controlled, protocol_version
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 
@@ -48,6 +49,8 @@ def forge_match_params(
     bridge_version: Optional[str],
     winner: Any = None,
     turns: Any = None,
+    policy_controlled: Any = None,
+    protocol_version: Any = None,
 ) -> tuple:
     def _text(value: Any) -> Optional[str]:
         if value is None:
@@ -72,6 +75,8 @@ def forge_match_params(
         _text(policy_version),
         _text(pool_version),
         _text(bridge_version),
+        None if policy_controlled is None else bool(policy_controlled),
+        _int(protocol_version),
     )
 
 

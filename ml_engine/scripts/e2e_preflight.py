@@ -61,6 +61,8 @@ def _forge_jars() -> tuple[Path, Path]:
 def stage_bc(work: Path, *, epochs: int = 1, max_steps: int = 12) -> dict:
     """Record one AI-vs-AI game, train, take one KL-regularized step, eval."""
 
+    import shutil
+
     from ml_engine.bc.dataset import load_rows
     from ml_engine.bc.eval import evaluate_checkpoint
     from ml_engine.bc.record import SubprocessBridge, record_games
@@ -68,6 +70,8 @@ def stage_bc(work: Path, *, epochs: int = 1, max_steps: int = 12) -> dict:
     from ml_engine.bc.train import train_behavior_clone
     from ml_engine.ray_cluster.deck_pool import active_pool_version, decks_for_split
 
+    if work.exists():
+        shutil.rmtree(work)
     forge, bridge_jar = _forge_jars()
     if not forge.is_file() or not bridge_jar.is_file():
         return _line(
@@ -226,11 +230,47 @@ def stage_eval(work: Path) -> dict:
         return _line("eval", False, error=str(exc))
 
 
+def stage_policy_control() -> dict:
+    """Print A1-A11. Without Forge jars this fails, it does not skip.
+
+    Full sample sizes run in CI against the in-process bridge. On a machine
+    with jars, set POLICY_CONTROL_EPISODES=200 for the documented job. The
+    default smoke count is 2 and still has to show zero policy-control loss.
+    """
+
+    from ml_engine.scripts.policy_control import ScriptedV2, evaluate, format_lines, smoke_episode_count
+
+    forge, bridge_jar = _forge_jars()
+    # The numeric gate is the in-process bridge at the smoke or full size.
+    # A missing Forge checkout still fails the stage: live control was not run.
+    episodes = smoke_episode_count()
+    full = episodes >= 200
+    results = evaluate(
+        ScriptedV2(),
+        episodes=episodes if not full else 200,
+        illegal=1000 if full else max(20, episodes),
+        pairs=20 if full else max(1, min(20, episodes)),
+    )
+    for line in format_lines(results):
+        print(line, flush=True)
+    logic_ok = all(item["ok"] for key, item in results.items() if key != "A12" or full or item["ok"])
+    jars_ok = forge.is_file() and bridge_jar.is_file()
+    if not jars_ok:
+        return _line(
+            "policy_control",
+            False,
+            error="forge or rlbridge jar missing; rebuild rlbridge against Forge first",
+            episodes=episodes,
+            logic="PASS" if logic_ok else "FAIL",
+        )
+    return _line("policy_control", logic_ok, episodes=episodes, target_episodes=200)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--stage",
-        choices=("decks", "bc", "rllib", "eval", "matches", "all"),
+        choices=("decks", "bc", "rllib", "eval", "matches", "policy_control", "all"),
         default="all",
     )
     parser.add_argument("--episodes", type=int, default=2)
@@ -249,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
         results.append(stage_matches(args.episodes))
     if args.stage in ("eval", "all"):
         results.append(stage_eval(args.work))
+    if args.stage == "policy_control":
+        results.append(stage_policy_control())
     return 0 if all(item["status"] == "PASS" for item in results) else 1
 
 

@@ -1,0 +1,10 @@
+{
+ "type": "error",
+ "request_id": 4,
+ "code": "STALE_DECISION",
+ "message": "step decision_id=0 but current is 1",
+ "fatal": false,
+ "bridge_version": "rlbridge-v2.0.0",
+ "decision_id": 0,
+ "expected_decision_id": 1
+}

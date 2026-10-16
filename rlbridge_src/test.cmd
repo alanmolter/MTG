@@ -14,7 +14,7 @@ if not exist "%SCRIPT_DIR%target\classes\forge\rlbridge\ForgeRLBridge.class" (
 if not exist "%SCRIPT_DIR%target\test-classes" mkdir "%SCRIPT_DIR%target\test-classes"
 
 echo [test.cmd] javac test sources...
-javac -cp "%FORGE_JAR%;%SCRIPT_DIR%target\classes" -d "%SCRIPT_DIR%target\test-classes" "%SCRIPT_DIR%src\test\java\forge\rlbridge\ForgeRLBridgeAutoregressiveTest.java"
+javac -cp "%FORGE_JAR%;%SCRIPT_DIR%target\classes" -d "%SCRIPT_DIR%target\test-classes" "%SCRIPT_DIR%src\test\java\forge\rlbridge\ForgeRLBridgeAutoregressiveTest.java" "%SCRIPT_DIR%src\test\java\forge\rlbridge\ForgeRLBridgeProtocolTest.java"
 if errorlevel 1 (
   echo [test.cmd] javac FAILED
   exit /b 1
@@ -22,4 +22,6 @@ if errorlevel 1 (
 
 echo [test.cmd] running...
 java -cp "%FORGE_JAR%;%SCRIPT_DIR%target\classes;%SCRIPT_DIR%target\test-classes" forge.rlbridge.ForgeRLBridgeAutoregressiveTest
+if errorlevel 1 exit /b 1
+java -cp "%SCRIPT_DIR%target\classes;%SCRIPT_DIR%target\test-classes" forge.rlbridge.ForgeRLBridgeProtocolTest
 exit /b %errorlevel%

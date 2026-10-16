@@ -1,0 +1,19 @@
+{
+ "type": "hello",
+ "request_id": 1,
+ "protocol": 2,
+ "bridge_version": "rlbridge-v2.0.0",
+ "forge_commit": "7cc4ff7b",
+ "cards_loaded": 31000,
+ "capabilities": [
+  "policy_control",
+  "seed",
+  "legal_mask",
+  "decision_points"
+ ],
+ "limits": {
+  "num_actions": 512,
+  "max_cards": 128,
+  "max_decision_timeout_ms": 8000
+ }
+}

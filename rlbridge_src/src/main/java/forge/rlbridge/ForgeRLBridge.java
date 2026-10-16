@@ -13,6 +13,7 @@ import forge.game.GameOutcome;
 import forge.game.GameRules;
 import forge.game.GameType;
 import forge.game.Match;
+import forge.card.MagicColor;
 import forge.game.card.Card;
 import forge.game.event.Event;
 import forge.game.event.GameEventGameFinished;
@@ -98,12 +99,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   - Cards load lazily (LOAD_CARD_SCRIPTS_LAZILY=true) to keep startup under
  *     a few seconds. The first new_game warms the cache for the decks in use.
  */
-public class ForgeRLBridge {
+public class ForgeRLBridge implements ExternalPlayerController.Host {
 
-    private static final int ACTION_MASK_SIZE = 512;
+    private static final int ACTION_MASK_SIZE = ProtocolV2.NUM_ACTIONS;
     /** Default decision wait. Python's read timeout must be strictly longer. */
     private static final int DEFAULT_STEP_TIMEOUT_SECONDS = 8;
-    static final String BRIDGE_VERSION = "rlbridge-fase0";
+    static final String BRIDGE_VERSION = ProtocolV2.BRIDGE_VERSION;
 
     // Phase 3 — autoregressive action space bounds. Must match
     // ml_engine/ray_cluster/env.py's AR_NUM_TYPES / AR_NUM_SOURCES /
@@ -116,6 +117,16 @@ public class ForgeRLBridge {
 
     // ── State shared between stdin reader and game thread ──────────────────
     private final BlockingQueue<String> snapshotQueue = new ArrayBlockingQueue<>(256);
+    private final DecisionHandoff handoff = new DecisionHandoff();
+    private volatile boolean externalPolicy;
+    private volatile String pendingKind = "none";
+    private volatile ProtocolV2.Layout currentLayout;
+    private volatile int chosenActionLabel = -1;
+    private volatile int aiFallbackDecisions;
+    private volatile long matchSeed;
+    private volatile int turnLimit = 50;
+    private volatile boolean turnLimitSent;
+    private volatile String truncationReason;
     private Thread gameThread = null;
     private Game currentGame = null;
     private Player agentPlayer = null;
@@ -157,9 +168,10 @@ public class ForgeRLBridge {
                     parsed = Json.parse(line);
                     handleCommand(parsed, protocolOut);
                 } catch (Throwable t) {
-                    String msg = escape(t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()));
+                    Long id = parsed == null ? null : parsed.longOrNull("request_id");
+                    String msg = t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage());
                     writeResponse(protocolOut, parsed,
-                        "{\"error\":\"" + msg + "\",\"terminal\":true,\"outcome\":0,\"illegal_action\":true}");
+                        ProtocolV2.errorResponse(id, "INTERNAL", msg, null, null));
                 }
             }
         } catch (Exception e) {
@@ -238,57 +250,62 @@ public class ForgeRLBridge {
     // ── Command dispatch ───────────────────────────────────────────────────
 
     private void handleCommand(Json j, PrintStream out) throws Exception {
-        // Minimal JSON parsing — we only care about a handful of top-level keys
-        // and we accept simple string/int/null scalars. This avoids pulling in
-        // a JSON library in the bridge jar.
         String cmd = j.str("cmd");
+        Long requestId = j.longOrNull("request_id");
         if (cmd == null) {
-            writeResponse(out, j, "{\"error\":\"missing cmd\"}");
+            writeResponse(out, j, ProtocolV2.errorResponse(requestId, "BAD_REQUEST", "missing cmd", null, null));
+            return;
+        }
+        if (requestId == null && !"quit".equals(cmd)) {
+            writeResponse(out, j, ProtocolV2.errorResponse(null, "BAD_REQUEST", "request_id is required", null, null));
             return;
         }
         switch (cmd) {
+            case "hello":
+                hello(j, out, requestId);
+                break;
             case "ping":
-                writeResponse(out, j, "{\"pong\":true,\"bridge_version\":\"" + BRIDGE_VERSION + "\"}");
+                hello(j, out, requestId);
                 break;
             case "quit":
-                writeResponse(out, j, "{\"bye\":true}");
+                writeResponse(out, j, "{\"type\":\"bye\",\"request_id\":" + (requestId == null ? 1 : requestId) + "}");
                 System.exit(0);
                 break;
             case "new_game":
-                startNewGame(j, out);
+                startNewGame(j, out, requestId);
                 break;
             case "step":
-                stepGame(j, out);
+                stepGame(j, out, requestId);
                 break;
             case "step_autoregressive":
-                stepAutoregressive(j, out);
+                stepAutoregressive(j, out, requestId);
                 break;
             default:
-                writeResponse(out, j, "{\"error\":\"unknown cmd: " + escape(cmd) + "\"}");
+                writeResponse(out, j, ProtocolV2.errorResponse(requestId, "UNKNOWN_CMD", "unknown cmd: " + cmd, null, null));
         }
     }
 
+    private void hello(Json j, PrintStream out, long requestId) {
+        Integer protocol = j.intOrNull("protocol");
+        if (protocol == null || protocol != ProtocolV2.PROTOCOL_VERSION) {
+            writeResponse(out, j, ProtocolV2.errorResponse(requestId, "PROTOCOL_MISMATCH",
+                "bridge protocol is " + ProtocolV2.PROTOCOL_VERSION, null, null));
+            return;
+        }
+        writeResponse(out, j, ProtocolV2.helloResponse(requestId, 0));
+    }
+
     /**
-     * Append the caller's request_id so Python can drop a reply that belongs
-     * to an earlier command. The snapshot itself is built before the request
-     * arrives, so the id is injected here rather than inside the game thread.
+     * Print one response. The body must already carry {@code type} and
+     * {@code request_id}. Stamping the id here was the v1 bug: a snapshot
+     * taken for an older decision left the queue under the new id.
      */
     private static void writeResponse(PrintStream out, Json request, String jsonObject) {
-        String body = jsonObject == null ? "{}" : jsonObject.trim();
-        if (body.endsWith("}")) {
-            StringBuilder extra = new StringBuilder();
-            if (request != null) {
-                Long requestId = request.longOrNull("request_id");
-                if (requestId != null) {
-                    extra.append(",\"request_id\":").append(requestId);
-                }
-            }
-            if (!body.contains("\"bridge_version\"")) {
-                extra.append(",\"bridge_version\":\"").append(BRIDGE_VERSION).append('"');
-            }
-            if (extra.length() > 0) {
-                body = body.substring(0, body.length() - 1) + extra + "}";
-            }
+        String body = jsonObject == null ? "" : jsonObject.trim();
+        if (!body.contains("\"type\"") || !body.contains("\"request_id\"")) {
+            Long id = request == null ? null : request.longOrNull("request_id");
+            body = ProtocolV2.errorResponse(id, "INTERNAL",
+                "refusing to emit a response that is not bound to a request", null, null);
         }
         out.println(body);
         out.flush();
@@ -317,33 +334,88 @@ public class ForgeRLBridge {
      * bridge still lets Forge AI play both sides, so a repeated seed repeats
      * the opening hands only when those shuffles go through MyRandom.
      */
-    private static void applyMatchSeed(Json j) {
+    private void applyMatchSeed(Json j) {
         Long seed = j.longOrNull("seed");
         if (seed == null) {
             System.err.println("[forge-rlbridge] new_game has no seed; Forge SecureRandom stays in place");
             return;
         }
-        MyRandom.setRandom(new Random(seed));
-        System.err.println("[forge-rlbridge] MyRandom.setRandom(new Random(" + seed + "))");
+        matchSeed = seed;
+        // One derived seed per source. Shuffles use forge.shuffle. AI helpers
+        // that keep a static Random are reseeded from forge.ai. Python seeds
+        // its own numpy/torch streams from the same match seed.
+        String[] forgeRngHolders = {
+            "forge.util.MyRandom",
+            "forge.ai.ComputerUtil",
+            "forge.ai.AiController",
+            "forge.ai.ComputerUtilCard",
+            "forge.game.GameAction",
+        };
+        for (String name : forgeRngHolders) {
+            try {
+                ProtocolV2.reseedStaticRandoms(seed, Class.forName(name));
+            } catch (ClassNotFoundException ignored) {
+                // The class is absent from this Forge build. The shuffle RNG
+                // below still covers MyRandom.
+            }
+        }
+        MyRandom.setRandom(ProtocolV2.shuffleRandom(seed));
+        ProtocolV2.javaRandom(seed);
+        System.err.println("[forge-rlbridge] seeded java, forge.shuffle, forge.ai from " + seed);
     }
 
     // ── new_game ───────────────────────────────────────────────────────────
 
-    private void startNewGame(Json j, PrintStream out) throws Exception {
+    private void startNewGame(Json j, PrintStream out, long requestId) throws Exception {
         killExistingGame();
+        handoff.reset();
+        aiFallbackDecisions = 0;
+        chosenActionLabel = -1;
+        currentLayout = null;
+        pendingKind = "none";
+        truncationReason = null;
+        turnLimitSent = false;
 
         Integer requestedTimeout = j.intOrNull("step_timeout_seconds");
         if (requestedTimeout != null && requestedTimeout > 0) {
             this.stepTimeoutSeconds = requestedTimeout;
         }
+        Integer requestedTurns = j.intOrNull("turn_limit");
+        if (requestedTurns != null && requestedTurns > 0) this.turnLimit = requestedTurns;
+        String policy = j.str("agent_policy");
+        if (policy == null || policy.isEmpty()) policy = "external";
+        if (!"external".equals(policy) && !"forge_ai".equals(policy)) {
+            writeResponse(out, j, ProtocolV2.errorResponse(requestId, "BAD_REQUEST",
+                "agent_policy must be external or forge_ai", null, null));
+            return;
+        }
+        this.externalPolicy = "external".equals(policy);
         applyMatchSeed(j);
 
-        Deck deckA = parseDeck(j.str("agent_deck"), "AgentDeck");
-        Deck deckB = parseDeck(j.str("opponent_deck"), "OpponentDeck");
+        Deck deckA;
+        Deck deckB;
+        try {
+            deckA = parseDeck(j.str("agent_deck"), "AgentDeck");
+            deckB = parseDeck(j.str("opponent_deck"), "OpponentDeck");
+        } catch (RuntimeException ex) {
+            writeResponse(out, j, ProtocolV2.errorResponse(requestId, "DECK_PARSE_ERROR", ex.getMessage(), null, null));
+            return;
+        }
+
+        int side = j.intVal("agent_side", 0);
+        if (side != 0 && side != 1) side = 0;
+        LobbyPlayer agentLobby = externalPolicy
+            ? new ExternalLobbyPlayer("agent", this)
+            : new LobbyPlayerAi("agent", null);
+        LobbyPlayer opponentLobby = new LobbyPlayerAi("opponent", null);
+        Deck deck0 = side == 0 ? deckA : deckB;
+        Deck deck1 = side == 0 ? deckB : deckA;
+        LobbyPlayer seat0 = side == 0 ? agentLobby : opponentLobby;
+        LobbyPlayer seat1 = side == 0 ? opponentLobby : agentLobby;
 
         List<RegisteredPlayer> players = new ArrayList<>();
-        RegisteredPlayer rpA = new RegisteredPlayer(deckA).setPlayer(new LobbyPlayerAi("agent", null));
-        RegisteredPlayer rpB = new RegisteredPlayer(deckB).setPlayer(new LobbyPlayerAi("opponent", null));
+        RegisteredPlayer rpA = new RegisteredPlayer(deck0).setPlayer(seat0);
+        RegisteredPlayer rpB = new RegisteredPlayer(deck1).setPlayer(seat1);
         players.add(rpA);
         players.add(rpB);
 
@@ -356,66 +428,68 @@ public class ForgeRLBridge {
         this.agentMaxLife = 20;
         this.oppMaxLife = 20;
 
-        // Resolve agent/opponent Player refs immediately — createGame()
-        // already populated game.getPlayers().
+        // Resolve seats by lobby name. createGame() already built the players.
+        this.agentPlayer = null;
+        this.opponentPlayer = null;
         List<Player> ps = game.getPlayers();
-        if (ps != null && ps.size() >= 2) {
-            this.agentPlayer = ps.get(0);
-            this.opponentPlayer = ps.get(1);
+        if (ps != null) {
+            for (Player p : ps) {
+                if ("agent".equals(p.getName())) this.agentPlayer = p;
+                else this.opponentPlayer = p;
+            }
+            if (this.agentPlayer == null && ps.size() >= 1) this.agentPlayer = ps.get(0);
+            if (this.opponentPlayer == null && ps.size() >= 2) this.opponentPlayer = ps.get(1);
         }
-        // Mirror what HostedMatch does so each player has opponent refs set.
         for (Player p : game.getPlayers()) {
             p.updateOpponentsForView();
         }
 
-        // Subscribe to game events so we can emit snapshots between turns.
-        game.subscribeToEvents(new GameEventListener(this));
-
-        // Run the game on Forge's internal game-thread pool (what HostedMatch
-        // does). Spawning a raw Thread fails because ThreadUtil.isGameThread()
-        // returns false, and several internal operations (stashGameState,
-        // controller.chooseSpellAbilityToPlay) require the game thread context.
+        // No turn-event subscription. Step responses come only from the
+        // decision the game thread publishes after the command that is waiting.
         game.getAction().invoke(() -> {
             try {
                 match.startGame(game);
             } catch (Throwable t) {
                 System.err.println("[forge-rlbridge] game thread crashed: " + t);
                 t.printStackTrace(System.err);
+                handoff.discardMatch();
             } finally {
                 gameFinished.set(true);
-                enqueueSnapshot(true);
+                if (!handoff.isDiscarded()) {
+                    pendingKind = "none";
+                    currentLayout = null;
+                    handoff.publishTerminal(new DecisionHandoff.Offer(
+                        "none", buildSnapshot(true, false, false), passMask(), true));
+                }
             }
         });
 
-        // Emit initial snapshot or await first turn event.
-        String snap = snapshotQueue.poll(stepTimeoutSeconds, TimeUnit.SECONDS);
-        boolean timedOut = snap == null;
-        if (timedOut) {
-            snap = buildSnapshot(false, false, true);
-        }
-        writeResponse(out, j, snap);
+        // Cold card load can take longer than a later decision. Stay under
+        // Python's 60s new_game read.
+        long firstWaitMs = Math.max(stepTimeoutSeconds, 45) * 1000L;
+        DecisionHandoff.Reply reply = handoff.awaitFirst(requestId, firstWaitMs);
+        writeResponse(out, j, reply.json);
+        if (reply.timedOut) killExistingGame();
     }
 
     // ── step ───────────────────────────────────────────────────────────────
 
-    private void stepGame(Json j, PrintStream out) throws Exception {
-        // The `action` param is currently observational — Forge's AI drives
-        // both sides. We simply await the next game-state snapshot.
+    private void stepGame(Json j, PrintStream out, long requestId) throws Exception {
         if (currentGame == null) {
-            writeResponse(out, j, "{\"error\":\"no game in progress\",\"terminal\":true,\"outcome\":0}");
+            writeResponse(out, j, ProtocolV2.errorResponse(requestId, "NO_GAME", "no game in progress", null, null));
             return;
         }
-        if (gameFinished.get() && snapshotQueue.isEmpty()) {
-            writeResponse(out, j, buildSnapshot(true));
+        Integer decisionId = j.intOrNull("decision_id");
+        Integer action = j.intOrNull("action");
+        if (decisionId == null || action == null) {
+            writeResponse(out, j, ProtocolV2.errorResponse(requestId, "BAD_REQUEST",
+                "step requires decision_id and action", decisionId, null));
             return;
         }
-        String snap = snapshotQueue.poll(stepTimeoutSeconds, TimeUnit.SECONDS);
-        if (snap == null) {
-            // Java gave up before Python's read timeout. The flag tells the
-            // env this reply is a truncation, not the next decision.
-            snap = buildSnapshot(gameFinished.get(), false, true);
-        }
-        writeResponse(out, j, snap);
+        DecisionHandoff.Reply reply = handoff.step(
+            requestId, decisionId, action, stepTimeoutSeconds * 1000L);
+        writeResponse(out, j, reply.json);
+        if (reply.timedOut) killExistingGame();
     }
 
     // ── step_autoregressive ─────────────────────────────────────────────────
@@ -446,9 +520,9 @@ public class ForgeRLBridge {
      * invoke the mapped Forge API (SpellAbility.canPlay, DeclareAttackers,
      * activated abilities, priority pass).
      */
-    private void stepAutoregressive(Json j, PrintStream out) throws Exception {
+    private void stepAutoregressive(Json j, PrintStream out, long requestId) throws Exception {
         if (currentGame == null) {
-            writeResponse(out, j, "{\"error\":\"no game in progress\",\"terminal\":true,\"outcome\":0}");
+            writeResponse(out, j, ProtocolV2.errorResponse(requestId, "NO_GAME", "no game in progress", null, null));
             return;
         }
 
@@ -462,26 +536,15 @@ public class ForgeRLBridge {
             targetId   < 0 || targetId   >= AR_NUM_TARGETS;
 
         if (illegal) {
-            // Consume the action without advancing Forge. Return the current
-            // snapshot with illegal_action=true → negative reward on the
-            // Python side via shaper.penalty_illegal_action.
-            writeResponse(out, j, buildSnapshot(gameFinished.get(), true, false));
+            // Reserved for the autoregressive endpoint. A discrete step uses
+            // state.illegal_action instead of this code, and neither path
+            // touches the pending decision.
+            writeResponse(out, j, ProtocolV2.errorResponse(requestId, "ILLEGAL_ACTION",
+                "autoregressive index out of range", null, null));
             return;
         }
-
-        // Valid triple — fall through to the same snapshot-await path as
-        // stepGame(). action_base dispatch is currently a no-op (Forge's AI
-        // drives both sides) but the event-driven snapshot stream still
-        // advances turn-by-turn, giving the RL loop a real win/loss signal.
-        if (gameFinished.get() && snapshotQueue.isEmpty()) {
-            writeResponse(out, j, buildSnapshot(true, false, false));
-            return;
-        }
-        String snap = snapshotQueue.poll(stepTimeoutSeconds, TimeUnit.SECONDS);
-        if (snap == null) {
-            snap = buildSnapshot(gameFinished.get(), false, true);
-        }
-        writeResponse(out, j, snap);
+        writeResponse(out, j, ProtocolV2.errorResponse(requestId, "BAD_REQUEST",
+            "step_autoregressive does not advance a policy-controlled game; use step", null, null));
     }
 
     // ── Event listener (subscribed via Guava EventBus) ─────────────────────
@@ -519,8 +582,22 @@ public class ForgeRLBridge {
     }
 
     private String buildSnapshot(boolean forcedTerminal, boolean illegalAction, boolean truncated) {
-        StringBuilder sb = new StringBuilder(2048);
+        StringBuilder sb = new StringBuilder(4096);
         sb.append('{');
+        sb.append("\"type\":\"state\",");
+        sb.append("\"protocol\":").append(ProtocolV2.PROTOCOL_VERSION).append(',');
+        sb.append("\"bridge_version\":\"").append(BRIDGE_VERSION).append("\",");
+        sb.append("\"decision_id\":-1,");
+        String kind = pendingKind == null ? "none" : pendingKind;
+        if (forcedTerminal) kind = "none";
+        sb.append("\"decision_kind\":\"").append(kind).append("\",");
+        sb.append("\"decision_type\":\"").append(kind).append("\",");
+        sb.append("\"state_hash\":\"PENDING\",");
+        sb.append("\"policy_action_applied\":null,");
+        sb.append("\"seed\":").append(matchSeed).append(',');
+        sb.append("\"ai_fallback_decisions\":").append(aiFallbackDecisions).append(',');
+        sb.append("\"policy_decisions\":").append(handoff.policyDecisions()).append(',');
+        sb.append("\"full_magic_training_ready\":false,");
 
         Game g = currentGame;
         Player you = agentPlayer;
@@ -569,7 +646,8 @@ public class ForgeRLBridge {
         field(sb, "terminal", terminal); sb.append(',');
         field(sb, "truncated", truncated); sb.append(',');
         if (truncated) {
-            field(sb, "truncation_reason", "step_timeout"); sb.append(',');
+            String reason = truncationReason == null ? "step_timeout" : truncationReason;
+            field(sb, "truncation_reason", reason); sb.append(',');
         }
         sb.append("\"outcome\":").append(outcome == null ? "null" : outcome.toString()).append(',');
         field(sb, "illegal_action", illegalAction); sb.append(',');
@@ -618,19 +696,21 @@ public class ForgeRLBridge {
         // are reported separately as mana_available_you. These keys stay in the
         // payload because LoopGuard hashes them; leaving them out collapses
         // the hash. They remain 0 until the pool is wired.
-        field(sb, "mana_pool_you", 0); sb.append(',');
-        field(sb, "mana_pool_opp", 0); sb.append(',');
+        int[] manaYou = manaColors(you);
+        int[] manaOpp = manaColors(opp);
+        field(sb, "mana_pool_you", manaYou[0]); sb.append(',');
+        field(sb, "mana_pool_opp", manaOpp[0]); sb.append(',');
 
         // "you" block
         sb.append("\"you\":{");
         field(sb, "life", lifeYou); sb.append(',');
         field(sb, "max_life_seen", agentMaxLife); sb.append(',');
-        field(sb, "mana_pool_total", 0); sb.append(',');
-        field(sb, "mana_w", 0); sb.append(',');
-        field(sb, "mana_u", 0); sb.append(',');
-        field(sb, "mana_b", 0); sb.append(',');
-        field(sb, "mana_r", 0); sb.append(',');
-        field(sb, "mana_g", 0); sb.append(',');
+        field(sb, "mana_pool_total", manaYou[0]); sb.append(',');
+        field(sb, "mana_w", manaYou[1]); sb.append(',');
+        field(sb, "mana_u", manaYou[2]); sb.append(',');
+        field(sb, "mana_b", manaYou[3]); sb.append(',');
+        field(sb, "mana_r", manaYou[4]); sb.append(',');
+        field(sb, "mana_g", manaYou[5]); sb.append(',');
         field(sb, "hand_size", handYou); sb.append(',');
         field(sb, "library_size", libYou); sb.append(',');
         field(sb, "graveyard_size", gyYou); sb.append(',');
@@ -644,12 +724,12 @@ public class ForgeRLBridge {
         sb.append("\"opp\":{");
         field(sb, "life", lifeOpp); sb.append(',');
         field(sb, "max_life_seen", oppMaxLife); sb.append(',');
-        field(sb, "mana_pool_total", 0); sb.append(',');
-        field(sb, "mana_w", 0); sb.append(',');
-        field(sb, "mana_u", 0); sb.append(',');
-        field(sb, "mana_b", 0); sb.append(',');
-        field(sb, "mana_r", 0); sb.append(',');
-        field(sb, "mana_g", 0); sb.append(',');
+        field(sb, "mana_pool_total", manaOpp[0]); sb.append(',');
+        field(sb, "mana_w", manaOpp[1]); sb.append(',');
+        field(sb, "mana_u", manaOpp[2]); sb.append(',');
+        field(sb, "mana_b", manaOpp[3]); sb.append(',');
+        field(sb, "mana_r", manaOpp[4]); sb.append(',');
+        field(sb, "mana_g", manaOpp[5]); sb.append(',');
         field(sb, "hand_size", handOpp); sb.append(',');
         field(sb, "library_size", libOpp); sb.append(',');
         field(sb, "graveyard_size", gyOpp); sb.append(',');
@@ -666,6 +746,8 @@ public class ForgeRLBridge {
         if (you != null) addCards(visible, zones, you.getCardsIn(ZoneType.Hand), "hand");
         if (g != null) addCards(visible, zones, g.getCardsIn(ZoneType.Battlefield), "battlefield");
         if (g != null) addCards(visible, zones, g.getCardsIn(ZoneType.Stack), "stack");
+        if (you != null) addCards(visible, zones, you.getCardsIn(ZoneType.Graveyard), "graveyard");
+        if (you != null) addCards(visible, zones, you.getCardsIn(ZoneType.Exile), "exile");
         int limit = Math.min(visible.size(), 120);
         sb.append("\"cards\":[");
         for (int i = 0; i < limit; i++) {
@@ -702,6 +784,19 @@ public class ForgeRLBridge {
      */
     private void appendActionContract(
             StringBuilder sb, List<Card> visible, List<String> zones, int limit, Player you, boolean activeYou) {
+        if (currentLayout != null) {
+            boolean controlled = externalPolicy && you != null
+                && you.getController() instanceof ExternalPlayerController;
+            sb.append("\"policy_controlled\":").append(controlled).append(',');
+            sb.append("\"chosen_action\":").append(chosenActionLabel).append(',');
+            appendIntArray(sb, "action_mask", currentLayout.mask); sb.append(',');
+            appendIntArray(sb, "action_source_indices", currentLayout.sources); sb.append(',');
+            appendIntArray(sb, "action_target_indices", currentLayout.targets); sb.append(',');
+            appendIntArray(sb, "action_kinds", currentLayout.kinds); sb.append(',');
+            sb.append("\"actions\":").append(currentLayout.actionsJson);
+            return;
+        }
+
         int[] mask = new int[ACTION_MASK_SIZE];
         int[] sources = new int[ACTION_MASK_SIZE];
         int[] targets = new int[ACTION_MASK_SIZE];
@@ -767,9 +862,9 @@ public class ForgeRLBridge {
             if (chosen < 0) choiceType = "unknown";
         }
 
-        // The AI still plays both sides. Do not claim external policy control
-        // until a PlayerController applies the action in `step`.
-        sb.append("\"policy_controlled\":false,");
+        boolean controlled = externalPolicy && you != null
+            && you.getController() instanceof ExternalPlayerController;
+        sb.append("\"policy_controlled\":").append(controlled).append(',');
         field(sb, "ai_choice_type", choiceType); sb.append(',');
         field(sb, "ai_choice_card", choiceCard); sb.append(',');
         sb.append("\"chosen_action\":").append(chosen).append(',');
@@ -807,8 +902,92 @@ public class ForgeRLBridge {
         if (agent != null && owner == agent) controller = "you";
         field(sb, "controller", controller); sb.append(',');
         field(sb, "zone", zone); sb.append(',');
-        field(sb, "name", c.getName());
+        field(sb, "name", c.getName()); sb.append(',');
+        String oracle = "";
+        try {
+            if (c.getRules() != null && c.getRules().getMainPart() != null
+                    && c.getRules().getMainPart().getOracleText() != null) {
+                oracle = c.getRules().getMainPart().getOracleText();
+            }
+        } catch (Throwable ignored) { }
+        field(sb, "oracle_text", oracle); sb.append(',');
+        field(sb, "is_attacking", c.isAttacking());
         sb.append('}');
+    }
+
+    /** total, W, U, B, R, G. */
+    private static int[] manaColors(Player player) {
+        int[] mana = new int[6];
+        if (player == null || player.getManaPool() == null) return mana;
+        mana[0] = player.getManaPool().totalMana();
+        mana[1] = player.getManaPool().getAmountOfColor(MagicColor.Color.WHITE.getColorMask());
+        mana[2] = player.getManaPool().getAmountOfColor(MagicColor.Color.BLUE.getColorMask());
+        mana[3] = player.getManaPool().getAmountOfColor(MagicColor.Color.BLACK.getColorMask());
+        mana[4] = player.getManaPool().getAmountOfColor(MagicColor.Color.RED.getColorMask());
+        mana[5] = player.getManaPool().getAmountOfColor(MagicColor.Color.GREEN.getColorMask());
+        return mana;
+    }
+
+    private static int[] passMask() {
+        int[] mask = new int[ACTION_MASK_SIZE];
+        mask[0] = 1;
+        return mask;
+    }
+
+    @Override
+    public int decide(String decisionKind, ProtocolV2.Layout layout, int aiChosenSlot) {
+        if (handoff.isDiscarded()) return -1;
+        this.pendingKind = decisionKind;
+        this.currentLayout = layout;
+        this.chosenActionLabel = aiChosenSlot;
+        try {
+            if (!turnLimitSent && currentGame != null && currentGame.getPhaseHandler() != null
+                    && currentGame.getPhaseHandler().getTurn() >= turnLimit) {
+                turnLimitSent = true;
+                truncationReason = "turn_limit";
+                pendingKind = "none";
+                handoff.publishTerminal(new DecisionHandoff.Offer(
+                    "none", buildSnapshot(false, false, true), layout.mask, true));
+                return -1;
+            }
+            if (turnLimitSent) return -1;
+            return handoff.publishAndAwaitAction(new DecisionHandoff.Offer(
+                decisionKind, buildSnapshot(false, false, false), layout.mask, false));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            handoff.discardMatch();
+            return -1;
+        } finally {
+            this.currentLayout = null;
+        }
+    }
+
+    @Override
+    public void noteFallback(String decisionKind, String why) {
+        aiFallbackDecisions++;
+        System.err.println("[forge-rlbridge] ai_fallback " + decisionKind + " " + why);
+    }
+
+    @Override
+    public boolean discarded() {
+        return handoff.isDiscarded();
+    }
+
+    @Override
+    public int visibleIndex(Card card) {
+        if (card == null) return -1;
+        List<Card> visible = new ArrayList<>();
+        List<String> zones = new ArrayList<>();
+        if (agentPlayer != null) addCards(visible, zones, agentPlayer.getCardsIn(ZoneType.Hand), "hand");
+        if (currentGame != null) addCards(visible, zones, currentGame.getCardsIn(ZoneType.Battlefield), "battlefield");
+        if (currentGame != null) addCards(visible, zones, currentGame.getCardsIn(ZoneType.Stack), "stack");
+        if (agentPlayer != null) addCards(visible, zones, agentPlayer.getCardsIn(ZoneType.Graveyard), "graveyard");
+        if (agentPlayer != null) addCards(visible, zones, agentPlayer.getCardsIn(ZoneType.Exile), "exile");
+        int limit = Math.min(visible.size(), 120);
+        for (int i = 0; i < limit; i++) {
+            if (visible.get(i) == card) return i;
+        }
+        return -1;
     }
 
     private static int countLands(Player p) {
@@ -974,6 +1153,7 @@ public class ForgeRLBridge {
     // ── Housekeeping ───────────────────────────────────────────────────────
 
     private void killExistingGame() {
+        handoff.discardMatch();
         // We no longer own the game thread directly (it runs on Forge's pool).
         // Best-effort: mark the game over so the internal main loop exits.
         try {

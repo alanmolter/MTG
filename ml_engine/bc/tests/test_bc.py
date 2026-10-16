@@ -150,14 +150,15 @@ def test_train_and_holdout_game_ids_stay_disjoint_and_manifest_holdout_is_droppe
     assert "azoriuscontrol_q05" in blocked
     kept, excluded = training_rows(
         [
-            {"split": "train", "deck_id": "not-in-pool", "opponent_id": "also-not", "game_id": "keep"},
-            {"split": "train", "deck_id": "azoriuscontrol_q05", "opponent_id": "not-in-pool", "game_id": "leak"},
-            {"split": "holdout", "deck_id": "not-in-pool", "opponent_id": "not-in-pool", "game_id": "held"},
+            {"split": "train", "deck_id": "not-in-pool", "opponent_id": "also-not", "game_id": "keep", "protocol": 2},
+            {"split": "train", "deck_id": "azoriuscontrol_q05", "opponent_id": "not-in-pool", "game_id": "leak", "protocol": 2},
+            {"split": "holdout", "deck_id": "not-in-pool", "opponent_id": "not-in-pool", "game_id": "held", "protocol": 2},
+            {"split": "train", "deck_id": "not-in-pool", "opponent_id": "also-not", "game_id": "v1", "protocol": 1},
         ],
         blocked,
     )
     assert [row["game_id"] for row in kept] == ["keep"]
-    assert excluded == 2
+    assert excluded == 3
     assert {row["game_id"] for row in kept}.isdisjoint({"leak", "held"})
 
 

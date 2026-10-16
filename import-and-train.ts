@@ -1,6 +1,5 @@
 import "dotenv/config";
 import { closeDb } from "./server/db.ts";
-import { importAllGoldfishFormats } from "./server/services/mtggoldfishScraper.ts";
 import { importAllTop8Formats } from "./server/services/mtgtop8Scraper.ts";
 import { trainEmbeddingsFromDecks } from "./server/services/embeddingTrainer.ts";
 import { applyTournamentSignal } from "./server/scripts/applyTournamentSignal.ts";
@@ -63,17 +62,17 @@ async function main() {
   );
   console.log("─".repeat(56));
 
-  // ─── 1. MTGGoldfish — todos os formatos ───────────────────────────────────
-  divider("1/3  MTGGoldfish — 7 Formatos (10 decks cada)");
+  // ─── 1. MTGGoldfish — disabled (scraper protection) ───────────────────────
+  divider("1/3  MTGGoldfish — disabled");
   const t1 = Date.now();
-  let goldfishTotal = {
+  const goldfishTotal = {
     decksImported: 0,
     cardsImported: 0,
     decksSkipped: 0,
-    errors: [] as string[],
+    errors: ["MTGGoldfish import is disabled (scraper protection)."],
   };
   try {
-    goldfishTotal = await importAllGoldfishFormats(10);
+    console.warn("  [MTGGoldfish] disabled — not fetching.");
     const dur1 = ((Date.now() - t1) / 1000).toFixed(1);
     console.log("─".repeat(56));
     console.log(`  MTGGoldfish RESUMO:`);

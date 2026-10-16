@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mtg.local/schemas/bridge_v2/error.schema.json",
+  "title": "error",
+  "type": "object",
+  "required": [
+    "type",
+    "request_id",
+    "code",
+    "message",
+    "fatal"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "const": "error"
+    },
+    "request_id": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "code": {
+      "$ref": "common.schema.json#/$defs/error_code"
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "fatal": {
+      "type": "boolean",
+      "description": "true ⇒ o cliente deve matar e respawnar a JVM."
+    },
+    "bridge_version": {
+      "type": "string"
+    },
+    "decision_id": {
+      "$ref": "common.schema.json#/$defs/decision_id"
+    },
+    "expected_decision_id": {
+      "$ref": "common.schema.json#/$defs/decision_id"
+    }
+  }
+}
