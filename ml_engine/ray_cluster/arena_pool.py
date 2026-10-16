@@ -383,6 +383,27 @@ def _archetype_to_recipe(name: str) -> Tuple[str, str, Sequence[str]]:
     return _ARCHETYPE_RECIPES[0]
 
 
+def resolve_training_matchup(
+    *,
+    arena_only: Optional[bool] = None,
+    seed: Optional[int] = None,
+    dsn: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str], str, str]:
+    """Return `(agent_deck, opponent_deck, agent_archetype, opponent_archetype)`.
+
+    Archetype ids are the catalog names (``control_uw``, ``aggro_red``, ...).
+    They are empty strings when arena rotation is off. The reward shaper uses
+    the agent id so a control deck is recognized as control.
+    """
+    decks = resolve_decks_for_training(arena_only=arena_only, seed=seed, dsn=dsn)
+    if arena_only is None:
+        arena_only = is_arena_only_training()
+    if not arena_only:
+        return decks[0], decks[1], "", ""
+    agent_archetype, opp_archetype = _archetype_pair_for_seed(seed)
+    return decks[0], decks[1], agent_archetype, opp_archetype
+
+
 def resolve_decks_for_training(
     *,
     arena_only: Optional[bool] = None,
@@ -440,6 +461,7 @@ __all__ = [
     "is_arena_only_training",
     "describe_training_pool",
     "resolve_decks_for_training",
+    "resolve_training_matchup",
     "ARENA_FALLBACK_AGGRO_RED",
     "ARENA_FALLBACK_CONTROL",
 ]

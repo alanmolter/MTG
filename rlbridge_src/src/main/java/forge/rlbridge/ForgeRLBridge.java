@@ -514,14 +514,38 @@ public class ForgeRLBridge {
         // filters on. Without them the hash is constant across turns and the
         // guard falsely fires at step 3. Include permanent counts + the phase
         // name so consecutive states have different hashes as the game moves.
-        int phase = (g != null && g.getPhaseHandler() != null) ? g.getPhaseHandler().getPhase().ordinal() : -1;
+        int phase = (g != null && g.getPhaseHandler() != null && g.getPhaseHandler().getPhase() != null)
+                ? g.getPhaseHandler().getPhase().ordinal() : -1;
+        String phaseName = (g != null && g.getPhaseHandler() != null && g.getPhaseHandler().getPhase() != null)
+                ? g.getPhaseHandler().getPhase().name() : "";
+        boolean turnEnded = "END_OF_TURN".equals(phaseName)
+                || "END".equals(phaseName)
+                || "CLEANUP".equals(phaseName)
+                || "CLEANUP_PHASE".equals(phaseName);
         int bfYou = (you != null) ? you.getCardsIn(ZoneType.Battlefield).size() : 0;
         int bfOpp = (opp != null) ? opp.getCardsIn(ZoneType.Battlefield).size() : 0;
+        int landsYou = countLands(you);
+        int landsOpp = countLands(opp);
+        int untappedYou = countUntappedLands(you);
+        int instantsYou = countInstantsInHand(you);
         field(sb, "turn_phase", phase); sb.append(',');
+        field(sb, "phase", phaseName); sb.append(',');
+        field(sb, "turn_ended", turnEnded); sb.append(',');
         field(sb, "battlefield_you", bfYou); sb.append(',');
         field(sb, "battlefield_opp", bfOpp); sb.append(',');
+        field(sb, "lands_you", landsYou); sb.append(',');
+        field(sb, "lands_opp", landsOpp); sb.append(',');
+        field(sb, "nonland_permanents_you", Math.max(0, bfYou - landsYou)); sb.append(',');
+        field(sb, "nonland_permanents_opp", Math.max(0, bfOpp - landsOpp)); sb.append(',');
+        field(sb, "untapped_lands_you", untappedYou); sb.append(',');
+        field(sb, "instants_in_hand_you", instantsYou); sb.append(',');
+        field(sb, "mana_available_you", untappedYou); sb.append(',');
         field(sb, "graveyard_you_size", gyYou); sb.append(',');
         field(sb, "graveyard_opp_size", gyOpp); sb.append(',');
+        // Floating mana is not read from Forge's mana pool yet. Untapped lands
+        // are reported separately as mana_available_you. These keys stay in the
+        // payload because LoopGuard hashes them; leaving them out collapses
+        // the hash. They remain 0 until the pool is wired.
         field(sb, "mana_pool_you", 0); sb.append(',');
         field(sb, "mana_pool_opp", 0); sb.append(',');
 
@@ -539,6 +563,8 @@ public class ForgeRLBridge {
         field(sb, "library_size", libYou); sb.append(',');
         field(sb, "graveyard_size", gyYou); sb.append(',');
         field(sb, "exile_size", exYou); sb.append(',');
+        field(sb, "lands_untapped", untappedYou); sb.append(',');
+        field(sb, "instants_in_hand", instantsYou); sb.append(',');
         field(sb, "is_active", activeYou);
         sb.append("},");
 
@@ -566,7 +592,7 @@ public class ForgeRLBridge {
             for (Card c : g.getCardsIn(ZoneType.Battlefield)) {
                 if (!first) sb.append(',');
                 first = false;
-                appendCard(sb, c);
+                appendCard(sb, c, you);
             }
         }
         sb.append("],");
@@ -588,7 +614,7 @@ public class ForgeRLBridge {
         return sb.toString();
     }
 
-    private static void appendCard(StringBuilder sb, Card c) {
+    private static void appendCard(StringBuilder sb, Card c, Player agent) {
         sb.append('{');
         field(sb, "mana_value", c.getCMC()); sb.append(',');
         field(sb, "power", c.isCreature() ? c.getNetPower() : 0); sb.append(',');
@@ -600,8 +626,41 @@ public class ForgeRLBridge {
         field(sb, "is_enchantment", c.isEnchantment()); sb.append(',');
         field(sb, "is_artifact", c.isArtifact()); sb.append(',');
         field(sb, "is_land", c.isLand()); sb.append(',');
-        field(sb, "is_planeswalker", c.isPlaneswalker());
+        field(sb, "is_planeswalker", c.isPlaneswalker()); sb.append(',');
+        field(sb, "is_tapped", c.isTapped()); sb.append(',');
+        String controller = "opp";
+        Player owner = c.getController();
+        if (agent != null && owner == agent) controller = "you";
+        field(sb, "controller", controller); sb.append(',');
+        field(sb, "zone", "battlefield");
         sb.append('}');
+    }
+
+    private static int countLands(Player p) {
+        if (p == null) return 0;
+        int n = 0;
+        for (Card c : p.getCardsIn(ZoneType.Battlefield)) {
+            if (c.isLand()) n++;
+        }
+        return n;
+    }
+
+    private static int countUntappedLands(Player p) {
+        if (p == null) return 0;
+        int n = 0;
+        for (Card c : p.getCardsIn(ZoneType.Battlefield)) {
+            if (c.isLand() && !c.isTapped()) n++;
+        }
+        return n;
+    }
+
+    private static int countInstantsInHand(Player p) {
+        if (p == null) return 0;
+        int n = 0;
+        for (Card c : p.getCardsIn(ZoneType.Hand)) {
+            if (c.isInstant()) n++;
+        }
+        return n;
     }
 
     private static int sumPower(Player p) {
@@ -761,6 +820,9 @@ public class ForgeRLBridge {
 
     private static void field(StringBuilder sb, String k, int v)     { sb.append('"').append(k).append("\":").append(v); }
     private static void field(StringBuilder sb, String k, boolean v) { sb.append('"').append(k).append("\":").append(v); }
+    private static void field(StringBuilder sb, String k, String v)  {
+        sb.append('"').append(k).append("\":\"").append(escape(v)).append('"');
+    }
 
     private static String escape(String s) {
         if (s == null) return "";

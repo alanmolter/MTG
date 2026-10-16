@@ -72,22 +72,106 @@ class LoopState:
 # ── Implementation ──────────────────────────────────────────────────────────
 
 
-def canonical_state_hash(state: Mapping[str, Any]) -> str:
-    """Deterministic, stable hash over a game state.
+# Keys ForgeRLBridge.buildSnapshot emits for this hash. mana_pool_* is present
+# in that payload but currently hardcoded to 0, so a mana-only change does not
+# move the hash until the bridge reports the real pool. Phase, battlefield
+# counts, power and land counts do.
+_HASH_FIELDS = (
+    "turn",
+    "turn_phase",
+    "life_you",
+    "life_opp",
+    "battlefield_you",
+    "battlefield_opp",
+    "hand_you_size",
+    "hand_opp_size",
+    "graveyard_you_size",
+    "graveyard_opp_size",
+    "mana_pool_you",
+    "mana_pool_opp",
+    "power_you",
+    "power_opp",
+    "lands_you",
+    "lands_opp",
+)
 
-    The dict keys are sorted so {a:1,b:2} and {b:2,a:1} hash identically.
-    Only includes fields that matter for loop detection — we ignore e.g.
-    priority passes or stack-depth changes that are transient.
+
+def _loop_view(state: Mapping[str, Any]) -> Dict[str, Any]:
+    """Project a bridge payload onto the loop-hash fields.
+
+    Prefer the flat keys the Java bridge writes. When an older payload only
+    has the nested ``you`` / ``opp`` blocks or a ``phase`` string, fill the
+    same slots from those aliases so the hash does not collapse to whatever
+    subset happened to be present.
     """
-    keyset = {
-        "turn_phase", "life_you", "life_opp",
-        "battlefield_you", "battlefield_opp",
-        "hand_you_size", "hand_opp_size",
-        "graveyard_you_size", "graveyard_opp_size",
-        "mana_pool_you", "mana_pool_opp",
+
+    view: Dict[str, Any] = {key: state[key] for key in _HASH_FIELDS if key in state}
+    you = state.get("you") if isinstance(state.get("you"), Mapping) else {}
+    opp = state.get("opp") if isinstance(state.get("opp"), Mapping) else {}
+    aliases = {
+        "turn_phase": state.get("phase", state.get("turn_phase")),
+        "life_you": you.get("life"),
+        "life_opp": opp.get("life"),
+        "hand_you_size": you.get("hand_size"),
+        "hand_opp_size": opp.get("hand_size"),
+        "graveyard_you_size": you.get("graveyard_size"),
+        "graveyard_opp_size": opp.get("graveyard_size"),
+        "mana_pool_you": you.get("mana_pool_total"),
+        "mana_pool_opp": opp.get("mana_pool_total"),
     }
-    filtered = {k: state[k] for k in state.keys() if k in keyset}
-    blob = json.dumps(filtered, sort_keys=True, default=str).encode("utf-8")
+    for key, value in aliases.items():
+        if key not in view and value is not None:
+            view[key] = value
+    if "battlefield_you" not in view or "lands_you" not in view:
+        lands_you, lands_opp, bf_you, bf_opp = _battlefield_counts(state)
+        if "battlefield_you" not in view and bf_you is not None:
+            view["battlefield_you"] = bf_you
+        if "battlefield_opp" not in view and bf_opp is not None:
+            view["battlefield_opp"] = bf_opp
+        if "lands_you" not in view and lands_you is not None:
+            view["lands_you"] = lands_you
+        if "lands_opp" not in view and lands_opp is not None:
+            view["lands_opp"] = lands_opp
+    return view
+
+
+def _battlefield_counts(state: Mapping[str, Any]) -> Tuple[Optional[int], Optional[int], Optional[int], Optional[int]]:
+    cards = state.get("cards")
+    if not isinstance(cards, list):
+        return None, None, None, None
+    lands_you = lands_opp = bf_you = bf_opp = 0
+    saw_controller = False
+    for card in cards:
+        if not isinstance(card, Mapping):
+            continue
+        zone = str(card.get("zone", "battlefield"))
+        if zone != "battlefield":
+            continue
+        controller = card.get("controller")
+        if controller is not None:
+            saw_controller = True
+        is_you = controller in (None, "you")
+        if is_you:
+            bf_you += 1
+            if card.get("is_land"):
+                lands_you += 1
+        elif controller == "opp":
+            bf_opp += 1
+            if card.get("is_land"):
+                lands_opp += 1
+    if not saw_controller:
+        return lands_you, None, bf_you, None
+    return lands_you, lands_opp, bf_you, bf_opp
+
+
+def canonical_state_hash(state: Mapping[str, Any]) -> str:
+    """Deterministic hash over the loop-relevant slice of a game state.
+
+    Key order does not matter. Priority passes and other transient keys are
+    not part of the projection.
+    """
+
+    blob = json.dumps(_loop_view(state), sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha1(blob).hexdigest()
 
 

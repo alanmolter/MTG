@@ -33,12 +33,16 @@ hung games (turn cap + timeout per step).
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import os
+import queue
 import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -51,7 +55,7 @@ except ImportError as e:  # pragma: no cover
     raise ImportError(f"gymnasium + numpy required: {e}")
 
 from ml_engine.forge_worker.loop_guard import LoopGuard
-from ml_engine.forge_worker.reward_shaper import GameStateSnapshot, RewardShaper
+from ml_engine.forge_worker.reward_shaper import GameStateSnapshot, RewardShaper, ShapingConfig
 from ml_engine.ray_cluster.card_features import hashed_oracle_vector, semantic_card_vector
 
 
@@ -80,6 +84,157 @@ AR_NUM_SOURCES = 128
 AR_NUM_TARGETS = 128
 ACTION_DESCRIPTOR_DIM = 32
 MAX_ACTION_KIND = 7
+
+# Numeric observation channels sit next to unit-norm card embeddings.
+# Scales are the typical magnitude of that channel (life 20, library 60, ...).
+_CARD_NUMERIC_SCALES = (10.0, 10.0, 10.0, 8.0)  # mana value, power, toughness, loyalty
+_PLAYER_FEATURE_SCALES = (
+    20.0,  # life
+    20.0,  # max life seen
+    10.0,  # mana pool
+    10.0, 10.0, 10.0, 10.0, 10.0,  # W U B R G
+    7.0,   # hand
+    60.0,  # library
+    20.0,  # graveyard
+    20.0,  # exile
+    20.0,  # turn
+    None,  # is_active
+    None,  # is_agent
+)
+
+logger = logging.getLogger("ml_engine.ray_cluster.env")
+
+
+class _StdoutLineReader:
+    """Read subprocess stdout on a daemon thread so ``readline`` can time out.
+
+    ``Popen.stdout.readline`` blocks even when the caller has a deadline. A
+    hung Forge JVM would otherwise pin the Ray worker until the learner queue
+    timed out. ``queue.Queue.get`` is the timeout that actually fires.
+    """
+
+    def __init__(self, stream: Any):
+        self.stream = stream
+        self._queue: queue.Queue = queue.Queue()
+        self._thread = threading.Thread(
+            target=self._pump, name="forge-stdout", daemon=True
+        )
+        self._thread.start()
+
+    def _pump(self) -> None:
+        try:
+            while True:
+                line = self.stream.readline()
+                self._queue.put(line)
+                if line == "":
+                    return
+        except Exception as exc:  # pragma: no cover - surfaced via readline()
+            self._queue.put(exc)
+
+    def readline(self, timeout: float) -> str:
+        try:
+            item = self._queue.get(timeout=timeout)
+        except queue.Empty as exc:
+            raise subprocess.TimeoutExpired(cmd="forge_step", timeout=timeout) from exc
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def _scale_features(values, scales) -> list:
+    scaled = []
+    for value, scale in zip(values, scales):
+        number = float(value or 0.0)
+        scaled.append(number if not scale else number / float(scale))
+    return scaled
+
+
+def _sha256_text(text: Optional[str]) -> str:
+    if not text:
+        return ""
+    normalized = "\n".join(line.strip() for line in str(text).strip().splitlines())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _win_flag(outcome: Any) -> Optional[float]:
+    """1 for a win, 0 for a loss. Draws and missing outcomes stay out of the rate."""
+    if outcome in (-1, 1) or outcome in ("-1", "1"):
+        try:
+            return 1.0 if int(outcome) == 1 else 0.0
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _development_counts(state: Dict[str, Any]) -> Tuple[int, int, int, int]:
+    """Return lands and non-land permanents for (you, opp).
+
+    Explicit bridge fields win. Otherwise count battlefield cards, using
+    ``controller`` when the payload has it.
+    """
+
+    if any(
+        key in state
+        for key in (
+            "lands_you", "lands_opp",
+            "nonland_permanents_you", "nonland_permanents_opp",
+        )
+    ):
+        return (
+            _as_int(state.get("lands_you")),
+            _as_int(state.get("lands_opp")),
+            _as_int(state.get("nonland_permanents_you")),
+            _as_int(state.get("nonland_permanents_opp")),
+        )
+    lands_you = lands_opp = nonland_you = nonland_opp = 0
+    cards = state.get("cards") or []
+    if not isinstance(cards, list):
+        return 0, 0, 0, 0
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        if str(card.get("zone", "battlefield")) != "battlefield":
+            continue
+        controller = card.get("controller", "you")
+        is_land = bool(card.get("is_land"))
+        if controller in (None, "you"):
+            if is_land:
+                lands_you += 1
+            else:
+                nonland_you += 1
+        elif controller == "opp":
+            if is_land:
+                lands_opp += 1
+            else:
+                nonland_opp += 1
+    return lands_you, lands_opp, nonland_you, nonland_opp
+
+
+def _as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _lands_you(state: Dict[str, Any]) -> int:
+    if "lands_you" in state:
+        try:
+            return int(state.get("lands_you") or 0)
+        except (TypeError, ValueError):
+            return 0
+    cards = state.get("cards") or []
+    if not isinstance(cards, list):
+        return 0
+    total = 0
+    for card in cards:
+        if not isinstance(card, dict) or not card.get("is_land"):
+            continue
+        zone = str(card.get("zone", "battlefield"))
+        controller = card.get("controller", "you")
+        if zone == "battlefield" and controller in (None, "you"):
+            total += 1
+    return total
 
 
 class MtgForgeEnv(gym.Env):
@@ -154,13 +309,28 @@ class MtgForgeEnv(gym.Env):
         self.ar_num_sources: int = int(config.get("ar_num_sources", AR_NUM_SOURCES))
         self.ar_num_targets: int = int(config.get("ar_num_targets", AR_NUM_TARGETS))
 
-        # Sub-components
-        self.shaper = RewardShaper()
+        # Sub-components. The shaping weight can decay across episodes so the
+        # terminal win/loss eventually dominates the return by construction.
+        self.shaper = RewardShaper(ShapingConfig(
+            shaping_weight=float(config.get("shaping_weight", 1.0)),
+            shaping_weight_final=float(config.get("shaping_weight_final", 0.0)),
+            shaping_anneal_episodes=int(config.get("shaping_anneal_episodes", 0)),
+            gamma=float(config.get("shaping_gamma", 0.99)),
+        ))
         self.loop_guard = LoopGuard()
 
         # Subprocess
         self._proc: Optional[subprocess.Popen] = None
+        self._stdout_reader: Optional[_StdoutLineReader] = None
         self._last_snapshot: Optional[GameStateSnapshot] = None
+        self._episode_seed: Optional[int] = None
+        self._episode_steps = 0
+        self._episode_passes = 0
+        self._lands_played = 0
+        self._lands_you_seen: Optional[int] = None
+        self._episode_started = time.monotonic()
+        self._agent_deck_sha256 = ""
+        self._opponent_deck_sha256 = ""
 
         # Spaces
         self.action_space = spaces.Discrete(self.num_actions)
@@ -171,17 +341,19 @@ class MtgForgeEnv(gym.Env):
             "player_feats": spaces.Box(
                 low=-1e3, high=1e3, shape=(2, 15), dtype=np.float32
             ),
+            # Edge slots are padded with -1. 0 is a real card/player index, so
+            # zero-filling would invent edges into node 0.
             "controlled_by_edges": spaces.Box(
-                low=0, high=max(self.max_cards, 2) - 1, shape=(2, 2 * self.max_cards), dtype=np.int64
+                low=-1, high=max(self.max_cards, 2) - 1, shape=(2, 2 * self.max_cards), dtype=np.int64
             ),
             "in_zone_edges": spaces.Box(
-                low=0, high=max(self.max_cards, 2) - 1, shape=(2, 2 * self.max_cards), dtype=np.int64
+                low=-1, high=max(self.max_cards, 2) - 1, shape=(2, 2 * self.max_cards), dtype=np.int64
             ),
             "synergy_edges": spaces.Box(
-                low=0, high=max(self.max_cards, 2) - 1, shape=(2, 4 * self.max_cards), dtype=np.int64
+                low=-1, high=max(self.max_cards, 2) - 1, shape=(2, 4 * self.max_cards), dtype=np.int64
             ),
             "attacks_edges": spaces.Box(
-                low=0, high=max(self.max_cards, 2) - 1, shape=(2, self.max_cards), dtype=np.int64
+                low=-1, high=max(self.max_cards, 2) - 1, shape=(2, self.max_cards), dtype=np.int64
             ),
             "action_mask": spaces.MultiBinary(self.num_actions),
             # Each legal action is linked to its source entity.  An action
@@ -206,6 +378,10 @@ class MtgForgeEnv(gym.Env):
     # ── Gym API ─────────────────────────────────────────────────────────────
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None):
+        # Ray usually calls reset() without a seed. Assign one so the bridge
+        # game and the logged episode metrics can be reproduced.
+        if seed is None:
+            seed = int.from_bytes(os.urandom(4), "little")
         super().reset(seed=seed)
         self._ensure_subprocess()
 
@@ -214,20 +390,29 @@ class MtgForgeEnv(gym.Env):
         # the agent sees varied matchups instead of one fixed Aggro vs Control.
         # Deck seed combines the caller's gym seed with an internal counter so
         # back-to-back resets always rotate, even if Ray reuses the same seed.
+        # The archetype name has to follow the deck: the shaper's control term
+        # keys off it, and a config-time "control" never matches "control_uw".
         if self.arena_only:
             try:
-                from ml_engine.ray_cluster.arena_pool import resolve_decks_for_training
-                deck_seed = ((seed or 0) ^ (self._episode_count * 2654435761)) & 0xFFFFFFFF
-                a_deck, o_deck = resolve_decks_for_training(arena_only=True, seed=deck_seed)
+                from ml_engine.ray_cluster.arena_pool import resolve_training_matchup
+                deck_seed = (int(seed) ^ (self._episode_count * 2654435761)) & 0xFFFFFFFF
+                a_deck, o_deck, a_arch, _o_arch = resolve_training_matchup(
+                    arena_only=True, seed=deck_seed
+                )
                 if a_deck:
                     self.agent_deck = a_deck
                 if o_deck:
                     self.opponent_deck = o_deck
+                if a_arch:
+                    self.archetype = str(a_arch).strip().lower()
             except Exception:
                 # Never let deck resolution kill an episode — fall through to
                 # whatever the previous deck was (or None → bridge fallback).
-                pass
+                logger.exception("arena deck rotation failed; keeping the previous decks")
         self._episode_count += 1
+        self.shaper.set_episode_index(self._episode_count)
+        self.shaper.reset_episode()
+        self._begin_episode_tracking(int(seed))
 
         self._send_command({"cmd": "new_game", "agent_deck": self.agent_deck,
                             "opponent_deck": self.opponent_deck, "seed": seed,
@@ -247,20 +432,30 @@ class MtgForgeEnv(gym.Env):
             )
         self.loop_guard.reset()
         self._last_snapshot = self._state_to_snapshot(first_state)
+        self._note_lands(first_state)
         try:
             obs = self._encode_observation(first_state)
         except ValueError:
             self._kill_subprocess()
             raise
-        info = {"state": first_state}
+        info = {
+            "state": first_state,
+            "seed": self._episode_seed,
+            "agent_deck_sha256": self._agent_deck_sha256,
+            "opponent_deck_sha256": self._opponent_deck_sha256,
+        }
         return obs, info
 
     def step(self, action):
         if self._proc is None or self._proc.poll() is not None:
-            # Subprocess died — force reset next call
-            return self._dummy_obs(), 0.0, True, False, {"error": "forge_subprocess_dead"}
+            # The JVM is already gone. This is an infrastructure truncation,
+            # not a loss the policy should learn from.
+            return self._infra_stop("forge_subprocess_dead")
 
         flat_action = int(action)
+        self._episode_steps += 1
+        if flat_action == 0:
+            self._episode_passes += 1
         action_type = (
             "pass" if flat_action == 0 else
             "noop" if flat_action in (self.num_actions - 2, self.num_actions - 1) else
@@ -274,18 +469,23 @@ class MtgForgeEnv(gym.Env):
         try:
             state = self._read_state()
         except subprocess.TimeoutExpired:
-            # Kill + next reset will respawn
-            self._kill_subprocess()
-            return self._dummy_obs(), self.shaper.config.penalty_illegal_action, True, False, {"error": "forge_step_timeout"}
+            return self._infra_stop("forge_step_timeout")
+        except EOFError:
+            return self._infra_stop("forge_subprocess_dead")
 
         is_terminal = bool(state.get("terminal", False))
         outcome = state.get("outcome")
         illegal = bool(state.get("illegal_action", False))
         if self.require_policy_control and not bool(state.get("policy_controlled", False)):
             self._kill_subprocess()
-            return self._dummy_obs(), self.shaper.config.penalty_illegal_action, True, False, {
+            self.shaper.reset_episode()
+            return self._dummy_obs(), 0.0, False, True, {
                 "error": "forge_policy_control_lost",
                 "state": state,
+                "episode_metrics": self._episode_metrics(
+                    win=None, truncated=True, turn=state.get("turn", 0),
+                    infra_error="forge_policy_control_lost",
+                ),
             }
         # The bridge reports whether the external controller actually consumed
         # a legal action. Treat failed selections as illegal instead of giving
@@ -304,15 +504,19 @@ class MtgForgeEnv(gym.Env):
             state["_loop_detected"] = True
             state["_toxic"] = toxic.__dict__ if toxic else None
 
+        # The turn limit is a truncation, not a terminal loss. Decide it
+        # before the snapshot so the shaper does not treat the cutoff as the
+        # end of the game (Phi stays defined and the value can bootstrap),
+        # and so the shaping budget cannot leak into the next episode.
+        turn_capped = (not is_terminal) and int(state.get("turn", 0) or 0) >= self.turn_limit
+        if turn_capped:
+            state["turn_limit_reached"] = True
+
         curr_snapshot = self._state_to_snapshot(state, illegal=illegal, terminal=is_terminal)
         reward = self.shaper.shape(self._last_snapshot, curr_snapshot, outcome=outcome)
         if looped:
             reward += self.loop_guard.config.toxic_penalty
-
-        # Turn cap → draw
-        if not is_terminal and state.get("turn", 0) >= self.turn_limit:
-            is_terminal = True
-            state["turn_limit_reached"] = True
+        self._note_lands(state)
 
         self._last_snapshot = curr_snapshot
         try:
@@ -320,11 +524,96 @@ class MtgForgeEnv(gym.Env):
         except ValueError:
             self._kill_subprocess()
             raise
-        truncated = state.get("turn_limit_reached", False)
-        return obs, reward, is_terminal and not truncated, truncated, {"state": state}
+        truncated = bool(turn_capped)
+        terminated = bool(is_terminal) and not truncated
+        info: Dict[str, Any] = {"state": state}
+        if terminated or truncated:
+            # Drop the spent shaping budget even when the bridge never marked
+            # the state terminal (turn limit) or the next reset is delayed.
+            self.shaper.reset_episode()
+            info["episode_metrics"] = self._episode_metrics(
+                win=_win_flag(outcome) if terminated else None,
+                truncated=truncated,
+                turn=state.get("turn", 0),
+            )
+        return obs, reward, terminated, truncated, info
 
     def close(self):
         self._kill_subprocess()
+
+    def _begin_episode_tracking(self, seed: int) -> None:
+        self._episode_seed = int(seed)
+        self._episode_steps = 0
+        self._episode_passes = 0
+        self._lands_played = 0
+        self._lands_you_seen = None
+        self._episode_started = time.monotonic()
+        self._agent_deck_sha256 = _sha256_text(self.agent_deck)
+        self._opponent_deck_sha256 = _sha256_text(self.opponent_deck)
+
+    def _note_lands(self, state: Dict[str, Any]) -> None:
+        lands = _lands_you(state)
+        if self._lands_you_seen is not None and lands > self._lands_you_seen:
+            self._lands_played += lands - self._lands_you_seen
+        self._lands_you_seen = lands
+
+    def _episode_metrics(
+        self,
+        *,
+        win: Optional[float],
+        truncated: bool,
+        turn: Any,
+        infra_error: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        elapsed = max(1e-6, time.monotonic() - self._episode_started)
+        steps = int(self._episode_steps)
+        try:
+            turn_number = max(1, int(turn or 1))
+        except (TypeError, ValueError):
+            turn_number = 1
+        metrics: Dict[str, Any] = {
+            "win": None if win is None else float(win),
+            "truncated": 1.0 if truncated else 0.0,
+            "steps": float(steps),
+            "passes": float(self._episode_passes),
+            "lands_played_per_turn": float(self._lands_played) / float(turn_number),
+            "steps_per_sec": float(steps) / elapsed,
+            "seed": self._episode_seed,
+            "agent_deck_sha256": self._agent_deck_sha256,
+            "opponent_deck_sha256": self._opponent_deck_sha256,
+        }
+        if infra_error:
+            metrics["infra_error"] = infra_error
+        logger.info(
+            "episode_end win=%s truncated=%s steps=%s passes=%s "
+            "lands_played_per_turn=%.4f steps_per_sec=%.3f seed=%s "
+            "agent_deck_sha256=%s opponent_deck_sha256=%s infra_error=%s",
+            metrics["win"],
+            int(truncated),
+            steps,
+            int(self._episode_passes),
+            metrics["lands_played_per_turn"],
+            metrics["steps_per_sec"],
+            metrics["seed"],
+            metrics["agent_deck_sha256"],
+            metrics["opponent_deck_sha256"],
+            infra_error or "",
+        )
+        return metrics
+
+    def _infra_stop(self, error: str):
+        """End the episode because Forge failed, without a terminal loss."""
+        turn = 0
+        if self._last_snapshot is not None:
+            turn = self._last_snapshot.turn
+        self._kill_subprocess()
+        self.shaper.reset_episode()
+        return self._dummy_obs(), 0.0, False, True, {
+            "error": error,
+            "episode_metrics": self._episode_metrics(
+                win=None, truncated=True, turn=turn, infra_error=error
+            ),
+        }
 
     # ── Subprocess management ───────────────────────────────────────────────
 
@@ -398,6 +687,7 @@ class MtgForgeEnv(gym.Env):
                 pass
         finally:
             self._proc = None
+            self._stdout_reader = None
 
     def _send_command(self, payload: Dict[str, Any]) -> None:
         assert self._proc and self._proc.stdin
@@ -408,21 +698,27 @@ class MtgForgeEnv(gym.Env):
     def _read_state(self, timeout_override: Optional[float] = None) -> Dict[str, Any]:
         assert self._proc and self._proc.stdout
         timeout = timeout_override if timeout_override is not None else self.step_timeout
-        start = time.time()
+        reader = self._stdout_reader
+        if reader is None or reader.stream is not self._proc.stdout:
+            reader = _StdoutLineReader(self._proc.stdout)
+            self._stdout_reader = reader
+        deadline = time.monotonic() + timeout
         while True:
-            if time.time() - start > timeout:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 raise subprocess.TimeoutExpired(cmd="forge_step", timeout=timeout)
-            line = self._proc.stdout.readline()
-            if not line:
-                time.sleep(0.01)
-                continue
+            line = reader.readline(remaining)
+            if line == "":
+                # EOF. The JVM closed stdout without a snapshot.
+                raise EOFError("forge stdout closed")
             line = line.strip()
             if not line:
                 continue
             try:
                 return json.loads(line)
             except json.JSONDecodeError:
-                # Forge sometimes prints stderr on stdout — skip garbage lines
+                # Forge sometimes prints logs on stdout — skip garbage lines.
+                logger.debug("ignoring non-json forge line: %s", line[:200])
                 continue
 
     # ── Encoding helpers ────────────────────────────────────────────────────
@@ -445,11 +741,14 @@ class MtgForgeEnv(gym.Env):
         instants_in_hand = int(
             state.get("instants_in_hand_you", you.get("instants_in_hand", 0))
         )
-        # turn_ended: bridge may signal it explicitly, else derive from phase.
-        turn_ended = bool(
-            state.get("turn_ended",
-                      str(state.get("phase", "")).upper() in ("END", "END_OF_TURN", "CLEANUP"))
-        )
+        phase_name = str(state.get("phase", "")).upper()
+        # turn_ended: bridge may signal it explicitly, else derive from the
+        # phase name. Do not treat COMBAT_END as the end step.
+        if "turn_ended" in state:
+            turn_ended = bool(state.get("turn_ended"))
+        else:
+            turn_ended = phase_name in ("END", "END_OF_TURN", "CLEANUP", "CLEANUP_PHASE")
+        lands_you, lands_opp, nonland_you, nonland_opp = _development_counts(state)
         return GameStateSnapshot(
             turn=int(state.get("turn", 0)),
             life_you=int(state.get("life_you", 20)),
@@ -464,6 +763,10 @@ class MtgForgeEnv(gym.Env):
             instants_in_hand_you=instants_in_hand,
             archetype=self.archetype,
             turn_ended=turn_ended,
+            lands_you=lands_you,
+            lands_opp=lands_opp,
+            nonland_permanents_you=nonland_you,
+            nonland_permanents_opp=nonland_opp,
             is_terminal=terminal,
             illegal_action=illegal,
         )
@@ -571,9 +874,13 @@ class MtgForgeEnv(gym.Env):
         card_feats = np.zeros((self.max_cards, 400), dtype=np.float32)
         cards = state.get("cards", [])[: self.max_cards]
         for i, c in enumerate(cards):
-            card_feats[i, :11] = [
-                c.get("mana_value", 0), c.get("power", 0), c.get("toughness", 0),
-                c.get("loyalty", 0),
+            card_feats[i, :11] = _scale_features(
+                [
+                    c.get("mana_value", 0), c.get("power", 0), c.get("toughness", 0),
+                    c.get("loyalty", 0),
+                ],
+                _CARD_NUMERIC_SCALES,
+            ) + [
                 int(c.get("is_creature", False)),
                 int(c.get("is_instant", False)),
                 int(c.get("is_sorcery", False)),
@@ -599,19 +906,24 @@ class MtgForgeEnv(gym.Env):
         player_feats = np.zeros((2, 15), dtype=np.float32)
         for pi, key in enumerate(("you", "opp")):
             p = state.get(key, {})
-            player_feats[pi, :15] = [
-                p.get("life", 20), p.get("max_life_seen", 20),
-                p.get("mana_pool_total", 0),
-                *[p.get(f"mana_{c}", 0) for c in ("w", "u", "b", "r", "g")],
-                p.get("hand_size", 0), p.get("library_size", 0),
-                p.get("graveyard_size", 0), p.get("exile_size", 0),
-                state.get("turn", 0),
-                int(p.get("is_active", False)),
-                int(key == "you"),
-            ]
+            player_feats[pi, :15] = _scale_features(
+                [
+                    p.get("life", 20), p.get("max_life_seen", 20),
+                    p.get("mana_pool_total", 0),
+                    *[p.get(f"mana_{c}", 0) for c in ("w", "u", "b", "r", "g")],
+                    p.get("hand_size", 0), p.get("library_size", 0),
+                    p.get("graveyard_size", 0), p.get("exile_size", 0),
+                    state.get("turn", 0),
+                    int(p.get("is_active", False)),
+                    int(key == "you"),
+                ],
+                _PLAYER_FEATURE_SCALES,
+            )
 
         def pad_edges(edges, target_cols):
-            arr = np.zeros((2, target_cols), dtype=np.int64)
+            # -1 is not a node. Padding with (0, 0) made every short edge list
+            # look like a real edge into card 0.
+            arr = np.full((2, target_cols), -1, dtype=np.int64)
             if not edges:
                 return arr
             edges = edges[:target_cols]
@@ -649,10 +961,10 @@ class MtgForgeEnv(gym.Env):
         return {
             "card_feats": np.zeros((self.max_cards, 400), dtype=np.float32),
             "player_feats": np.zeros((2, 15), dtype=np.float32),
-            "controlled_by_edges": np.zeros((2, 2 * self.max_cards), dtype=np.int64),
-            "in_zone_edges": np.zeros((2, 2 * self.max_cards), dtype=np.int64),
-            "synergy_edges": np.zeros((2, 4 * self.max_cards), dtype=np.int64),
-            "attacks_edges": np.zeros((2, self.max_cards), dtype=np.int64),
+            "controlled_by_edges": np.full((2, 2 * self.max_cards), -1, dtype=np.int64),
+            "in_zone_edges": np.full((2, 2 * self.max_cards), -1, dtype=np.int64),
+            "synergy_edges": np.full((2, 4 * self.max_cards), -1, dtype=np.int64),
+            "attacks_edges": np.full((2, self.max_cards), -1, dtype=np.int64),
             "action_mask": np.zeros(self.num_actions, dtype=np.int8),
             "action_source_indices": np.full(self.num_actions, -1, dtype=np.int64),
             "action_target_indices": np.full(self.num_actions, -1, dtype=np.int64),

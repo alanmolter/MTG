@@ -447,10 +447,10 @@ def _batched_dict_to_hetero(obs, edge_relations):
             dst_off = torch.arange(B, device=device).view(B, 1) * N_card
         src = (raw[:, 0, :].long() + src_off).reshape(-1)                             # [B*E]
         dst = (raw[:, 1, :].long() + dst_off).reshape(-1)                             # [B*E]
-        # Drop padded zero-edges: an all-zero (0,0) pair across every graph is
-        # noise from pad_edges(). Keep edges where at least one endpoint is >0.
-        nonzero_mask = (raw[:, 0, :] > 0) | (raw[:, 1, :] > 0)                        # [B, E]
-        keep = nonzero_mask.reshape(-1)
+        # Padding is -1. Index 0 is a real card or player, including the edge
+        # from the first card to player 0, so a (0, 0) pair must be kept.
+        valid = (raw[:, 0, :] >= 0) & (raw[:, 1, :] >= 0)                             # [B, E]
+        keep = valid.reshape(-1)
         if keep.any():
             data[rel].edge_index = torch.stack([src[keep], dst[keep]], dim=0)
         else:
