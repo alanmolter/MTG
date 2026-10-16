@@ -13,9 +13,11 @@
 -- replaces competitive_deck_cards inside one transaction.
 
 ALTER TABLE competitive_decks ALTER COLUMN source SET DEFAULT 'moxfield';
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX IF NOT EXISTS competitive_deck_cards_deck_card_section_unique
   ON competitive_deck_cards (deck_id, card_name, section);
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS competitive_deck_cards_deck_id_idx
   ON competitive_deck_cards (deck_id);

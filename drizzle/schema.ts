@@ -252,7 +252,7 @@ export type InsertCompetitiveDeckCard =
   typeof competitiveDeckCards.$inferInsert;
 
 // Log de jobs de treinamento de embeddings
-export const statusEnum = pgEnum("status", [
+export const statusEnum = pgEnum("job_status", [
   "pending",
   "running",
   "completed",
