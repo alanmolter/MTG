@@ -56,6 +56,7 @@ def bc_kl_penalty(
         "bc_kl": float(penalty.detach()),
         "bc_kl_divergence": float(divergence.detach()),
         "bc_kl_coeff": float(coeff),
+        "bc_kl_iter": float(iteration),
     }
 
 
