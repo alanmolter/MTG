@@ -1,148 +1,97 @@
 /**
- * applyMigration.ts
+ * Apply pending PostgreSQL files in drizzle/ and record each one.
  *
- * Aplica a migracao 0004 diretamente no banco PostgreSQL usando SQL puro.
- * Nao depende do drizzle-kit generate (que falha com snapshots MySQL antigos).
- * Seguro para rodar multiplas vezes (todas as instrucoes usam IF NOT EXISTS).
- * Suporta blocos DO $$ ... END $$ sem quebrar no ponto-e-virgula interno.
+ * 0000–0002 are historical MySQL snapshots and are skipped.
+ * A database that already has public.cards (created before schema_migrations
+ * existed) gets 0003–0009 stamped, then 0010+ runs for real.
+ * One transaction per file. An unexpected error fails the process.
+ *
+ * This is the supported path. `npm run db:push` still asks drizzle-kit to
+ * generate from the old MySQL snapshots, which is the wrong tool here.
  */
 import "dotenv/config";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import { sql } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
+import postgres from "postgres";
+import {
+  applyPendingMigrations,
+  isPostgresMigration,
+  type MigrationDb,
+} from "./migrationRunner";
 
-// Codigos PostgreSQL que indicam "objeto ja existe" — ignorar silenciosamente
-const SKIP_CODES = new Set(["42P07", "42701", "42P06", "42P04", "42710", "23505"]);
-const SKIP_MSGS  = ["already exists", "ja existe", "já existe", "duplicate"];
-
-function isExpectedError(err: any): boolean {
-  if (err?.severity === "NOTICE" || err?.severity_local === "NOTA") return true;
-  if (SKIP_CODES.has(err?.code)) return true;
-  const msg = (err?.message ?? "").toLowerCase();
-  return SKIP_MSGS.some((s) => msg.includes(s));
-}
-
-/**
- * Divide o SQL em statements preservando blocos DO $$ ... END $$ inteiros.
- */
-function splitStatements(sql: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inDollarBlock = false;
-
-  for (const line of sql.split("\n")) {
-    const trimmed = line.trim();
-    // Pular linhas de comentario puras
-    if (trimmed.startsWith("--")) continue;
-
-    // Detectar inicio de bloco DO $$
-    if (/^DO\s*\$\$/.test(trimmed)) inDollarBlock = true;
-
-    current += line + "\n";
-
-    // Detectar fim de bloco DO $$ (END $$;)
-    if (inDollarBlock && /^END\s*\$\$/.test(trimmed)) {
-      inDollarBlock = false;
-      const stmt = current.trim().replace(/;$/, ""); // remover ; final para sql.raw
-      if (stmt.length > 0) result.push(stmt);
-      current = "";
-      continue;
-    }
-
-    // Statement normal terminado com ;
-    if (!inDollarBlock && trimmed.endsWith(";")) {
-      const stmt = current.trim().replace(/;$/, "");
-      if (stmt.length > 0) result.push(stmt);
-      current = "";
-    }
-  }
-
-  // Qualquer resto
-  const leftover = current.trim().replace(/;$/, "");
-  if (leftover.length > 0) result.push(leftover);
-
-  return result.filter((s) => s.replace(/--.*$/gm, "").trim().length > 0);
+function adapt(sql: {
+  unsafe: (query: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>>;
+  begin?: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
+}): MigrationDb {
+  return {
+    async query(sqlText, params) {
+      const rows =
+        params && params.length > 0
+          ? await sql.unsafe(sqlText, params)
+          : await sql.unsafe(sqlText);
+      return Array.from(rows);
+    },
+    transaction(fn) {
+      if (typeof sql.begin !== "function") return fn(adapt(sql));
+      return sql.begin((tx) => fn(adapt(tx as typeof sql)));
+    },
+  };
 }
 
 async function applyMigration() {
-  console.log("[Migration] Verificando schema do banco...");
-
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
     console.error("[Migration] DATABASE_URL nao configurado.");
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
-  // Conexao dedicada com max:1 — garante que client.end() fecha tudo
   const client = postgres(dbUrl, {
     max: 1,
     idle_timeout: 5,
     connect_timeout: 10,
     onnotice: () => {},
   });
-  const db = drizzle(client);
 
   try {
-    // Migrações aplicadas em ordem; qualquer NEW file drizzle/000N_*.sql é auto-descoberto
     const drizzleDir = path.join(process.cwd(), "drizzle");
-    const migrationFiles = fs
+    const files = fs
       .readdirSync(drizzleDir)
-      .filter((f) => /^00(0[4-9]|[1-9][0-9])_.*\.sql$/.test(f))  // 0004+
-      .sort();
+      .filter((filename) => isPostgresMigration(filename))
+      .sort()
+      .map((filename) => ({
+        filename,
+        sql: fs.readFileSync(path.join(drizzleDir, filename), "utf-8"),
+      }));
 
-    if (migrationFiles.length === 0) {
-      console.error("[Migration] Nenhum arquivo 000N_*.sql encontrado a partir de 0004.");
+    if (files.length === 0) {
+      console.error("[Migration] Nenhum arquivo PostgreSQL 00NN_*.sql encontrado.");
+      process.exitCode = 1;
       return;
     }
 
-    let totalApplied = 0;
-    let totalSkipped = 0;
-
-    for (const file of migrationFiles) {
-      const migrationPath = path.join(drizzleDir, file);
-      const migrationSQL = fs.readFileSync(migrationPath, "utf-8");
-      const statements = splitStatements(migrationSQL);
-
-      let applied = 0;
-      let skipped = 0;
-
-      for (const statement of statements) {
-        try {
-          await db.execute(sql.raw(statement));
-          applied++;
-        } catch (err: any) {
-          if (isExpectedError(err)) {
-            skipped++; // silencioso — objeto ja existe
-          } else {
-            const shortMsg = err?.message?.split("\n")[0] ?? "erro desconhecido";
-            console.warn(`[Migration][${file}] Aviso inesperado: ${shortMsg}`);
-            skipped++;
-          }
-        }
-      }
-
-      if (applied > 0) {
-        console.log(`[Migration] ${file}: ${applied} alteracoes aplicadas (${skipped} no-op).`);
-      }
-      totalApplied += applied;
-      totalSkipped += skipped;
-    }
-
-    if (totalApplied > 0) {
-      console.log(`[Migration] Schema atualizado: ${totalApplied} alteracoes aplicadas no total.`);
-    } else {
-      console.log(`[Migration] Schema ja esta atualizado (${totalSkipped} objetos ja existiam).`);
-    }
-  } catch (err: any) {
-    console.error("[Migration] Erro fatal:", err?.message);
+    const result = await applyPendingMigrations(adapt(client as unknown as Parameters<typeof adapt>[0]), files);
+    console.log(
+      `[Migration] applied=${result.applied.join(",") || "(none)"} ` +
+        `stamped=${result.stamped.length} skipped=${result.skipped.length}`,
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[Migration] Erro fatal:", message);
+    process.exitCode = 1;
   } finally {
-    // SEMPRE fechar a conexao para o processo Node.js poder encerrar
-    try { await client.end({ timeout: 3 }); } catch (_) {}
+    try {
+      await client.end({ timeout: 3 });
+    } catch {
+      /* pool already closed */
+    }
   }
 }
 
 applyMigration()
-  .catch((err) => console.error("[Migration] Erro fatal:", err?.message))
-  .finally(() => process.exit(0));
+  .catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[Migration] Erro fatal:", message);
+    process.exitCode = 1;
+  })
+  .finally(() => process.exit(process.exitCode ?? 0));

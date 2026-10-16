@@ -65,7 +65,39 @@ from ml_engine.ray_cluster.card_features import hashed_oracle_vector, semantic_c
 DEFAULT_NUM_ACTIONS = 512
 DEFAULT_MAX_CARDS = 128        # cap on card nodes in obs
 DEFAULT_TURN_LIMIT = 50        # hard stop after N turns (draw)
-DEFAULT_STEP_TIMEOUT = 10.0    # seconds — if Forge doesn't respond, we abort
+DEFAULT_STEP_TIMEOUT = 12.0    # seconds — Python gives up after the Java bridge
+DEFAULT_JAVA_STEP_TIMEOUT_SECONDS = 8  # Java must answer first and flag truncated
+
+
+def java_step_timeout_seconds(python_timeout: float, requested: Optional[int] = None) -> int:
+    """Whole seconds the Java bridge may block, strictly below ``python_timeout``.
+
+    A sub-second Python deadline cannot be paired with a positive integer
+    Java timeout. Training and preflight use 12s Python / 8s Java.
+    """
+
+    python_timeout = float(python_timeout)
+    chosen = DEFAULT_JAVA_STEP_TIMEOUT_SECONDS if requested is None else int(requested)
+    if chosen < 1:
+        chosen = 1
+    if python_timeout > 1 and chosen >= python_timeout:
+        chosen = max(1, int(python_timeout) - 1)
+    return chosen
+
+
+def response_matches(payload: Dict[str, Any], expected_request_id: Optional[int]) -> bool:
+    """True when a JSON reply belongs to the command currently in flight.
+
+    Replies with no ``request_id`` are kept so older bridges and test fakes
+    still work. A present id that does not match is stale and must be dropped.
+    """
+
+    if expected_request_id is None or payload.get("request_id") is None:
+        return True
+    try:
+        return int(payload["request_id"]) == int(expected_request_id)
+    except (TypeError, ValueError):
+        return False
 
 # Memory-budget notes
 # ───────────────────
@@ -269,6 +301,19 @@ class MtgForgeEnv(gym.Env):
         self.max_cards: int = int(config.get("max_cards", DEFAULT_MAX_CARDS))
         self.turn_limit: int = int(config.get("turn_limit", DEFAULT_TURN_LIMIT))
         self.step_timeout: float = float(config.get("step_timeout", DEFAULT_STEP_TIMEOUT))
+        self.java_step_timeout_seconds: int = java_step_timeout_seconds(
+            self.step_timeout, config.get("java_step_timeout_seconds")
+        )
+        self.policy_version: str = str(
+            config.get("policy_version") or os.environ.get("POLICY_VERSION") or ""
+        )
+        self.pool_version: str = str(
+            config.get("deck_pool_version") or os.environ.get("DECK_POOL_VERSION") or ""
+        )
+        self.bridge_version: str = str(config.get("bridge_version") or "rlbridge")
+        self._request_seq: int = 0
+        self._pending_request_id: Optional[int] = None
+        self.stale_replies_discarded: int = 0
         # Never train against an observational bridge. The first snapshot must
         # prove that the agent-side PlayerController was installed in Forge.
         self.require_policy_control: bool = bool(config.get("require_policy_control", True))
@@ -418,7 +463,8 @@ class MtgForgeEnv(gym.Env):
 
         self._send_command({"cmd": "new_game", "agent_deck": self.agent_deck,
                             "opponent_deck": self.opponent_deck, "seed": seed,
-                            "agent_policy": self.agent_policy})
+                            "agent_policy": self.agent_policy,
+                            "step_timeout_seconds": self.java_step_timeout_seconds})
         # Forge's cold-start (card DB load) takes ~5s. Give new_game a generous
         # one-time budget so the first reset survives the warm-up.
         first_state = self._read_state(timeout_override=max(self.step_timeout, 60.0))
@@ -476,6 +522,8 @@ class MtgForgeEnv(gym.Env):
             return self._infra_stop("forge_step_timeout")
         except EOFError:
             return self._infra_stop("forge_subprocess_dead")
+        if state.get("truncation_reason") == "step_timeout":
+            return self._infra_stop("forge_step_timeout")
 
         is_terminal = bool(state.get("terminal", False))
         outcome = state.get("outcome")
@@ -540,6 +588,7 @@ class MtgForgeEnv(gym.Env):
                 truncated=truncated,
                 turn=state.get("turn", 0),
             )
+            self._publish_match(info["episode_metrics"], outcome=outcome if terminated else None, turns=state.get("turn", 0))
         return obs, reward, terminated, truncated, info
 
     def close(self):
@@ -620,12 +669,30 @@ class MtgForgeEnv(gym.Env):
             turn = self._last_snapshot.turn
         self._kill_subprocess()
         self.shaper.reset_episode()
+        metrics = self._episode_metrics(
+            win=None, truncated=True, turn=turn, infra_error=error
+        )
+        self._publish_match(metrics, outcome=None, turns=turn)
         return self._dummy_obs(), 0.0, False, True, {
             "error": error,
-            "episode_metrics": self._episode_metrics(
-                win=None, truncated=True, turn=turn, infra_error=error
-            ),
+            "episode_metrics": metrics,
         }
+
+    def _publish_match(self, metrics: Dict[str, Any], *, outcome: Any, turns: Any) -> None:
+        try:
+            from ml_engine.ray_cluster.match_record import maybe_record_forge_match
+            maybe_record_forge_match(
+                agent_deck_id=metrics.get("agent_deck_id") or None,
+                opponent_deck_id=metrics.get("opponent_deck_id") or None,
+                seed=metrics.get("seed"),
+                policy_version=self.policy_version or None,
+                pool_version=self.pool_version or None,
+                bridge_version=self.bridge_version or None,
+                winner=outcome,
+                turns=turns,
+            )
+        except Exception:
+            logger.exception("forge_matches write failed")
 
     # ── Subprocess management ───────────────────────────────────────────────
 
@@ -703,7 +770,11 @@ class MtgForgeEnv(gym.Env):
 
     def _send_command(self, payload: Dict[str, Any]) -> None:
         assert self._proc and self._proc.stdin
-        line = json.dumps(payload) + "\n"
+        self._request_seq += 1
+        body = dict(payload)
+        body["request_id"] = self._request_seq
+        self._pending_request_id = self._request_seq
+        line = json.dumps(body) + "\n"
         self._proc.stdin.write(line)
         self._proc.stdin.flush()
 
@@ -727,11 +798,22 @@ class MtgForgeEnv(gym.Env):
             if not line:
                 continue
             try:
-                return json.loads(line)
+                parsed = json.loads(line)
             except json.JSONDecodeError:
                 # Forge sometimes prints logs on stdout — skip garbage lines.
                 logger.debug("ignoring non-json forge line: %s", line[:200])
                 continue
+            if not isinstance(parsed, dict):
+                continue
+            if not response_matches(parsed, self._pending_request_id):
+                self.stale_replies_discarded += 1
+                logger.warning(
+                    "discarding stale forge reply request_id=%s expected=%s",
+                    parsed.get("request_id"),
+                    self._pending_request_id,
+                )
+                continue
+            return parsed
 
     # ── Encoding helpers ────────────────────────────────────────────────────
 

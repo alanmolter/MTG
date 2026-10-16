@@ -6,8 +6,11 @@ global.fetch = vi.fn();
 
 // Mock db — source uses `getRawClient()` (postgres.js tagged-template).
 function makeFakePg() {
-  return vi.fn(async (_strings: TemplateStringsArray, ..._values: any[]) => {
+  const pg = vi.fn(async (_strings: TemplateStringsArray, ..._values: any[]) => {
     return [{ id: 1 }];
+  });
+  return Object.assign(pg, {
+    begin: async (fn: (tx: typeof pg) => Promise<unknown>) => fn(pg),
   });
 }
 

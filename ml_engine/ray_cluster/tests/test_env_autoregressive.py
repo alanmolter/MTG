@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 import numpy as np
 import pytest
 
-from ml_engine.ray_cluster.env import MtgForgeEnv
+from ml_engine.ray_cluster.env import MtgForgeEnv, java_step_timeout_seconds
 
 
 # ── Fakes ────────────────────────────────────────────────────────────────────
@@ -524,6 +524,39 @@ def test_life_library_and_turn_are_scaled_next_to_binary_flags():
     assert observation["card_feats"][0, 0] == pytest.approx(1.0)  # mana value / 10
     assert observation["card_feats"][0, 1] == pytest.approx(0.2)  # power / 10
     assert observation["card_feats"][0, 4] == pytest.approx(1.0)  # creature flag
+
+
+def test_java_timeout_stays_below_python_and_stale_replies_are_dropped():
+    assert java_step_timeout_seconds(12.0) == 8
+    assert java_step_timeout_seconds(12.0, 20) == 11
+    assert java_step_timeout_seconds(12.0, 7) == 7
+
+    responses = []
+    for request_id in range(1, 1001):
+        responses.append({"request_id": request_id - 1, "turn": -1, "terminal": False})
+        responses.append(_minimal_state(request_id=request_id, turn=request_id))
+    env = _make_env()
+    env._proc = _FakeProc(responses)
+    for request_id in range(1, 1001):
+        env._pending_request_id = request_id
+        state = env._read_state(timeout_override=2.0)
+        assert state["turn"] == request_id
+    assert env.stale_replies_discarded == 1000
+
+
+def test_bridge_step_timeout_flag_is_an_infra_stop():
+    env = _make_env()
+    env._proc = _FakeProc([{
+        "truncated": True,
+        "truncation_reason": "step_timeout",
+        "turn": 3,
+        "terminal": False,
+    }])
+    _obs, reward, terminated, truncated, info = env.step(0)
+    assert terminated is False
+    assert truncated is True
+    assert reward == 0.0
+    assert info["error"] == "forge_step_timeout"
 
 
 def test_malformed_active_response_kills_forge_worker():

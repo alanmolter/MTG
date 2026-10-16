@@ -1,10 +1,14 @@
 # rlbridge_src — mirror dos fontes Java do ForgeRLBridge
 
-Este diretório existe porque `forge/` é um git submódulo (fork de
-`Card-Forge/forge`) e o Git do superprojeto **não consegue trackear**
-arquivos dentro dele. Então mantemos aqui uma cópia versionada de
-`forge/rlbridge/` e o `setup.ps1` se encarrega de materializar essa cópia
-dentro de `forge/rlbridge/` na máquina do usuário.
+`forge/` is a git submodule of https://github.com/Card-Forge/forge
+(pinned commit `7cc4ff7b17365c7e882cb472537c5ccdda0dbde0`, see `.gitmodules`).
+The superproject does not vendor files inside that checkout, so the bridge
+sources live here and `setup.ps1` copies them into `forge/rlbridge/` on the
+user's machine.
+
+```powershell
+git submodule update --init forge
+```
 
 ## Fluxo em `setup.ps1`
 
@@ -22,8 +26,8 @@ rlbridge_src/  →  forge/rlbridge/   (cópia automática no setup)
   com o protocolo `step` (legacy Discrete) e `step_autoregressive` (Phase 3
   sem hash collision).
 - `src/test/java/forge/rlbridge/ForgeRLBridgeAutoregressiveTest.java` —
-  25 asserts via reflection validando o parser de JSON + fail-safe de
-  range.
+  reflection tests for the JSON parser (including `longOrNull` seeds) and
+  the fail-safe range check.
 - `build.cmd` — javac + jar, sem Maven (compila contra o fat jar do
   Forge).
 - `test.cmd` — compila + roda os testes.
@@ -52,6 +56,27 @@ Snapshots now include the Discrete(512) contract (`action_mask`,
 agent's hand since the previous snapshot, `0` for an inferred pass, or `-1`
 when the AI decision does not map. `policy_controlled` stays false until a
 controller actually applies `step`.
+
+## Seed
+
+`new_game.seed` is applied with `MyRandom.setRandom(new java.util.Random(seed))`
+before `match.createGame()`. Forge documents that hook for deterministic
+simulation. It covers shuffles and coin flips that later call
+`MyRandom.getRandom()`.
+
+Limits, so the same seed is not a full replay:
+
+- Code that does `new Random()` or `new SecureRandom()` (some AI heuristics)
+  does not see this seed. `setSeed` on the default `SecureRandom` is not used,
+  because that is not a portable replay.
+- Wall-clock timeouts and thread scheduling still vary.
+- `MyRandom` is process-global. Run one game per JVM.
+- The bridge still lets Forge AI play both sides. A repeated seed repeats
+  opening hands when those shuffles go through `MyRandom`. It does not prove
+  the whole game is identical.
+
+A missing seed leaves Forge's `SecureRandom` in place. Python may send a
+seed larger than `Integer.MAX_VALUE`; the bridge reads it as a long.
 
 ## Atualizar os fontes
 

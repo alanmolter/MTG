@@ -40,6 +40,36 @@ export interface PromotionMetrics {
   baselineMetric?: number | null;
   candidateMetric?: number | null;
   hasCheckpoint?: boolean;
+  /** Path the promoter is considering. Compared to the policy report. */
+  candidateCheckpoint?: string | null;
+  promotionMode?: "first_promotion" | "challenge_incumbent";
+  incumbentCheckpoint?: string | null;
+  /** Independent holdout report. A negative training reward cannot replace it. */
+  policyReport?: PolicyEvaluationReport | null;
+  deckReport?: DeckEvaluationReport | null;
+}
+
+interface PolicyEvaluationReport {
+  candidate?: {
+    checkpoint?: string | null;
+    metrics?: { action_applied_rate?: number | null };
+  };
+  baselines?: {
+    forge_ai?: { status?: string | null };
+  };
+  comparisons?: {
+    candidate_vs_forge_ai?: { win_rate_delta_lower_bound_95?: number | null };
+    candidate_vs_incumbent?: unknown;
+  };
+  heldout_matchups?: Array<{
+    verified_disjoint_from_training?: boolean;
+    agent_deck_sha256?: string;
+    opponent_deck_sha256?: string;
+  }>;
+}
+
+interface DeckEvaluationReport {
+  decks?: Array<{ decklist_sha256?: string | null }>;
 }
 
 export interface PromotionGateResult {
@@ -128,11 +158,8 @@ export function evaluateDataReadiness(metrics: Pick<PromotionMetrics,
   return { passed: failures.length === 0, failures };
 }
 
-/** Fail closed: a policy checkpoint is never marked champion on weak evidence. */
-export function evaluatePromotionGates(metrics: PromotionMetrics): PromotionGateResult {
-  const failures = evaluateDataReadiness(metrics).failures;
-  if (metrics.realMatchCount < 10) failures.push("need_at_least_10_recorded_forge_matches");
-  if (!metrics.hasCheckpoint) failures.push("candidate_checkpoint_missing");
+function rewardFailures(metrics: PromotionMetrics): string[] {
+  const failures: string[] = [];
   if (!Number.isFinite(metrics.candidateMetric)) failures.push("candidate_metric_missing");
   if ((metrics.candidateMetric ?? Number.NEGATIVE_INFINITY) < 0) {
     failures.push("candidate_metric_below_zero_baseline");
@@ -143,6 +170,63 @@ export function evaluatePromotionGates(metrics: PromotionMetrics): PromotionGate
     && (metrics.candidateMetric as number) <= (metrics.baselineMetric as number)
   ) {
     failures.push("candidate_did_not_beat_baseline");
+  }
+  return failures;
+}
+
+/**
+ * Fail closed: a policy checkpoint is never marked champion on weak evidence.
+ *
+ * A negative training reward is not a veto once an independent policy report
+ * and deck report are present. Those reports are the evidence. Without them
+ * the reward checks still apply, and the missing reports fail the gate.
+ */
+export function evaluatePromotionGates(metrics: PromotionMetrics): PromotionGateResult {
+  const failures = evaluateDataReadiness(metrics).failures;
+  if (metrics.realMatchCount < 10) failures.push("need_at_least_10_recorded_forge_matches");
+  if (!metrics.hasCheckpoint) failures.push("candidate_checkpoint_missing");
+
+  const policy = metrics.policyReport;
+  const deck = metrics.deckReport;
+  if (!policy) failures.push("policy_evaluation_missing");
+  if (!deck) failures.push("deck_evaluation_missing");
+  if (!policy || !deck) {
+    failures.push(...rewardFailures(metrics));
+    return { passed: failures.length === 0, failures };
+  }
+
+  if ((policy.candidate?.checkpoint ?? null) !== (metrics.candidateCheckpoint ?? null)) {
+    failures.push("policy_checkpoint_mismatch");
+  }
+  if (policy.baselines?.forge_ai?.status !== "passed") {
+    failures.push("forge_ai_baseline_not_passed");
+  }
+  const holdouts = policy.heldout_matchups ?? [];
+  if (holdouts.some((matchup) => matchup.verified_disjoint_from_training !== true)) {
+    failures.push("heldout_not_verified_disjoint");
+  }
+  const applied = policy.candidate?.metrics?.action_applied_rate;
+  if (applied == null || applied < 0.98) {
+    failures.push("candidate_action_applied_rate_below_0_98");
+  }
+  const improvement = policy.comparisons?.candidate_vs_forge_ai?.win_rate_delta_lower_bound_95;
+  if (improvement == null || improvement <= 0) {
+    failures.push("forge_ai_stable_improvement_not_proven");
+  }
+  const covered = new Set(
+    (deck.decks ?? []).map((entry) => entry.decklist_sha256).filter((hash): hash is string => Boolean(hash)),
+  );
+  const needed = new Set<string>();
+  for (const matchup of holdouts) {
+    if (matchup.agent_deck_sha256) needed.add(matchup.agent_deck_sha256);
+    if (matchup.opponent_deck_sha256) needed.add(matchup.opponent_deck_sha256);
+  }
+  const missing = Array.from(needed).some((hash) => !covered.has(hash));
+  if (missing) {
+    failures.push("deck_cohort_coverage_missing");
+  }
+  if (metrics.promotionMode === "challenge_incumbent" && !policy.comparisons?.candidate_vs_incumbent) {
+    failures.push("incumbent_comparison_missing");
   }
   return { passed: failures.length === 0, failures };
 }

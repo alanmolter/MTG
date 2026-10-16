@@ -38,6 +38,7 @@ public class ForgeRLBridgeAutoregressiveTest {
         testRangeValidationInBounds();
         testRangeValidationOutOfBounds();
         testIllegalActionFailSafeContract();
+        testSeedLongOrNull();
 
         System.out.println("[rlbridge-test] passed=" + passed + " failed=" + failed);
         if (failed > 0) System.exit(1);
@@ -77,6 +78,12 @@ public class ForgeRLBridgeAutoregressiveTest {
         Method m = j.getClass().getDeclaredMethod("intVal", String.class, int.class);
         m.setAccessible(true);
         return (Integer) m.invoke(j, key, def);
+    }
+
+    private static Long jsonLongOrNull(Object j, String key) throws Exception {
+        Method m = j.getClass().getDeclaredMethod("longOrNull", String.class);
+        m.setAccessible(true);
+        return (Long) m.invoke(j, key);
     }
 
     /** Mirrors the bridge's fail-safe check in stepAutoregressive(). */
@@ -150,5 +157,15 @@ public class ForgeRLBridgeAutoregressiveTest {
             assertTrue("failsafe.rejects " + triple[0] + "/" + triple[1] + "/" + triple[2],
                        !valid(triple[0], triple[1], triple[2]));
         }
+    }
+
+    /** Seed 0 is a real seed. Values above Integer.MAX_VALUE stay longs. */
+    private static void testSeedLongOrNull() throws Exception {
+        Object zero = parseJson("{\"cmd\":\"new_game\",\"seed\":0}");
+        assertEq("seed.zero", jsonLongOrNull(zero, "seed"), 0L);
+        Object big = parseJson("{\"cmd\":\"new_game\",\"seed\":3000000000}");
+        assertEq("seed.above_int", jsonLongOrNull(big, "seed"), 3000000000L);
+        Object missing = parseJson("{\"cmd\":\"new_game\"}");
+        assertEq("seed.missing", jsonLongOrNull(missing, "seed"), null);
     }
 }

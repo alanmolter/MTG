@@ -31,3 +31,39 @@ def load_rows(root: Path, *, split: str | None = None) -> list[dict]:
     if split is None:
         return rows
     return [row for row in rows if row.get("split") == split]
+
+
+def manifest_blocked_deck_ids(version: str | None = None) -> set[str]:
+    """Deck ids the pool manifest marks holdout or benchmark.
+
+    A behavior-cloning row that names one of these decks is not a training
+    row, even if its ``split`` field says ``train``.
+    """
+
+    from ml_engine.ray_cluster.deck_pool import active_pool_version, decks_for_split
+
+    resolved = version or active_pool_version()
+    blocked: set[str] = set()
+    for split in ("holdout", "benchmark"):
+        for deck in decks_for_split(split, resolved):
+            blocked.add(deck.deck_id)
+    return blocked
+
+
+def row_uses_blocked_deck(row: dict, blocked_deck_ids: set[str]) -> bool:
+    named = {str(row.get("deck_id") or ""), str(row.get("opponent_id") or "")}
+    named.discard("")
+    return bool(named & blocked_deck_ids)
+
+
+def training_rows(rows: list[dict], blocked_deck_ids: set[str]) -> tuple[list[dict], int]:
+    """Keep ``split == train`` rows whose decks are not held out by the manifest."""
+
+    kept: list[dict] = []
+    excluded = 0
+    for row in rows:
+        if row.get("split") != "train" or row_uses_blocked_deck(row, blocked_deck_ids):
+            excluded += 1
+            continue
+        kept.append(row)
+    return kept, excluded

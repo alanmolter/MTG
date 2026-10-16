@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-from ml_engine.bc.dataset import load_rows
+from ml_engine.bc.dataset import load_rows, manifest_blocked_deck_ids, training_rows
 from ml_engine.models.game_state_gnn import GNNConfig, GameStateGNN, build_hetero_data
 
 
@@ -64,12 +64,17 @@ def train_behavior_clone(
     value_coef: float = 0.5,
     max_rows: int | None = None,
     config: GNNConfig | None = None,
+    pool_version: str | None = None,
 ) -> dict:
-    rows = load_rows(shard_root)
+    blocked = manifest_blocked_deck_ids(pool_version)
+    rows, excluded = training_rows(load_rows(shard_root), blocked)
     if max_rows is not None:
         rows = rows[:max_rows]
     if not rows:
-        raise RuntimeError(f"BC shard {shard_root} has no mapped decisions")
+        raise RuntimeError(
+            f"BC shard {shard_root} has no train-split decisions after "
+            f"dropping {excluded} holdout/benchmark rows"
+        )
     device = torch.device("cpu")
     model = GameStateGNN(config or GNNConfig()).to(device)
     optim = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -90,14 +95,23 @@ def train_behavior_clone(
         optim.step()
         last_loss = float(loss.detach())
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    game_ids = [str(row.get("game_id") or "") for row in rows]
     payload = {
         "model": model.state_dict(),
         "loss": last_loss,
         "rows": len(rows),
         "epochs": epochs,
+        "game_ids": game_ids,
+        "excluded_rows": excluded,
     }
     torch.save(payload, checkpoint)
-    return {"loss": last_loss, "rows": len(rows), "checkpoint": str(checkpoint)}
+    return {
+        "loss": last_loss,
+        "rows": len(rows),
+        "checkpoint": str(checkpoint),
+        "game_ids": game_ids,
+        "excluded_rows": excluded,
+    }
 
 
 def load_bc_weights(model: torch.nn.Module, path: str | Path) -> None:

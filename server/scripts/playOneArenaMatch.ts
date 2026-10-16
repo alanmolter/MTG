@@ -913,15 +913,24 @@ async function launchForgeGui(jarPath: string, deckFiles?: string[]): Promise<Fo
 
 async function recordForgeMatch(
   db: any,
+  agentDeck: PickedDeck | null,
+  opponentDeck: PickedDeck | null,
   winnerDeck: PickedDeck | null,
   loserDeck: PickedDeck | null,
   result?: ForgeLaunchResult["autoResult"],
 ) {
   // Evaluation is immutable evidence. It is intentionally recorded before any
   // optional update and carries the candidate identity used by promotion.
+  // The GUI launcher does not pass a seed into Forge, so seed stays null.
   await db.insert(forgeMatches).values({
     winner: winnerDeck?.id ?? null,
     turns: result?.turns ?? null,
+    agentDeckId: agentDeck ? String(agentDeck.id) : null,
+    opponentDeckId: opponentDeck ? String(opponentDeck.id) : null,
+    seed: null,
+    policyVersion: normalizeCheckpoint(CANDIDATE_CHECKPOINT),
+    poolVersion: process.env.DECK_POOL_VERSION || "1",
+    bridgeVersion: "forge-gui",
     rawJson: JSON.stringify({
       engine: "forge_gui",
       winnerDeckId: winnerDeck?.id ?? null,
@@ -1244,7 +1253,7 @@ async function main() {
   }
 
   if (winnerIdx === -2) {
-    await recordForgeMatch(db, null, null, forgeRun.autoResult);
+    await recordForgeMatch(db, decks[0], decks[1], null, null, forgeRun.autoResult);
     console.log("  Empate registrado como evidência — nenhum sinal aplicado.");
   } else {
     const winnerDeck = decks[winnerIdx];
@@ -1252,7 +1261,7 @@ async function main() {
     console.log(`  Vencedor : ${winnerDeck.name}`);
     console.log(`  Perdedor : ${loserDeck.name}`);
     console.log("");
-    await recordForgeMatch(db, winnerDeck, loserDeck, forgeRun.autoResult);
+    await recordForgeMatch(db, decks[0], decks[1], winnerDeck, loserDeck, forgeRun.autoResult);
     if (APPLY_LEARNING_SIGNAL) {
       console.log("  Checkpoint aprovado: aplicando sinal em card_learning...");
       await applyMatchSignal(db, winnerDeck, loserDeck);

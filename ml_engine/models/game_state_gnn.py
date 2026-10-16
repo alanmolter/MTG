@@ -475,10 +475,57 @@ def register_with_rllib():
             self.gnn = GameStateGNN(cfg)
             self._value_out = None
             custom = (model_config or {}).get("custom_model_config") or {}
+            self._bc_kl_coeff = float(custom.get("bc_kl_coeff") or 0.0)
+            self._bc_kl_iters = int(custom.get("bc_kl_iters") or 0)
+            self._anchor = None
             bc_checkpoint = custom.get("bc_checkpoint")
             if bc_checkpoint:
+                import copy
+
                 from ml_engine.bc.train import load_bc_weights
                 load_bc_weights(self.gnn, bc_checkpoint)
+                if self._bc_kl_coeff > 0:
+                    self._anchor = copy.deepcopy(self.gnn).eval()
+                    for param in self._anchor.parameters():
+                        param.requires_grad_(False)
+
+        def bc_kl_penalty(self, train_batch, iteration: int):
+            """KL(current || frozen BC policy), weighted by the decay schedule.
+
+            IMPALA's torch policy calls this from its loss. Without a BC
+            checkpoint the term is zero, which is also what ``bc_kl_coeff=0``
+            means.
+            """
+
+            from ml_engine.bc.regularize import bc_kl_penalty as _penalty
+
+            device = next(self.parameters()).device
+            zero = torch.zeros((), device=device)
+            empty = {"bc_kl": 0.0, "bc_kl_divergence": 0.0, "bc_kl_coeff": 0.0}
+            if self._anchor is None or self._bc_kl_coeff <= 0 or self._bc_kl_iters <= 0:
+                return zero, empty
+            obs = train_batch["obs"] if isinstance(train_batch, dict) else None
+            if not isinstance(obs, dict) or "action_mask" not in obs:
+                return zero, empty
+            current, _ = self.forward({"obs": obs}, [], None)
+            mask = obs["action_mask"]
+            if mask.shape[-1] != current.shape[-1]:
+                return zero, empty
+            saved = self.gnn
+            self.gnn = self._anchor
+            try:
+                with torch.no_grad():
+                    anchor, _ = self.forward({"obs": obs}, [], None)
+            finally:
+                self.gnn = saved
+            return _penalty(
+                current,
+                anchor,
+                mask,
+                iteration=int(iteration),
+                bc_kl_coeff=self._bc_kl_coeff,
+                bc_kl_iters=self._bc_kl_iters,
+            )
 
         def forward(self, input_dict, state, seq_lens):
             obs = input_dict["obs"]
