@@ -162,6 +162,72 @@ Na dúvida, confira o arquivo SQL antes: nem todos são idempotentes (`0003` tem
 Sobre `0000`–`0002`: eram DDL MySQL (backticks, `AUTO_INCREMENT`). Não há como terem sido
 aplicadas num Postgres; o equivalente Postgres é `0003_postgres_init`. Não entram no baseline.
 
+## Runbook: primeiro `db:migrate` num banco migrado pelo runner antigo (af0ece20)
+
+Vale para o banco real, que tem `public.schema_migrations` e ainda não tem
+`drizzle.__drizzle_migrations`. Testado em Postgres 17 + pgvector 0.8 com o runner de
+af0ece20 de verdade em quatro estados:
+
+| Estado | `schema_migrations` | `db:migrate` novo |
+|---|---|---|
+| R1: banco criado do zero pelo runner antigo | 0003–0010 reais | ✅ importa sozinho (com checagem de objetos) e aplica o resto |
+| R2: `cards` já existia (0003–0009 via psql); o runner carimbou 0003–0009 e aplicou 0010 | 0003–0010, carimbos verdadeiros | ✅ igual ao R1 |
+| R3: banco criado por `drizzle-kit push`; o runner carimbou 0003–0009 | 0003–0010, **carimbos falsos** | ❌ aborta sem gravar: falta tipo `job_status` (a coluna usa `status`), os índices HNSW de 0005 e 2 índices de 0008 |
+| R4: só 0003–0007 aplicadas; o runner carimbou até 0009 e falhou em 0010 | 0003–0009, carimbos falsos | ❌ aborta sem gravar: faltam os objetos de 0008 |
+
+No caso normal (R1/R2) **não precisa de `db:baseline`**: o `npm run db:migrate` importa
+`schema_migrations` depois de verificar os objetos de cada tag e aplica as migrações
+novas. Só siga o passo 5 se ele abortar. O erro lista exatamente o que falta.
+
+1. Pare tudo que usa o banco (treino, import, servidor). Use a branch atualizada e rode `npm install`.
+2. **Backup:** `pg_dump -Fc -f mtg_antes_migrate_$(date +%Y%m%d_%H%M).dump "$DATABASE_URL"`
+3. **Diagnóstico (só leitura):**
+   ```sql
+   SELECT filename FROM public.schema_migrations ORDER BY 1;   -- espera 0003..0010
+   SELECT to_regclass('drizzle.__drizzle_migrations');         -- espera NULL
+   SELECT udt_name FROM information_schema.columns
+    WHERE table_name = 'training_jobs' AND column_name = 'status';  -- espera job_status
+   SELECT extversion FROM pg_extension WHERE extname = 'vector';    -- >= 0.5
+   ```
+   e `npm run db:check` (com `DATABASE_URL`).
+4. **Migrar:** `npm run db:migrate`. Não existe dry-run puro, mas as checagens rodam antes
+   de qualquer escrita e, se falharem, nada é gravado. Baseline e migrate rodam em
+   transação, sob advisory lock.
+   Esperado: `baseline (schema_migrations): 0003 … 0010` e
+   `ok. N migrações no ledger; última: <tag mais nova do journal>`.
+5. **Se abortar:**
+   - *Faltam objetos a partir da tag N* (estilo R4):
+     `npm run db:baseline -- --through <última tag cujos objetos existem>`
+     (ex.: `0007_competitive_deck_cards_repair`) e depois `npm run db:migrate`.
+     O resto é aplicado pelo migrator, e 0008–0010 são idempotentes.
+   - *Falta `job_status` e/ou índices* (estilo R3):
+     ```sql
+     BEGIN;
+     DO $$ BEGIN CREATE TYPE job_status AS ENUM('pending','running','completed','failed');
+     EXCEPTION WHEN duplicate_object THEN null; END $$;
+     ALTER TABLE training_jobs ALTER COLUMN status DROP DEFAULT;
+     ALTER TABLE training_jobs ALTER COLUMN status TYPE job_status USING status::text::job_status;
+     ALTER TABLE training_jobs ALTER COLUMN status SET DEFAULT 'pending';
+     COMMIT;
+     ```
+     depois `psql -v ON_ERROR_STOP=1 -f drizzle/0005_endgame_pgvector.sql "$DATABASE_URL"` e
+     `-f drizzle/0008_training_quality_gates.sql` (`IF NOT EXISTS`; o HNSW em tabela
+     populada pode demorar), e `npm run db:migrate`.
+6. **Verificar:**
+   ```sql
+   SELECT count(*) FROM drizzle.__drizzle_migrations;   -- = número de entradas do journal
+   SELECT count(*) FROM information_schema.columns
+    WHERE table_name = 'competitive_decks'
+      AND column_name IN ('download_status', 'archived_at', 'import_run_id');  -- 3
+   SELECT to_regclass('public.competitive_deck_cards_oracle_id_idx');        -- não NULL
+   ```
+   e `npm run db:check` → ok.
+7. **Backfill (opcional, separado):** `npx tsx server/scripts/backfillDeckProvenance.ts`
+   (dry-run) e depois `--apply`. Pode rodar de novo sem problema.
+8. **Voltar atrás:** o down abaixo (seção Rollback) ou `pg_restore` do dump.
+
+`public.schema_migrations` pode ficar: ele só é lido uma vez, quando o ledger novo está vazio.
+
 ## Divergências conhecidas entre `schema.ts` e o banco real
 
 O snapshot reflete `schema.ts` (para que `generate` só produza mudanças novas). Comparando
@@ -201,3 +267,21 @@ drift que **não** foi corrigido neste PR:
 Antes de rodar o primeiro `db:generate` de verdade, vale alinhar `schema.ts` a esses
 pontos (ou gerar uma migração de reconciliação revisada à mão), senão a migração
 gerada pode tentar criar índices duplicados ou mexer em constraints.
+
+## Rollback: 20261016234006_competitive_decks_provenance
+
+Down script proposto pelo DBA na revisão do PR #8. Sem a função `immutable_unaccent`, que saiu desta migração. Rodar à mão, numa transação, fora do pipeline de importação. Antes, ter `pg_dump`: as colunas removidas levam junto o backfill e o arquivamento.
+
+```sql
+BEGIN;
+DROP INDEX IF EXISTS competitive_deck_cards_oracle_id_idx;
+ALTER TABLE competitive_deck_cards DROP COLUMN IF EXISTS oracle_id, DROP COLUMN IF EXISTS raw_name, DROP COLUMN IF EXISTS resolved;
+ALTER TABLE competitive_decks DROP COLUMN IF EXISTS download_status, DROP COLUMN IF EXISTS archived_at, DROP COLUMN IF EXISTS archive_reason,
+  DROP COLUMN IF EXISTS source_url, DROP COLUMN IF EXISTS collected_at, DROP COLUMN IF EXISTS content_hash,
+  DROP COLUMN IF EXISTS parser_version, DROP COLUMN IF EXISTS last_fetch_error, DROP COLUMN IF EXISTS import_run_id;
+DROP TYPE IF EXISTS deck_download_status;
+DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1792194006561;
+COMMIT;
+```
+
+`created_at` é o `when` da entrada no `drizzle/meta/_journal.json`.

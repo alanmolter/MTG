@@ -84,6 +84,13 @@ const BASIC_LANDS = new Set([
   "mountain",
   "forest",
   "wastes",
+  // Snow basics are basic lands too: no 4-copy limit.
+  "snow-covered plains",
+  "snow-covered island",
+  "snow-covered swamp",
+  "snow-covered mountain",
+  "snow-covered forest",
+  "snow-covered wastes",
 ]);
 const MAINBOARD_SECTIONS = new Set(["main", "mainboard", ""]);
 

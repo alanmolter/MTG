@@ -238,3 +238,18 @@ describe("training quality contract", () => {
     ).toContain("incumbent_comparison_missing");
   });
 });
+
+describe("snow basics", () => {
+  it("does not apply the 4-copy limit to snow-covered basics", async () => {
+    const { validateTrainingDeck } = await import("./trainingQuality");
+    const names = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+    const cards = [
+      { cardName: "Snow-Covered Forest", quantity: 14, section: "mainboard" },
+      ...names.map((n) => ({ cardName: `Card ${n}`, quantity: 4, section: "mainboard" })),
+      { cardName: "Forest", quantity: 2, section: "mainboard" },
+    ];
+    const result = validateTrainingDeck({ format: "modern", cards, isSynthetic: false } as never);
+    expect(result.reasons.filter((r) => r.startsWith("copy_limit"))).toEqual([]);
+    expect(result.eligible).toBe(true);
+  });
+});
