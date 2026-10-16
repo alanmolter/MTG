@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -85,7 +85,6 @@ export default function DeckBuilder() {
   const [isCreating, setIsCreating] = useState(false);
   const [, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<CardRow[]>([]);
   const [newDeck, setNewDeck] = useState({
     name: "",
     format: "standard" as "standard" | "modern" | "commander" | "legacy",
@@ -102,19 +101,16 @@ export default function DeckBuilder() {
       enabled: !!selectedDeck,
     });
 
-  // Busca de cartas (é uma query, não mutation)
-  const [searchEnabled, setSearchEnabled] = useState(false);
+  // Busca de cartas (é uma query, não mutation). O termo só é "submetido" no
+  // handleSearch; os resultados derivam direto do cache do React Query, então
+  // um refetch em background de uma query stale atualiza a lista.
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const { data: cardSearchData, isFetching: isSearching } =
     trpc.cards.search.useQuery(
-      { name: searchQuery },
-      { enabled: searchEnabled && !!searchQuery.trim() }
+      { name: submittedQuery },
+      { enabled: !!submittedQuery }
     );
-
-  useEffect(() => {
-    if (!searchEnabled || !cardSearchData) return;
-    setSearchResults(cardSearchData);
-    setSearchEnabled(false);
-  }, [cardSearchData, searchEnabled]);
+  const searchResults: CardRow[] = submittedQuery ? (cardSearchData ?? []) : [];
 
   // Mutations
   const createDeckMutation = trpc.decks.create.useMutation({
@@ -194,8 +190,9 @@ export default function DeckBuilder() {
   };
 
   const handleSearch = () => {
-    if (searchQuery.trim()) {
-      setSearchEnabled(true);
+    const q = searchQuery.trim();
+    if (q) {
+      setSubmittedQuery(q);
     }
   };
 
