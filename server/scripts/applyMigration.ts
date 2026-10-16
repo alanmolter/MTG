@@ -1,97 +1,121 @@
 /**
- * Apply pending PostgreSQL files in drizzle/ and record each one.
+ * Aplica as migrações PostgreSQL do journal (drizzle/meta/_journal.json) com o
+ * migrator oficial do drizzle, que registra cada uma em
+ * drizzle.__drizzle_migrations (o mesmo ledger usado por `drizzle-kit migrate`).
  *
- * 0000–0002 are historical MySQL snapshots and are skipped.
- * A database that already has public.cards (created before schema_migrations
- * existed) gets 0003–0009 stamped, then 0010+ runs for real.
- * One transaction per file. An unexpected error fails the process.
+ * Antes de migrar, faz o baseline de bancos que já tinham 0003–0010 aplicadas
+ * por outro caminho (ver migrationBaseline.ts e docs/migrations.md).
  *
- * This is the supported path. `npm run db:push` still asks drizzle-kit to
- * generate from the old MySQL snapshots, which is the wrong tool here.
+ * Uso:
+ *   npm run db:migrate                                  # baseline automático + migrate
+ *   npm run db:baseline -- --through 0009_competitive_deck_import
+ *                                                       # só carimba, não migra
  */
 import "dotenv/config";
 import * as fs from "fs";
 import * as path from "path";
+import { pathToFileURL } from "url";
 import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import {
-  applyPendingMigrations,
-  isPostgresMigration,
+  applyBaseline,
+  DRIZZLE_SCHEMA,
+  DRIZZLE_TABLE,
+  migrationHash,
+  planBaseline,
+  type JournalMigration,
   type MigrationDb,
-} from "./migrationRunner";
+} from "./migrationBaseline";
 
-function adapt(sql: {
-  unsafe: (query: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>>;
-  begin?: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
-}): MigrationDb {
+type Sql = ReturnType<typeof postgres>;
+
+function adapt(sql: Sql | postgres.TransactionSql): MigrationDb {
   return {
     async query(sqlText, params) {
       const rows =
         params && params.length > 0
-          ? await sql.unsafe(sqlText, params)
+          ? await sql.unsafe(sqlText, params as postgres.ParameterOrJSON<never>[])
           : await sql.unsafe(sqlText);
-      return Array.from(rows);
+      return Array.from(rows) as Array<Record<string, unknown>>;
     },
     transaction(fn) {
-      if (typeof sql.begin !== "function") return fn(adapt(sql));
-      return sql.begin((tx) => fn(adapt(tx as typeof sql)));
+      if (!("begin" in sql)) return fn(adapt(sql));
+      return sql.begin((tx) => fn(adapt(tx))) as Promise<never>;
     },
   };
 }
 
-async function applyMigration() {
+export function readJournal(migrationsFolder: string): JournalMigration[] {
+  const journal = JSON.parse(
+    fs.readFileSync(path.join(migrationsFolder, "meta", "_journal.json"), "utf-8"),
+  ) as { dialect: string; entries: Array<{ tag: string; when: number }> };
+  if (journal.dialect !== "postgresql") {
+    throw new Error(`_journal.json dialect=${journal.dialect}; esperado postgresql`);
+  }
+  return journal.entries.map((entry) => ({
+    tag: entry.tag,
+    when: entry.when,
+    hash: migrationHash(fs.readFileSync(path.join(migrationsFolder, `${entry.tag}.sql`)).toString()),
+  }));
+}
+
+function parseArgs(argv: string[]) {
+  const throughIdx = argv.indexOf("--through");
+  return {
+    through: throughIdx >= 0 ? argv[throughIdx + 1] : undefined,
+    baselineOnly: argv.includes("--baseline-only"),
+  };
+}
+
+async function main() {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
     console.error("[Migration] DATABASE_URL nao configurado.");
     process.exitCode = 1;
     return;
   }
+  const args = parseArgs(process.argv.slice(2));
+  if (process.argv.includes("--through") && !args.through) {
+    console.error("[Migration] --through exige uma tag do journal.");
+    process.exitCode = 1;
+    return;
+  }
 
-  const client = postgres(dbUrl, {
-    max: 1,
-    idle_timeout: 5,
-    connect_timeout: 10,
-    onnotice: () => {},
-  });
+  const migrationsFolder = path.join(process.cwd(), "drizzle");
+  const client = postgres(dbUrl, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
 
   try {
-    const drizzleDir = path.join(process.cwd(), "drizzle");
-    const files = fs
-      .readdirSync(drizzleDir)
-      .filter((filename) => isPostgresMigration(filename))
-      .sort()
-      .map((filename) => ({
-        filename,
-        sql: fs.readFileSync(path.join(drizzleDir, filename), "utf-8"),
-      }));
-
-    if (files.length === 0) {
-      console.error("[Migration] Nenhum arquivo PostgreSQL 00NN_*.sql encontrado.");
-      process.exitCode = 1;
+    const journal = readJournal(migrationsFolder);
+    const db = adapt(client);
+    const plan = await planBaseline(db, journal, { through: args.through });
+    const stamped = await applyBaseline(db, plan);
+    if (stamped.length > 0) {
+      console.log(`[Migration] baseline (${plan.kind === "stamp" ? plan.source : ""}): ${stamped.join(", ")}`);
+    }
+    if (args.baselineOnly) {
+      console.log(`[Migration] --baseline-only: migrator não executado (plano: ${plan.kind}).`);
       return;
     }
-
-    const result = await applyPendingMigrations(adapt(client as unknown as Parameters<typeof adapt>[0]), files);
-    console.log(
-      `[Migration] applied=${result.applied.join(",") || "(none)"} ` +
-        `stamped=${result.stamped.length} skipped=${result.skipped.length}`,
+    await migrate(drizzle(client), {
+      migrationsFolder,
+      migrationsSchema: DRIZZLE_SCHEMA,
+      migrationsTable: DRIZZLE_TABLE,
+    });
+    const [last] = await client.unsafe(
+      `SELECT count(*)::int AS n, max(created_at) AS last FROM "${DRIZZLE_SCHEMA}"."${DRIZZLE_TABLE}"`,
     );
+    const lastTag = journal.find((entry) => String(entry.when) === String(last?.last))?.tag ?? "(nenhuma)";
+    console.log(`[Migration] ok. ${last?.n ?? 0} migrações no ledger; última: ${lastTag}`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[Migration] Erro fatal:", message);
     process.exitCode = 1;
   } finally {
-    try {
-      await client.end({ timeout: 3 });
-    } catch {
-      /* pool already closed */
-    }
+    await client.end({ timeout: 3 }).catch(() => undefined);
   }
 }
 
-applyMigration()
-  .catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[Migration] Erro fatal:", message);
-    process.exitCode = 1;
-  })
-  .finally(() => process.exit(process.exitCode ?? 0));
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main();
+}
