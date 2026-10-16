@@ -29,7 +29,7 @@ import { getCardLearningQueue } from "../services/cardLearningQueue";
 import { describeTrainingPool, isArenaOnlyTraining } from "./utils/poolFilter";
 
 // Deltas por seção — mainboard vale muito mais que sideboard
-const DELTA_MAINBOARD = 0.10;
+const DELTA_MAINBOARD = 0.1;
 const DELTA_SIDEBOARD = 0.03;
 
 // Janela de novidade: só processa decks importados nas últimas 48h
@@ -64,14 +64,20 @@ export async function applyTournamentSignal(): Promise<{
   const arenaOnly = isArenaOnlyTraining();
   console.log(`  Pool scope         : ${describeTrainingPool()}`);
   if (arenaOnly) {
-    console.log(`  (cartas não-Arena serão registradas mas não receberão delta)`);
+    console.log(
+      `  (cartas não-Arena serão registradas mas não receberão delta)`
+    );
   }
 
   // ── 1. Buscar decks reais importados nas últimas 48h ─────────────
   const cutoff = new Date(Date.now() - HOURS_WINDOW * 60 * 60 * 1000);
 
   const recentDecks = await db
-    .select({ id: competitiveDecks.id, name: competitiveDecks.name, format: competitiveDecks.format })
+    .select({
+      id: competitiveDecks.id,
+      name: competitiveDecks.name,
+      format: competitiveDecks.format,
+    })
     .from(competitiveDecks)
     .where(
       and(
@@ -85,10 +91,12 @@ export async function applyTournamentSignal(): Promise<{
     return { cardsReinforced: 0, totalDelta: 0, decksProcessed: 0 };
   }
 
-  console.log(`  Decks recentes (últimas ${HOURS_WINDOW}h): ${recentDecks.length}`);
+  console.log(
+    `  Decks recentes (últimas ${HOURS_WINDOW}h): ${recentDecks.length}`
+  );
 
   // ── 2. Buscar todas as cartas desses decks ────────────────────────
-  const deckIds = recentDecks.map((d) => d.id);
+  const deckIds = recentDecks.map(d => d.id);
 
   // Acumular deltas por carta (mesma carta em vários decks = delta somado)
   const deltaMap = new Map<string, number>();
@@ -134,7 +142,7 @@ export async function applyTournamentSignal(): Promise<{
       .select({ name: cards.name })
       .from(cards)
       .where(and(eq(cards.isArena, 1), inArray(cards.name, cardNamesArray)));
-    const arenaSet = new Set(arenaRows.map((r) => r.name));
+    const arenaSet = new Set(arenaRows.map(r => r.name));
 
     for (const cardName of cardNamesArray) {
       if (!arenaSet.has(cardName)) {
@@ -183,13 +191,15 @@ export async function applyTournamentSignal(): Promise<{
 // ── Execução standalone ───────────────────────────────────────────
 if (import.meta.url === `file://${process.argv[1]}`) {
   applyTournamentSignal()
-    .then((result) => {
+    .then(result => {
       console.log("\n  Resultado:", result);
     })
-    .catch((e) => {
+    .catch(e => {
       console.error("[TournamentSignal] Erro:", e?.message);
     })
     .finally(() => {
-      closeDb().then(() => process.exit(0)).catch(() => process.exit(1));
+      closeDb()
+        .then(() => process.exit(0))
+        .catch(() => process.exit(1));
     });
 }

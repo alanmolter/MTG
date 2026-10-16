@@ -53,7 +53,8 @@ describe("reimport empty competitive decks", () => {
 
   it("refetches a goldfish deck that has no stored list", async () => {
     const fetchText = vi.fn(async (url: string) => {
-      if (url.endsWith("/arena_download/42")) return "4 Lightning Bolt\n20 Mountain";
+      if (url.endsWith("/arena_download/42"))
+        return "4 Lightning Bolt\n20 Mountain";
       return null;
     });
     const save = vi.fn(async () => ({ imported: true, cards: 2 }));
@@ -62,7 +63,9 @@ describe("reimport empty competitive decks", () => {
       fetchText,
       save,
     });
-    expect(fetchText).toHaveBeenCalledWith("https://www.mtggoldfish.com/deck/arena_download/42");
+    expect(fetchText).toHaveBeenCalledWith(
+      "https://www.mtggoldfish.com/deck/arena_download/42"
+    );
     expect(report.reimported).toBe(1);
   });
 
@@ -70,8 +73,10 @@ describe("reimport empty competitive decks", () => {
     expect(refetchUrls(row({ sourceId: "top8-e=1&d=2" }))).toEqual([
       "https://mtgtop8.com/mtgo?e=1&d=2",
     ]);
-    const parsed = deckFromStoredJson(row({ rawJson: "4 Lightning Bolt\n20 Mountain\n\n1 Pyroblast" }));
-    expect(parsed?.sideboard.map((card) => card.cardName)).toEqual(["Pyroblast"]);
+    const parsed = deckFromStoredJson(
+      row({ rawJson: "4 Lightning Bolt\n20 Mountain\n\n1 Pyroblast" })
+    );
+    expect(parsed?.sideboard.map(card => card.cardName)).toEqual(["Pyroblast"]);
   });
 
   it("skips a deck whose source cannot be fetched", async () => {

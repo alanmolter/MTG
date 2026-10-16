@@ -16,7 +16,10 @@ import {
   trainingRuns,
 } from "../../drizzle/schema";
 import { closeDb, getDb } from "../db";
-import { evaluateDataReadiness, validateTrainingDeck } from "../services/trainingQuality";
+import {
+  evaluateDataReadiness,
+  validateTrainingDeck,
+} from "../services/trainingQuality";
 
 const APPLY = process.argv.includes("--apply");
 const REQUIRE_READY = process.argv.includes("--require-ready");
@@ -32,7 +35,9 @@ async function main(): Promise<void> {
 
   console.log("\n════════════════════════════════════════════════════════════");
   console.log("  QUALITY GATE — dados de treino");
-  console.log(`  Modo: ${APPLY ? "APLICAR quarentena segura" : "AUDITORIA (somente leitura)"}`);
+  console.log(
+    `  Modo: ${APPLY ? "APLICAR quarentena segura" : "AUDITORIA (somente leitura)"}`
+  );
   console.log("════════════════════════════════════════════════════════════");
 
   const [decks, deckCards] = await Promise.all([
@@ -53,22 +58,29 @@ async function main(): Promise<void> {
     const validation = validateTrainingDeck({
       format: deck.format,
       isSynthetic: deck.isSynthetic,
-      cards: (cardsByDeck.get(deck.id) ?? []).map((card) => ({
+      cards: (cardsByDeck.get(deck.id) ?? []).map(card => ({
         cardName: card.cardName,
         quantity: card.quantity,
         section: card.section,
       })),
     });
-    digest.update(`${deck.id}:${deck.importedAt.toISOString()}:${validation.eligible};`);
+    digest.update(
+      `${deck.id}:${deck.importedAt.toISOString()}:${validation.eligible};`
+    );
     if (validation.eligible) valid++;
     else rejected.push({ id: deck.id, reason: validation.reasons.join(",") });
 
     if (APPLY) {
-      await db.update(competitiveDecks).set({
-        isTrainingEligible: validation.eligible,
-        trainingRejectionReason: validation.eligible ? null : validation.reasons.join(","),
-        trainingQualityCheckedAt: new Date(),
-      }).where(eq(competitiveDecks.id, deck.id));
+      await db
+        .update(competitiveDecks)
+        .set({
+          isTrainingEligible: validation.eligible,
+          trainingRejectionReason: validation.eligible
+            ? null
+            : validation.reasons.join(","),
+          trainingQualityCheckedAt: new Date(),
+        })
+        .where(eq(competitiveDecks.id, deck.id));
     }
   }
 
@@ -76,10 +88,14 @@ async function main(): Promise<void> {
     .select({ value: count() })
     .from(cardSynergies)
     .where(sql`${cardSynergies.card1Id} = ${cardSynergies.card2Id}`);
-  const [{ value: realMatchCount }] = await db.select({ value: count() }).from(forgeMatches);
+  const [{ value: realMatchCount }] = await db
+    .select({ value: count() })
+    .from(forgeMatches);
 
   if (APPLY && Number(invalidSynergyCount) > 0) {
-    await db.delete(cardSynergies).where(sql`${cardSynergies.card1Id} = ${cardSynergies.card2Id}`);
+    await db
+      .delete(cardSynergies)
+      .where(sql`${cardSynergies.card1Id} = ${cardSynergies.card2Id}`);
   }
 
   const postCleanupInvalid = APPLY ? 0 : Number(invalidSynergyCount);
@@ -90,13 +106,22 @@ async function main(): Promise<void> {
   const fingerprint = digest.digest("hex").slice(0, 16);
 
   console.log(`\n  Decks importados       : ${decks.length}`);
-  console.log(`  Elegíveis para treino  : ${bar(valid, decks.length)} ${valid}`);
-  console.log(`  Em quarentena          : ${bar(rejected.length, decks.length)} ${rejected.length}`);
+  console.log(
+    `  Elegíveis para treino  : ${bar(valid, decks.length)} ${valid}`
+  );
+  console.log(
+    `  Em quarentena          : ${bar(rejected.length, decks.length)} ${rejected.length}`
+  );
   console.log(`  Partidas Forge gravadas: ${Number(realMatchCount)}`);
-  console.log(`  Auto-sinergias         : ${Number(invalidSynergyCount)}${APPLY ? " → 0" : ""}`);
+  console.log(
+    `  Auto-sinergias         : ${Number(invalidSynergyCount)}${APPLY ? " → 0" : ""}`
+  );
   console.log(`  Snapshot               : ${fingerprint}`);
   if (rejected.length) {
-    const samples = rejected.slice(0, 5).map((d) => `#${d.id}: ${d.reason}`).join("\n    ");
+    const samples = rejected
+      .slice(0, 5)
+      .map(d => `#${d.id}: ${d.reason}`)
+      .join("\n    ");
     console.log(`\n  Exemplos rejeitados:\n    ${samples}`);
   }
 
@@ -113,10 +138,14 @@ async function main(): Promise<void> {
   });
 
   if (gates.passed) {
-    console.log("\n  ✓ Dados prontos para treino. A promoção ainda exigirá partidas Forge e um checkpoint melhor que o baseline.");
+    console.log(
+      "\n  ✓ Dados prontos para treino. A promoção ainda exigirá partidas Forge e um checkpoint melhor que o baseline."
+    );
   } else {
     console.log(`\n  BLOQUEADO: ${gates.failures.join(", ")}`);
-    console.log("  Nenhum checkpoint será promovido e nenhum peso deve ser atualizado por self-play heurístico.");
+    console.log(
+      "  Nenhum checkpoint será promovido e nenhum peso deve ser atualizado por self-play heurístico."
+    );
   }
   console.log("════════════════════════════════════════════════════════════\n");
 
@@ -124,5 +153,10 @@ async function main(): Promise<void> {
 }
 
 main()
-  .catch((error) => { console.error("[sanitizeTrainingData] erro:", error?.message ?? error); process.exitCode = 1; })
-  .finally(async () => { await closeDb(); });
+  .catch(error => {
+    console.error("[sanitizeTrainingData] erro:", error?.message ?? error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await closeDb();
+  });

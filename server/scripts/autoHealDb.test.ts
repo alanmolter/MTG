@@ -18,10 +18,10 @@ import { healTable } from "./autoHealDb";
  */
 function makeMockSql(opts: {
   corruptedTables: Set<string>;
-  repairOnReindex?: Set<string>;   // após REINDEX X, X fica saudável
+  repairOnReindex?: Set<string>; // após REINDEX X, X fica saudável
   repairOnVacuum?: Set<string>;
-  repairOnRebuild?: Set<string>;   // sempre card_synergies se habilitado
-  fatalCommands?: Set<string>;     // comandos que lançam erro (ex: "VACUUM FULL foo")
+  repairOnRebuild?: Set<string>; // sempre card_synergies se habilitado
+  fatalCommands?: Set<string>; // comandos que lançam erro (ex: "VACUUM FULL foo")
 }) {
   const {
     corruptedTables,
@@ -112,23 +112,27 @@ describe("autoHealDb — healTable escalation ladder", () => {
 
     expect(result).toBe("reindex");
     // Nunca chegou a tentar VACUUM
-    expect(log.some((q) => q.startsWith("VACUUM FULL"))).toBe(false);
+    expect(log.some(q => q.startsWith("VACUUM FULL"))).toBe(false);
   });
 
   it("escala para VACUUM FULL quando REINDEX não resolve", async () => {
     const { sql, log } = makeMockSql({
       corruptedTables: new Set(["card_synergies"]),
-      repairOnReindex: new Set(),  // REINDEX "roda" mas não conserta
+      repairOnReindex: new Set(), // REINDEX "roda" mas não conserta
       repairOnVacuum: new Set(["card_synergies"]),
     });
 
     const result = await healTable(sql, "card_synergies");
 
     expect(result).toBe("vacuum");
-    expect(log.some((q) => q.startsWith("REINDEX TABLE card_synergies"))).toBe(true);
-    expect(log.some((q) => q.startsWith("VACUUM FULL card_synergies"))).toBe(true);
+    expect(log.some(q => q.startsWith("REINDEX TABLE card_synergies"))).toBe(
+      true
+    );
+    expect(log.some(q => q.startsWith("VACUUM FULL card_synergies"))).toBe(
+      true
+    );
     // Não chegou no REBUILD
-    expect(log.some((q) => q.startsWith("DROP TABLE"))).toBe(false);
+    expect(log.some(q => q.startsWith("DROP TABLE"))).toBe(false);
   });
 
   it("escala para REBUILD quando REINDEX e VACUUM falham (card_synergies)", async () => {
@@ -140,9 +144,13 @@ describe("autoHealDb — healTable escalation ladder", () => {
     const result = await healTable(sql, "card_synergies");
 
     expect(result).toBe("rebuild");
-    expect(log.some((q) => q.includes("DROP TABLE IF EXISTS card_synergies"))).toBe(true);
-    expect(log.some((q) => q.match(/CREATE TABLE card_synergies/))).toBe(true);
-    expect(log.some((q) => q.includes("CREATE INDEX idx_card_synergies"))).toBe(true);
+    expect(
+      log.some(q => q.includes("DROP TABLE IF EXISTS card_synergies"))
+    ).toBe(true);
+    expect(log.some(q => q.match(/CREATE TABLE card_synergies/))).toBe(true);
+    expect(log.some(q => q.includes("CREATE INDEX idx_card_synergies"))).toBe(
+      true
+    );
   });
 
   it("NÃO tenta REBUILD em tabelas com dados insubstituíveis (card_learning)", async () => {
@@ -154,7 +162,7 @@ describe("autoHealDb — healTable escalation ladder", () => {
     const result = await healTable(sql, "card_learning");
 
     expect(result).toBeNull();
-    expect(log.some((q) => q.startsWith("DROP TABLE"))).toBe(false);
+    expect(log.some(q => q.startsWith("DROP TABLE"))).toBe(false);
   });
 
   it("respeita --no-rebuild (allowRebuild=false)", async () => {
@@ -163,10 +171,12 @@ describe("autoHealDb — healTable escalation ladder", () => {
       fatalCommands: new Set(["VACUUM FULL card_synergies"]),
     });
 
-    const result = await healTable(sql, "card_synergies", { allowRebuild: false });
+    const result = await healTable(sql, "card_synergies", {
+      allowRebuild: false,
+    });
 
     expect(result).toBeNull();
-    expect(log.some((q) => q.startsWith("DROP TABLE"))).toBe(false);
+    expect(log.some(q => q.startsWith("DROP TABLE"))).toBe(false);
   });
 
   it("retorna null quando REBUILD também falha", async () => {
@@ -188,7 +198,7 @@ describe("autoHealDb — healTable escalation ladder", () => {
     // A ladder deve detectar isso via scan e escalar para VACUUM.
     const { sql, log } = makeMockSql({
       corruptedTables: new Set(["card_synergies"]),
-      repairOnReindex: new Set(),           // REINDEX OK mas não conserta
+      repairOnReindex: new Set(), // REINDEX OK mas não conserta
       repairOnVacuum: new Set(["card_synergies"]),
     });
 
@@ -197,7 +207,7 @@ describe("autoHealDb — healTable escalation ladder", () => {
     expect(result).toBe("vacuum");
 
     // Deve ter feito scan APÓS reindex (SELECT 1) para validar
-    const reindexIdx = log.findIndex((q) => q.startsWith("REINDEX TABLE"));
+    const reindexIdx = log.findIndex(q => q.startsWith("REINDEX TABLE"));
     const postReindexSelectIdx = log.findIndex(
       (q, i) => i > reindexIdx && q.startsWith("SELECT 1 FROM card_synergies")
     );

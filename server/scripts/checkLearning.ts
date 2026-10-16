@@ -15,12 +15,16 @@ async function check() {
   console.log("\n🔥 TOP 10 CARTAS APRENDIDAS (Mais Fortes):");
   console.log("=".repeat(50));
   topCards.forEach((c, i) => {
-    console.log(`${i+1}. ${c.cardName.padEnd(25)} | Peso: ${c.weight.toFixed(2)} | Wins: ${c.winCount}`);
+    console.log(
+      `${i + 1}. ${c.cardName.padEnd(25)} | Peso: ${c.weight.toFixed(2)} | Wins: ${c.winCount}`
+    );
   });
-  
+
   const total = await db.select().from(cardLearning);
   console.log(`\n🧠 Total de cartas no cérebro: ${total.length}`);
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+  closeDb()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(0));
 }
 
 check().catch(console.error);

@@ -38,7 +38,9 @@ async function fetchText(url: string): Promise<string | null> {
 
 async function main() {
   if (!process.env.DATABASE_URL) {
-    console.error("[reimport] DATABASE_URL is not set. Put it in .env and run again.");
+    console.error(
+      "[reimport] DATABASE_URL is not set. Put it in .env and run again."
+    );
     process.exitCode = 1;
     return;
   }
@@ -52,24 +54,26 @@ async function main() {
   const report = await reimportEmptyDecks({
     listEmpty: async () => {
       const rows = (await pg.unsafe(EMPTY_DECK_SQL)) as RawRow[];
-      return rows.map((row): EmptyDeckRow => ({
-        id: Number(row.id),
-        sourceId: row.source_id,
-        source: row.source,
-        name: row.name,
-        format: row.format,
-        archetype: row.archetype,
-        author: row.author,
-        rawJson: row.raw_json,
-      }));
+      return rows.map(
+        (row): EmptyDeckRow => ({
+          id: Number(row.id),
+          sourceId: row.source_id,
+          source: row.source,
+          name: row.name,
+          format: row.format,
+          archetype: row.archetype,
+          author: row.author,
+          rawJson: row.raw_json,
+        })
+      );
     },
     fetchText,
-    save: (deck) => saveCompetitiveDeck(pg as unknown as object, deck),
+    save: deck => saveCompetitiveDeck(pg as unknown as object, deck),
   });
 
   console.log(
     `[reimport] considered=${report.considered} reimported=${report.reimported} ` +
-      `skipped=${report.skipped.length} failed=${report.failed.length}`,
+      `skipped=${report.skipped.length} failed=${report.failed.length}`
   );
   for (const line of report.skipped) console.log(`[reimport] skip ${line}`);
   for (const line of report.failed) console.error(`[reimport] fail ${line}`);

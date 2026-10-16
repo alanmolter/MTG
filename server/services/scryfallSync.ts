@@ -32,7 +32,9 @@ interface SyncOptions {
  * Sincroniza cartas do Scryfall com o banco de dados
  * Busca cartas legais em um formato específico
  */
-export async function syncCardsFromScryfall(options: SyncOptions = {}): Promise<{
+export async function syncCardsFromScryfall(
+  options: SyncOptions = {}
+): Promise<{
   imported: number;
   skipped: number;
   errors: number;
@@ -124,7 +126,10 @@ export async function syncCardsFromScryfall(options: SyncOptions = {}): Promise<
             skipped++;
           }
         } catch (error) {
-          console.error(`[Scryfall Sync] Erro ao processar carta ${scryfallCard.name}:`, error);
+          console.error(
+            `[Scryfall Sync] Erro ao processar carta ${scryfallCard.name}:`,
+            error
+          );
           errors++;
         }
       }
@@ -133,7 +138,7 @@ export async function syncCardsFromScryfall(options: SyncOptions = {}): Promise<
       nextPageUrl = data.next_page;
 
       // Respeitar rate limit do Scryfall
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
       console.error("[Scryfall Sync] Erro ao buscar página:", error);
       break;

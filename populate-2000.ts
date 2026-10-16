@@ -27,7 +27,8 @@ interface ScryfallCard {
 
 async function getImageUrl(card: ScryfallCard): Promise<string | null> {
   if (card.image_uris?.normal) return card.image_uris.normal;
-  if (card.card_faces?.[0]?.image_uris?.normal) return card.card_faces[0].image_uris.normal;
+  if (card.card_faces?.[0]?.image_uris?.normal)
+    return card.card_faces[0].image_uris.normal;
   return null;
 }
 
@@ -40,7 +41,9 @@ async function populateTo2000() {
   }
 
   // Check current count
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(cards);
+  const countResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(cards);
   let currentCount = Number(countResult[0].count);
   console.log(`\nStarting population logic. Current count: ${currentCount}`);
 
@@ -103,7 +106,9 @@ async function populateTo2000() {
           currentCount++;
 
           if (totalImported % 50 === 0) {
-            console.log(`   ✅ Total cards: ${currentCount} (+${totalImported} imported)`);
+            console.log(
+              `   ✅ Total cards: ${currentCount} (+${totalImported} imported)`
+            );
           }
         } catch (err) {
           // Silently skip on error for a single card
@@ -112,8 +117,7 @@ async function populateTo2000() {
 
       nextPageUrl = data.next_page;
       // Rate limit
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (err) {
       console.error("❌ Erro ao buscar página:", err);
       break;

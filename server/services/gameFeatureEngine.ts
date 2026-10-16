@@ -135,31 +135,51 @@ export function getCardRoles(card: {
   if (type.includes("land")) roles.push("land");
   if (type.includes("creature")) roles.push("threat");
   if (type.includes("planeswalker")) roles.push("wincon");
-  
+
   // Removal: Board Wipe vs Targeted
-  if (text.includes("destroy each") || text.includes("exile all") || text.includes("destroy all")) {
+  if (
+    text.includes("destroy each") ||
+    text.includes("exile all") ||
+    text.includes("destroy all")
+  ) {
     roles.push("board_wipe", "removal");
-  } else if (text.includes("destroy target") || text.includes("exile target") || (text.includes("deals") && text.includes("damage"))) {
+  } else if (
+    text.includes("destroy target") ||
+    text.includes("exile target") ||
+    (text.includes("deals") && text.includes("damage"))
+  ) {
     roles.push("targeted_removal", "removal");
   }
 
   // Draw: Cantrip vs Heavy Draw
   if (text.includes("draw a card")) {
     roles.push("cantrip", "card_draw");
-  } else if (text.includes("draw two") || text.includes("draw three") || text.includes("draw cards")) {
+  } else if (
+    text.includes("draw two") ||
+    text.includes("draw three") ||
+    text.includes("draw cards")
+  ) {
     roles.push("heavy_draw", "card_draw");
   }
 
   // Mana: Ramp
-  if (text.includes("add {") || text.includes("search your library for a basic land") || text.includes("put a land")) {
+  if (
+    text.includes("add {") ||
+    text.includes("search your library for a basic land") ||
+    text.includes("put a land")
+  ) {
     roles.push("ramp");
   }
 
   // Engine / Interaction
-  if (text.includes("whenever") || text.includes("at the beginning")) roles.push("engine");
-  if (text.includes("counter target spell")) roles.push("counterspell", "interaction");
-  if (text.includes("search your library") && !roles.includes("ramp")) roles.push("tutor");
-  if (text.includes("protection from") || text.includes("hexproof")) roles.push("protection");
+  if (text.includes("whenever") || text.includes("at the beginning"))
+    roles.push("engine");
+  if (text.includes("counter target spell"))
+    roles.push("counterspell", "interaction");
+  if (text.includes("search your library") && !roles.includes("ramp"))
+    roles.push("tutor");
+  if (text.includes("protection from") || text.includes("hexproof"))
+    roles.push("protection");
 
   const uniqueRoles = new Set(roles);
   return Array.from(uniqueRoles);
@@ -181,17 +201,35 @@ export function extractCardFeatures(card: {
 
   const roles = getCardRoles(card);
   const mechanicTags: string[] = [];
-  const tagKeywords = ["token", "sacrifice", "counter", "lifegain", "graveyard", "discard", "scry", "flying", "haste", "trample"];
+  const tagKeywords = [
+    "token",
+    "sacrifice",
+    "counter",
+    "lifegain",
+    "graveyard",
+    "discard",
+    "scry",
+    "flying",
+    "haste",
+    "trample",
+  ];
   for (const tag of tagKeywords) if (text.includes(tag)) mechanicTags.push(tag);
 
   // Functional role → mechanic-tag bridge. The scoring layer operates on
   // mechanicTags, so roles like card_draw/ramp/counterspell/removal need
   // to surface there too or a deck full of removal spells scores 0.
-  if (roles.includes("card_draw") && !mechanicTags.includes("draw")) mechanicTags.push("draw");
-  if (roles.includes("ramp") && !mechanicTags.includes("ramp")) mechanicTags.push("ramp");
-  if (roles.includes("counterspell") && !mechanicTags.includes("counterspell")) mechanicTags.push("counterspell");
-  if ((roles.includes("removal") || roles.includes("targeted_removal") || roles.includes("board_wipe"))
-      && !mechanicTags.includes("removal")) {
+  if (roles.includes("card_draw") && !mechanicTags.includes("draw"))
+    mechanicTags.push("draw");
+  if (roles.includes("ramp") && !mechanicTags.includes("ramp"))
+    mechanicTags.push("ramp");
+  if (roles.includes("counterspell") && !mechanicTags.includes("counterspell"))
+    mechanicTags.push("counterspell");
+  if (
+    (roles.includes("removal") ||
+      roles.includes("targeted_removal") ||
+      roles.includes("board_wipe")) &&
+    !mechanicTags.includes("removal")
+  ) {
     mechanicTags.push("removal");
   }
 
@@ -217,7 +255,8 @@ export function extractCardFeatures(card: {
   if (roles.includes("finisher")) impactScore += 3;
   if (roles.includes("heavy_draw")) impactScore += 2;
   if (roles.includes("tutor")) impactScore += 2;
-  if (roles.includes("removal") || roles.includes("targeted_removal")) impactScore += 1;
+  if (roles.includes("removal") || roles.includes("targeted_removal"))
+    impactScore += 1;
   if (text.includes("discard") && (isInstant || isSorcery)) impactScore += 1; // Thoughtseize, Inquisition
   if (isCreature && cmc >= 3 && cmc <= 4) impactScore += 1;
   if (isCreature && cmc >= 5) impactScore += 2;
@@ -260,9 +299,13 @@ export function extractCardFeatures(card: {
 
 // ─── Scoring Functions ────────────────────────────────────────────────────────
 
-export function manaCurveScore(features: CardFeatures[], archetype: string = "default"): { score: number; curve: Record<number, number> } {
+export function manaCurveScore(
+  features: CardFeatures[],
+  archetype: string = "default"
+): { score: number; curve: Record<number, number> } {
   const rawCurve: Record<number, number> = {};
-  const idealCurve = IDEAL_CURVES[archetype.toLowerCase()] || IDEAL_CURVES.default;
+  const idealCurve =
+    IDEAL_CURVES[archetype.toLowerCase()] || IDEAL_CURVES.default;
   let score = 0;
 
   for (const f of features) {
@@ -279,15 +322,24 @@ export function manaCurveScore(features: CardFeatures[], archetype: string = "de
   return { score, curve: rawCurve };
 }
 
-export function landRatioScore(features: CardFeatures[], archetype: string = "default"): number {
+export function landRatioScore(
+  features: CardFeatures[],
+  archetype: string = "default"
+): number {
   const lands = features.filter(f => f.isLand).length;
-  const ideal = IDEAL_LAND_COUNTS[archetype.toLowerCase()] || IDEAL_LAND_COUNTS.default;
+  const ideal =
+    IDEAL_LAND_COUNTS[archetype.toLowerCase()] || IDEAL_LAND_COUNTS.default;
   return -Math.abs(lands - ideal) * 3;
 }
 
-export function mechanicSynergyScore(features: CardFeatures[]): { score: number; tagCounts: Record<string, number> } {
+export function mechanicSynergyScore(features: CardFeatures[]): {
+  score: number;
+  tagCounts: Record<string, number>;
+} {
   const tagCounts: Record<string, number> = {};
-  for (const f of features) for (const tag of f.mechanicTags) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+  for (const f of features)
+    for (const tag of f.mechanicTags)
+      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
 
   // Super-linear stacking: a deck with 12× the same tag is dramatically more
   // synergistic than 4 groups of 3, so we use count^1.5 once the group
@@ -306,8 +358,13 @@ export function mechanicSynergyScore(features: CardFeatures[]): { score: number;
   return { score, tagCounts };
 }
 
-export function simulateTurns(features: CardFeatures[], iterations: number = 30): { score: number; stats: SimulationStats } {
-  let screw = 0, flood = 0, wasted = 0;
+export function simulateTurns(
+  features: CardFeatures[],
+  iterations: number = 30
+): { score: number; stats: SimulationStats } {
+  let screw = 0,
+    flood = 0,
+    wasted = 0;
   for (let i = 0; i < iterations; i++) {
     const deck = [...features].sort(() => Math.random() - 0.5);
     const hand = deck.splice(0, 7);
@@ -315,15 +372,23 @@ export function simulateTurns(features: CardFeatures[], iterations: number = 30)
     if (lands < 2) screw++;
     if (lands > 4) flood++;
   }
-  return { 
-    score: (iterations - screw - flood) * 2, 
-    stats: { screwRate: screw/iterations, floodRate: flood/iterations, winRate: 0.5, avgWastedMana: 2 } 
+  return {
+    score: (iterations - screw - flood) * 2,
+    stats: {
+      screwRate: screw / iterations,
+      floodRate: flood / iterations,
+      winRate: 0.5,
+      avgWastedMana: 2,
+    },
   };
 }
 
 // ─── Metrics Calculation ─────────────────────────────────────────────────────
 
-export function calculateDeckMetrics(cards: any[], archetype: string = "default"): DeckMetrics {
+export function calculateDeckMetrics(
+  cards: any[],
+  archetype: string = "default"
+): DeckMetrics {
   const features = cards.map(c => extractCardFeatures(c));
   const curve = manaCurveScore(features, archetype);
   const land = landRatioScore(features, archetype);
@@ -331,7 +396,8 @@ export function calculateDeckMetrics(cards: any[], archetype: string = "default"
   const sim = simulateTurns(features);
 
   const roleCounts: Record<string, number> = {};
-  for (const f of features) for (const role of f.roles) roleCounts[role] = (roleCounts[role] || 0) + 1;
+  for (const f of features)
+    for (const role of f.roles) roleCounts[role] = (roleCounts[role] || 0) + 1;
 
   const totalScore = curve.score + land + synergy.score + sim.score;
 
@@ -364,8 +430,8 @@ export function calculateDeckMetrics(cards: any[], archetype: string = "default"
       consistency: 70,
       speed: 80,
       complexity: 10,
-      structure: 90
-    }
+      structure: 90,
+    },
   };
 }
 
@@ -400,7 +466,10 @@ export function calibrateFromRealDecks(
     let landsThisDeck = 0;
     const deckCurve: Record<number, number> = {};
     for (const card of deck) {
-      if (typeof card.type === "string" && card.type.toLowerCase().includes("land")) {
+      if (
+        typeof card.type === "string" &&
+        card.type.toLowerCase().includes("land")
+      ) {
         landsThisDeck += card.quantity;
       } else {
         deckCurve[card.cmc] = (deckCurve[card.cmc] || 0) + card.quantity;
@@ -443,9 +512,17 @@ export function optimizeDeckRL(
   archetype: string,
   iterations: number = 100,
   evaluator?: (deck: any[], archetype: string) => { totalScore: number }
-): { deck: any[], initialScore: number, finalScore: number, improvements: number } {
+): {
+  deck: any[];
+  initialScore: number;
+  finalScore: number;
+  improvements: number;
+} {
   let currentDeck = [...deck];
-  const getScore = (d: any[]) => evaluator ? evaluator(d, archetype).totalScore : calculateDeckMetrics(d, archetype).totalScore;
+  const getScore = (d: any[]) =>
+    evaluator
+      ? evaluator(d, archetype).totalScore
+      : calculateDeckMetrics(d, archetype).totalScore;
 
   let initialScore = getScore(currentDeck);
   let currentScore = initialScore;
@@ -460,7 +537,12 @@ export function optimizeDeckRL(
       improvements++;
     }
   }
-  return { deck: currentDeck, initialScore, finalScore: currentScore, improvements };
+  return {
+    deck: currentDeck,
+    initialScore,
+    finalScore: currentScore,
+    improvements,
+  };
 }
 
 // ─── Win Condition Validator ───────────────────────────────────────────────────
@@ -491,7 +573,12 @@ const ALT_WIN_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /exile.*library/i, label: "mill_win" },
 ];
 
-const COMBO_KEYWORDS = ["infinite", "whenever.*untap", "tap.*add.*mana.*tap.*add", "loop"];
+const COMBO_KEYWORDS = [
+  "infinite",
+  "whenever.*untap",
+  "tap.*add.*mana.*tap.*add",
+  "loop",
+];
 
 /**
  * Named MTG combo pairs/trios. Each entry: at least 2 cards that together form
@@ -500,35 +587,115 @@ const COMBO_KEYWORDS = ["infinite", "whenever.*untap", "tap.*add.*mana.*tap.*add
  */
 const KNOWN_COMBOS: { name: string; label: string; pieces: string[] }[] = [
   // Creature copy loops (infinite combat/damage)
-  { name: "Kiki-Jiki + Pestermite", label: "combo_engine", pieces: ["kiki-jiki", "pestermite"] },
-  { name: "Kiki-Jiki + Deceiver Exarch", label: "combo_engine", pieces: ["kiki-jiki", "deceiver exarch"] },
-  { name: "Kiki-Jiki + Restoration Angel", label: "combo_engine", pieces: ["kiki-jiki", "restoration angel"] },
-  { name: "Splinter Twin + Pestermite", label: "combo_engine", pieces: ["splinter twin", "pestermite"] },
-  { name: "Splinter Twin + Deceiver Exarch", label: "combo_engine", pieces: ["splinter twin", "deceiver exarch"] },
+  {
+    name: "Kiki-Jiki + Pestermite",
+    label: "combo_engine",
+    pieces: ["kiki-jiki", "pestermite"],
+  },
+  {
+    name: "Kiki-Jiki + Deceiver Exarch",
+    label: "combo_engine",
+    pieces: ["kiki-jiki", "deceiver exarch"],
+  },
+  {
+    name: "Kiki-Jiki + Restoration Angel",
+    label: "combo_engine",
+    pieces: ["kiki-jiki", "restoration angel"],
+  },
+  {
+    name: "Splinter Twin + Pestermite",
+    label: "combo_engine",
+    pieces: ["splinter twin", "pestermite"],
+  },
+  {
+    name: "Splinter Twin + Deceiver Exarch",
+    label: "combo_engine",
+    pieces: ["splinter twin", "deceiver exarch"],
+  },
   // Library win combos
-  { name: "Thassa's Oracle + Demonic Consultation", label: "combo_engine", pieces: ["thassa's oracle", "demonic consultation"] },
-  { name: "Thassa's Oracle + Tainted Pact", label: "combo_engine", pieces: ["thassa's oracle", "tainted pact"] },
-  { name: "Laboratory Maniac + Demonic Consultation", label: "combo_engine", pieces: ["laboratory maniac", "demonic consultation"] },
+  {
+    name: "Thassa's Oracle + Demonic Consultation",
+    label: "combo_engine",
+    pieces: ["thassa's oracle", "demonic consultation"],
+  },
+  {
+    name: "Thassa's Oracle + Tainted Pact",
+    label: "combo_engine",
+    pieces: ["thassa's oracle", "tainted pact"],
+  },
+  {
+    name: "Laboratory Maniac + Demonic Consultation",
+    label: "combo_engine",
+    pieces: ["laboratory maniac", "demonic consultation"],
+  },
   // Infinite damage/counters
-  { name: "Heliod + Walking Ballista", label: "combo_engine", pieces: ["heliod, sun-crowned", "walking ballista"] },
-  { name: "Mikaeus + Triskelion", label: "combo_engine", pieces: ["mikaeus, the unhallowed", "triskelion"] },
-  { name: "Mikaeus + Walking Ballista", label: "combo_engine", pieces: ["mikaeus, the unhallowed", "walking ballista"] },
+  {
+    name: "Heliod + Walking Ballista",
+    label: "combo_engine",
+    pieces: ["heliod, sun-crowned", "walking ballista"],
+  },
+  {
+    name: "Mikaeus + Triskelion",
+    label: "combo_engine",
+    pieces: ["mikaeus, the unhallowed", "triskelion"],
+  },
+  {
+    name: "Mikaeus + Walking Ballista",
+    label: "combo_engine",
+    pieces: ["mikaeus, the unhallowed", "walking ballista"],
+  },
   // Infinite mana combos
-  { name: "Urza + Dramatic Reversal + Isochron Scepter", label: "combo_engine", pieces: ["dramatic reversal", "isochron scepter"] },
-  { name: "Selvala + Freed from the Real", label: "combo_engine", pieces: ["selvala", "freed from the real"] },
-  { name: "Basalt Monolith + Rings of Brighthearth", label: "combo_engine", pieces: ["basalt monolith", "rings of brighthearth"] },
+  {
+    name: "Urza + Dramatic Reversal + Isochron Scepter",
+    label: "combo_engine",
+    pieces: ["dramatic reversal", "isochron scepter"],
+  },
+  {
+    name: "Selvala + Freed from the Real",
+    label: "combo_engine",
+    pieces: ["selvala", "freed from the real"],
+  },
+  {
+    name: "Basalt Monolith + Rings of Brighthearth",
+    label: "combo_engine",
+    pieces: ["basalt monolith", "rings of brighthearth"],
+  },
   // Infinite tokens/creatures
-  { name: "Nim Deathmantle + Ashnod's Altar + Creature", label: "combo_engine", pieces: ["nim deathmantle", "ashnod's altar"] },
-  { name: "Painter's Servant + Grindstone", label: "combo_engine", pieces: ["painter's servant", "grindstone"] },
+  {
+    name: "Nim Deathmantle + Ashnod's Altar + Creature",
+    label: "combo_engine",
+    pieces: ["nim deathmantle", "ashnod's altar"],
+  },
+  {
+    name: "Painter's Servant + Grindstone",
+    label: "combo_engine",
+    pieces: ["painter's servant", "grindstone"],
+  },
   // Alternate win with combo
-  { name: "Approach of the Second Sun", label: "alternate_win", pieces: ["approach of the second sun"] },
-  { name: "Thassa's Oracle empty library", label: "alternate_win", pieces: ["thassa's oracle"] },
+  {
+    name: "Approach of the Second Sun",
+    label: "alternate_win",
+    pieces: ["approach of the second sun"],
+  },
+  {
+    name: "Thassa's Oracle empty library",
+    label: "alternate_win",
+    pieces: ["thassa's oracle"],
+  },
   // Poison / Infect combos
   { name: "Infect + Pump", label: "poison_win", pieces: ["glistener elf"] },
   { name: "Phyresis + Target", label: "poison_win", pieces: ["phyresis"] },
   // Mill combos
-  { name: "Traumatize + Fraying Sanity", label: "mill_win", pieces: ["traumatize", "fraying sanity"] },
-  { name: "Maddening Cacophony + Bruvac", label: "mill_win", pieces: ["maddening cacophony", "bruvac"] },
+  {
+    name: "Traumatize + Fraying Sanity",
+    label: "mill_win",
+    pieces: ["traumatize", "fraying sanity"],
+  },
+  {
+    name: "Maddening Cacophony + Bruvac",
+    label: "mill_win",
+    pieces: ["maddening cacophony", "bruvac"],
+  },
 ];
 
 /**
@@ -568,8 +735,11 @@ export function detectWinConditions(cards: WinCard[]): WinConditionResult {
 
     // Direct damage win (burn/aggro)
     if (
-      text.includes("deals") && text.includes("damage") &&
-      (text.includes("target player") || text.includes("any target") || text.includes("each opponent"))
+      text.includes("deals") &&
+      text.includes("damage") &&
+      (text.includes("target player") ||
+        text.includes("any target") ||
+        text.includes("each opponent"))
     ) {
       directDamageCount++;
     }
@@ -578,10 +748,13 @@ export function detectWinConditions(cards: WinCard[]): WinConditionResult {
     if (type.includes("creature")) {
       if (text.includes("haste")) hasteCreatureCount++;
       if (
-        text.includes("flying") || text.includes("trample") ||
-        text.includes("unblockable") || text.includes("menace") ||
+        text.includes("flying") ||
+        text.includes("trample") ||
+        text.includes("unblockable") ||
+        text.includes("menace") ||
         text.includes("can't be blocked")
-      ) evasionCreatureCount++;
+      )
+        evasionCreatureCount++;
     }
 
     // Tutors (combo enablers)
@@ -591,7 +764,8 @@ export function detectWinConditions(cards: WinCard[]): WinConditionResult {
 
     // Combo engine indicators
     if (
-      text.includes("whenever") && (text.includes("untap") || text.includes("add {")) ||
+      (text.includes("whenever") &&
+        (text.includes("untap") || text.includes("add {"))) ||
       (text.includes("return") && text.includes("from your graveyard")) ||
       COMBO_KEYWORDS.some(k => new RegExp(k).test(text))
     ) {
@@ -600,7 +774,10 @@ export function detectWinConditions(cards: WinCard[]): WinConditionResult {
   }
 
   // Classify aggro win condition
-  if (directDamageCount >= 4 || (hasteCreatureCount + evasionCreatureCount) >= 8) {
+  if (
+    directDamageCount >= 4 ||
+    hasteCreatureCount + evasionCreatureCount >= 8
+  ) {
     types.add("aggro_damage");
     details.push(
       `${hasteCreatureCount} haste + ${evasionCreatureCount} evasion creatures, ${directDamageCount} direct damage spells`
@@ -610,7 +787,9 @@ export function detectWinConditions(cards: WinCard[]): WinConditionResult {
   // Classify combo win condition (heuristic)
   if (tutorCount >= 3 && comboEngineCount >= 2) {
     types.add("combo_engine");
-    details.push(`${tutorCount} tutors + ${comboEngineCount} combo engine pieces`);
+    details.push(
+      `${tutorCount} tutors + ${comboEngineCount} combo engine pieces`
+    );
   }
 
   // Named combo detection — check if the deck contains known MTG combo pieces
@@ -627,17 +806,28 @@ export function detectWinConditions(cards: WinCard[]): WinConditionResult {
 
   // Warnings for weak/missing win conditions
   if (types.size === 0 && planeswalkerCount < 2) {
-    warnings.push("No clear win condition detected — add direct damage, evasion creatures, or explicit win cards");
+    warnings.push(
+      "No clear win condition detected — add direct damage, evasion creatures, or explicit win cards"
+    );
   }
   if (tutorCount === 0 && types.has("combo_engine")) {
-    warnings.push("Combo detected but no tutors — combo pieces may be hard to assemble consistently");
+    warnings.push(
+      "Combo detected but no tutors — combo pieces may be hard to assemble consistently"
+    );
   }
 
   const hasWinCondition = types.size > 0;
 
   // Confidence: more evidence = higher confidence
-  const evidenceScore = types.size * 25 + details.length * 10 + (planeswalkerCount >= 2 ? 15 : 0);
+  const evidenceScore =
+    types.size * 25 + details.length * 10 + (planeswalkerCount >= 2 ? 15 : 0);
   const confidence = Math.min(100, evidenceScore);
 
-  return { hasWinCondition, types: Array.from(types), confidence, details, warnings };
+  return {
+    hasWinCondition,
+    types: Array.from(types),
+    confidence,
+    details,
+    warnings,
+  };
 }

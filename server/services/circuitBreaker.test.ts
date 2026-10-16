@@ -13,9 +13,13 @@ function mockDbWithBudget(callCount = 0, costUsd = 0) {
   const selectChain = {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue(callCount === 0 && costUsd === 0 ? [] : [
-      { callCount, costUsd: String(costUsd) }
-    ]),
+    limit: vi
+      .fn()
+      .mockResolvedValue(
+        callCount === 0 && costUsd === 0
+          ? []
+          : [{ callCount, costUsd: String(costUsd) }]
+      ),
   };
   return {
     select: vi.fn().mockReturnValue(selectChain),
@@ -118,7 +122,11 @@ describe("CircuitBreaker", () => {
       (getDb as any).mockResolvedValue(mockDbWithBudget(0, 0));
       CircuitBreaker.recordFailure(new Error("1"));
       CircuitBreaker.recordFailure(new Error("2"));
-      await CircuitBreaker.recordSuccess({ inputTokens: 10, outputTokens: 20, costUsd: 0.01 });
+      await CircuitBreaker.recordSuccess({
+        inputTokens: 10,
+        outputTokens: 20,
+        costUsd: 0.01,
+      });
       // Após success, contagem volta a 0 — 3 falhas novas seriam necessárias
       CircuitBreaker.recordFailure(new Error("after-reset-1"));
       CircuitBreaker.recordFailure(new Error("after-reset-2"));
@@ -136,7 +144,7 @@ describe("CircuitBreaker", () => {
       expect((await CircuitBreaker.getStatus()).state).toBe("OPEN");
 
       // Fast-forward past cooldown via sleep
-      await new Promise((r) => setTimeout(r, 60));
+      await new Promise(r => setTimeout(r, 60));
 
       const gate = await CircuitBreaker.canCall();
       expect(gate.ok).toBe(true); // Prova OK
@@ -146,9 +154,13 @@ describe("CircuitBreaker", () => {
       (getDb as any).mockResolvedValue(mockDbWithBudget(0, 0));
       CircuitBreaker.configure({ cooldownMs: 10 });
       CircuitBreaker.trip("test");
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise(r => setTimeout(r, 20));
       await CircuitBreaker.canCall(); // → HALF_OPEN
-      await CircuitBreaker.recordSuccess({ inputTokens: 1, outputTokens: 1, costUsd: 0.001 });
+      await CircuitBreaker.recordSuccess({
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: 0.001,
+      });
 
       const status = await CircuitBreaker.getStatus();
       expect(status.state).toBe("CLOSED");

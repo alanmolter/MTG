@@ -95,7 +95,10 @@ export function resetSynergyCircuit() {
  * Calcula sinergia entre duas cartas baseado em co-ocorrência
  * Retorna peso da conexão (0-100)
  */
-export async function getCardSynergy(card1Id: number, card2Id: number): Promise<number> {
+export async function getCardSynergy(
+  card1Id: number,
+  card2Id: number
+): Promise<number> {
   if (circuitTripped) return 0;
   const db = await getDb();
   if (!db) return 0;
@@ -107,8 +110,14 @@ export async function getCardSynergy(card1Id: number, card2Id: number): Promise<
       .from(cardSynergies)
       .where(
         or(
-          and(eq(cardSynergies.card1Id, card1Id), eq(cardSynergies.card2Id, card2Id)),
-          and(eq(cardSynergies.card1Id, card2Id), eq(cardSynergies.card2Id, card1Id))
+          and(
+            eq(cardSynergies.card1Id, card1Id),
+            eq(cardSynergies.card2Id, card2Id)
+          ),
+          and(
+            eq(cardSynergies.card1Id, card2Id),
+            eq(cardSynergies.card2Id, card1Id)
+          )
         )
       )
       .limit(1);
@@ -142,14 +151,11 @@ export async function getSynergyNeighbors(
       .select()
       .from(cardSynergies)
       .where(
-        or(
-          eq(cardSynergies.card1Id, cardId),
-          eq(cardSynergies.card2Id, cardId)
-        )
+        or(eq(cardSynergies.card1Id, cardId), eq(cardSynergies.card2Id, cardId))
       )
       .limit(limit);
 
-    return result.map((synergy) => ({
+    return result.map(synergy => ({
       cardId: synergy.card1Id === cardId ? synergy.card2Id : synergy.card1Id,
       weight: synergy.coOccurrenceRate,
     }));
@@ -171,22 +177,21 @@ export async function updateSynergy(
   if (circuitTripped) return null;
   // A card cannot provide evidence of synergy with itself. Previous self-play
   // loops could emit these rows, which amplified arbitrary card weights.
-  if (!isValidSynergyObservation(card1Id, card2Id, coOccurrenceRate)) return null;
+  if (!isValidSynergyObservation(card1Id, card2Id, coOccurrenceRate))
+    return null;
   const db = await getDb();
   if (!db) return null;
 
   // Garantir ordem consistente
-  const [minId, maxId] = card1Id < card2Id ? [card1Id, card2Id] : [card2Id, card1Id];
+  const [minId, maxId] =
+    card1Id < card2Id ? [card1Id, card2Id] : [card2Id, card1Id];
 
   try {
     const existing = await db
       .select()
       .from(cardSynergies)
       .where(
-        and(
-          eq(cardSynergies.card1Id, minId),
-          eq(cardSynergies.card2Id, maxId)
-        )
+        and(eq(cardSynergies.card1Id, minId), eq(cardSynergies.card2Id, maxId))
       )
       .limit(1);
 
@@ -217,10 +222,7 @@ export async function updateSynergy(
       .select()
       .from(cardSynergies)
       .where(
-        and(
-          eq(cardSynergies.card1Id, minId),
-          eq(cardSynergies.card2Id, maxId)
-        )
+        and(eq(cardSynergies.card1Id, minId), eq(cardSynergies.card2Id, maxId))
       )
       .limit(1);
 

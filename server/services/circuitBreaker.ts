@@ -32,7 +32,11 @@ export interface BreakerConfig {
 
 export interface BreakerGate {
   ok: boolean;
-  reason?: "RATE_EXCEEDED" | "BUDGET_EXCEEDED" | "CIRCUIT_OPEN" | "DB_UNAVAILABLE";
+  reason?:
+    | "RATE_EXCEEDED"
+    | "BUDGET_EXCEEDED"
+    | "CIRCUIT_OPEN"
+    | "DB_UNAVAILABLE";
   detail?: string;
   cooldownRemainingMs?: number;
 }
@@ -108,13 +112,19 @@ class CircuitBreakerImpl {
       }
       // Cooldown expirou → HALF_OPEN para testar 1 chamada
       this.state = "HALF_OPEN";
-      console.warn("[CircuitBreaker] 🟡 HALF_OPEN — permitindo chamada de prova");
+      console.warn(
+        "[CircuitBreaker] 🟡 HALF_OPEN — permitindo chamada de prova"
+      );
     }
 
     // Verifica limites persistidos no DB
     const db = await getDb();
     if (!db) {
-      return { ok: false, reason: "DB_UNAVAILABLE", detail: "Sem conexão com o banco — bloqueando por segurança" };
+      return {
+        ok: false,
+        reason: "DB_UNAVAILABLE",
+        detail: "Sem conexão com o banco — bloqueando por segurança",
+      };
     }
 
     const windowStart = this.currentWindowStart();
@@ -128,12 +138,24 @@ class CircuitBreakerImpl {
     const cost = Number(rows[0]?.costUsd ?? 0);
 
     if (calls >= this.config.hourlyCallLimit) {
-      this.trip(`Rate limit ${this.config.hourlyCallLimit}/h excedido (${calls} chamadas na janela)`);
-      return { ok: false, reason: "RATE_EXCEEDED", detail: `${calls}/${this.config.hourlyCallLimit}` };
+      this.trip(
+        `Rate limit ${this.config.hourlyCallLimit}/h excedido (${calls} chamadas na janela)`
+      );
+      return {
+        ok: false,
+        reason: "RATE_EXCEEDED",
+        detail: `${calls}/${this.config.hourlyCallLimit}`,
+      };
     }
     if (cost >= this.config.hourlyCostLimitUsd) {
-      this.trip(`Budget $${this.config.hourlyCostLimitUsd}/h excedido (acumulado $${cost.toFixed(4)})`);
-      return { ok: false, reason: "BUDGET_EXCEEDED", detail: `$${cost.toFixed(4)}/$${this.config.hourlyCostLimitUsd}` };
+      this.trip(
+        `Budget $${this.config.hourlyCostLimitUsd}/h excedido (acumulado $${cost.toFixed(4)})`
+      );
+      return {
+        ok: false,
+        reason: "BUDGET_EXCEEDED",
+        detail: `$${cost.toFixed(4)}/$${this.config.hourlyCostLimitUsd}`,
+      };
     }
 
     return { ok: true };
@@ -143,10 +165,16 @@ class CircuitBreakerImpl {
    * Registra uma chamada bem-sucedida. Atualiza ledger via UPSERT.
    * Recupera o state (fecha circuito se estava HALF_OPEN).
    */
-  async recordSuccess(params: { inputTokens: number; outputTokens: number; costUsd: number }): Promise<void> {
+  async recordSuccess(params: {
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+  }): Promise<void> {
     this.consecutiveErrors = 0;
     if (this.state === "HALF_OPEN") {
-      console.log("[CircuitBreaker] 🟢 CLOSED — chamada de prova passou, circuito fechado");
+      console.log(
+        "[CircuitBreaker] 🟢 CLOSED — chamada de prova passou, circuito fechado"
+      );
       this.state = "CLOSED";
       this.openedAt = null;
     }
@@ -173,7 +201,9 @@ class CircuitBreakerImpl {
     this.consecutiveErrors++;
     if (this.consecutiveErrors >= this.config.consecutiveErrorThreshold) {
       const msg = error instanceof Error ? error.message : String(error);
-      this.trip(`${this.consecutiveErrors} falhas consecutivas. Último erro: ${msg}`);
+      this.trip(
+        `${this.consecutiveErrors} falhas consecutivas. Último erro: ${msg}`
+      );
     }
   }
 

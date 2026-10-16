@@ -15,38 +15,56 @@ import { getRawClient, closeDb } from "../db";
  * então fazemos full scan das tabelas.
  */
 
-const CRITICAL_TABLES = [
-  "card_synergies",
-  "card_learning",
-  "cards",
-];
+const CRITICAL_TABLES = ["card_synergies", "card_learning", "cards"];
 
-function unwrapError(e: any): { msg: string; code?: string; isConnError: boolean; block?: number } {
+function unwrapError(e: any): {
+  msg: string;
+  code?: string;
+  isConnError: boolean;
+  block?: number;
+} {
   const collectCodes = (err: any, acc: Set<string>) => {
     if (!err) return;
     if (err.code) acc.add(String(err.code));
-    if (Array.isArray(err.errors)) for (const s of err.errors) collectCodes(s, acc);
+    if (Array.isArray(err.errors))
+      for (const s of err.errors) collectCodes(s, acc);
     if (err.cause) collectCodes(err.cause, acc);
   };
   const codes = new Set<string>();
   collectCodes(e, codes);
 
-  const connCodes = ["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET", "EAI_AGAIN"];
+  const connCodes = [
+    "ECONNREFUSED",
+    "ENOTFOUND",
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "EAI_AGAIN",
+  ];
   const isConnError = connCodes.some(c => codes.has(c));
 
   const rawMsg = String(e?.message || "");
   const subMsgs = Array.isArray(e?.errors)
-    ? e.errors.map((s: any) => s?.message).filter(Boolean).join(" | ")
+    ? e.errors
+        .map((s: any) => s?.message)
+        .filter(Boolean)
+        .join(" | ")
     : "";
   const msg = rawMsg || subMsgs || String(e);
 
   const blockMatch = (rawMsg + " " + subMsgs).match(/block (\d+) of relation/);
   const block = blockMatch ? Number(blockMatch[1]) : undefined;
 
-  return { msg: msg + (subMsgs ? ` [${subMsgs}]` : ""), code: Array.from(codes).join(","), isConnError, block };
+  return {
+    msg: msg + (subMsgs ? ` [${subMsgs}]` : ""),
+    code: Array.from(codes).join(","),
+    isConnError,
+    block,
+  };
 }
 
-async function pingDb(sql: any): Promise<{ ok: boolean; err?: ReturnType<typeof unwrapError> }> {
+async function pingDb(
+  sql: any
+): Promise<{ ok: boolean; err?: ReturnType<typeof unwrapError> }> {
   try {
     await sql`SELECT 1`;
     return { ok: true };
@@ -55,7 +73,10 @@ async function pingDb(sql: any): Promise<{ ok: boolean; err?: ReturnType<typeof 
   }
 }
 
-async function scanTable(sql: any, table: string): Promise<{ ok: boolean; err?: ReturnType<typeof unwrapError> }> {
+async function scanTable(
+  sql: any,
+  table: string
+): Promise<{ ok: boolean; err?: ReturnType<typeof unwrapError> }> {
   try {
     await sql.unsafe(`SELECT 1 FROM ${table}`);
     return { ok: true };
@@ -112,7 +133,9 @@ async function run() {
       process.exit(1);
     } else {
       anyCorruption = true;
-      console.log(`CORROMPIDA${r.err?.block !== undefined ? ` (block ${r.err.block})` : ""}`);
+      console.log(
+        `CORROMPIDA${r.err?.block !== undefined ? ` (block ${r.err.block})` : ""}`
+      );
       console.log(`    ${r.err?.msg}`);
     }
   }
@@ -134,9 +157,15 @@ async function run() {
   process.exit(0);
 }
 
-run().catch(async (e) => {
+run().catch(async e => {
   const u = unwrapError(e);
-  console.error("[checkDbHealth] Erro fatal:", u.msg, u.code ? `(code=${u.code})` : "");
-  try { await closeDb(); } catch {}
+  console.error(
+    "[checkDbHealth] Erro fatal:",
+    u.msg,
+    u.code ? `(code=${u.code})` : ""
+  );
+  try {
+    await closeDb();
+  } catch {}
   process.exit(1);
 });

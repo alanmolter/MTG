@@ -1,5 +1,11 @@
 import { getDb } from "../db";
-import { competitiveDecks, competitiveDeckCards, CompetitiveDeck, CompetitiveDeckCard, cards } from "../../drizzle/schema";
+import {
+  competitiveDecks,
+  competitiveDeckCards,
+  CompetitiveDeck,
+  CompetitiveDeckCard,
+  cards,
+} from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { getCardEmbedding } from "./embeddings";
 
@@ -9,9 +15,9 @@ export interface DeckVector {
   colors: string;
   format: string;
   cardCount: number;
-  creatureRatio: number;    // proporção de criaturas no deck
+  creatureRatio: number; // proporção de criaturas no deck
   instantSorceryRatio: number; // proporção de instants+sorceries
-  avgCmc: number;           // custo de mana médio
+  avgCmc: number; // custo de mana médio
 }
 
 export interface ClusterResult {
@@ -54,10 +60,12 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
     const deckCards = await db
       .select()
       .from(competitiveDeckCards)
-      .where(and(
-        eq(competitiveDeckCards.deckId, deckId),
-        eq(competitiveDeckCards.section, "mainboard")
-      ));
+      .where(
+        and(
+          eq(competitiveDeckCards.deckId, deckId),
+          eq(competitiveDeckCards.section, "mainboard")
+        )
+      );
 
     if (deckCards.length === 0) return null;
 
@@ -127,7 +135,8 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
 
     // Usar cores calculadas das cartas se o campo colors do deck estiver vazio
     const deckColors = deck[0].colors || "";
-    const computedColors = deckColors.length > 0 ? deckColors : Array.from(colorSet).sort().join("");
+    const computedColors =
+      deckColors.length > 0 ? deckColors : Array.from(colorSet).sort().join("");
 
     return {
       deckId,
@@ -136,7 +145,8 @@ export async function deckToVector(deckId: number): Promise<DeckVector | null> {
       format: deck[0].format,
       cardCount: totalQuantity,
       creatureRatio: totalQuantity > 0 ? creatureCount / totalQuantity : 0,
-      instantSorceryRatio: totalQuantity > 0 ? instantSorceryCount / totalQuantity : 0,
+      instantSorceryRatio:
+        totalQuantity > 0 ? instantSorceryCount / totalQuantity : 0,
       avgCmc: cmcCards > 0 ? totalCmc / cmcCards : 0,
     };
   } catch (error) {
@@ -198,9 +208,9 @@ function normalizeVector(vec: number[]): number[] {
     magnitude += vec[i] * vec[i];
   }
   magnitude = Math.sqrt(magnitude);
-  
+
   if (magnitude === 0) return vec;
-  
+
   return vec.map(v => v / magnitude);
 }
 
@@ -299,7 +309,11 @@ function assignPoints(data: number[][], centroids: number[][]): number[] {
 /**
  * Recalcula centroids. TRATA CLUSTERS VAZIOS com re-seed.
  */
-function updateCentroids(data: number[][], assignments: number[], k: number): number[][] {
+function updateCentroids(
+  data: number[][],
+  assignments: number[],
+  k: number
+): number[][] {
   const dim = data[0].length;
   const centroids: number[][] = [];
   const counts = new Array(k).fill(0);
@@ -329,7 +343,8 @@ function updateCentroids(data: number[][], assignments: number[], k: number): nu
         if (assignments[i] === largestCluster) {
           let dist = 0;
           for (let d = 0; d < dim; d++) {
-            const diff = data[i][d] - (sums[largestCluster][d] / counts[largestCluster]);
+            const diff =
+              data[i][d] - sums[largestCluster][d] / counts[largestCluster];
             dist += diff * diff;
           }
           if (dist > maxDist) {
@@ -340,7 +355,9 @@ function updateCentroids(data: number[][], assignments: number[], k: number): nu
       }
 
       centroids.push([...data[farthestIdx]]);
-      console.log(`[KMeans] Cluster ${c} vazio → re-seed com ponto do cluster ${largestCluster}`);
+      console.log(
+        `[KMeans] Cluster ${c} vazio → re-seed com ponto do cluster ${largestCluster}`
+      );
     }
   }
 
@@ -354,7 +371,12 @@ function robustKMeans(
   data: number[][],
   k: number,
   maxIterations: number = 150
-): { assignments: number[]; centroids: number[][]; converged: boolean; iterations: number } {
+): {
+  assignments: number[];
+  centroids: number[][];
+  converged: boolean;
+  iterations: number;
+} {
   const n = data.length;
 
   let centroids = kmeansppInit(data, k);
@@ -386,21 +408,34 @@ function robustKMeans(
  * Atribui nomes de arquétipos baseado nas características REAIS dos decks.
  * Usa creatureRatio, instantSorceryRatio, avgCmc e cores — não apenas cardCount.
  */
-function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { archetype: string; confidence: number } {
-  if (clusterVectors.length === 0) return { archetype: "Unknown", confidence: 0 };
+function assignArchetype(
+  clusterVectors: DeckVector[],
+  centroid: number[]
+): { archetype: string; confidence: number } {
+  if (clusterVectors.length === 0)
+    return { archetype: "Unknown", confidence: 0 };
 
   const totalDecks = clusterVectors.length;
 
   // ─── Calcular métricas médias do cluster ──────────────────────────
-  const avgCreatureRatio = clusterVectors.reduce((s, dv) => s + dv.creatureRatio, 0) / totalDecks;
-  const avgInstantSorceryRatio = clusterVectors.reduce((s, dv) => s + dv.instantSorceryRatio, 0) / totalDecks;
-  const avgCmc = clusterVectors.reduce((s, dv) => s + dv.avgCmc, 0) / totalDecks;
-  const avgCardCount = clusterVectors.reduce((s, dv) => s + dv.cardCount, 0) / totalDecks;
+  const avgCreatureRatio =
+    clusterVectors.reduce((s, dv) => s + dv.creatureRatio, 0) / totalDecks;
+  const avgInstantSorceryRatio =
+    clusterVectors.reduce((s, dv) => s + dv.instantSorceryRatio, 0) /
+    totalDecks;
+  const avgCmc =
+    clusterVectors.reduce((s, dv) => s + dv.avgCmc, 0) / totalDecks;
+  const avgCardCount =
+    clusterVectors.reduce((s, dv) => s + dv.cardCount, 0) / totalDecks;
 
   // ─── Calcular cores dominantes ─────────────────────────────────────
   const colorCounts: { [key: string]: number } = {};
   const colorMap: { [key: string]: string } = {
-    W: "White", U: "Blue", B: "Black", R: "Red", G: "Green",
+    W: "White",
+    U: "Blue",
+    B: "Black",
+    R: "Red",
+    G: "Green",
   };
 
   clusterVectors.forEach(dv => {
@@ -432,25 +467,38 @@ function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { ar
   if (avgCreatureRatio >= 0.45 && avgCmc <= 2.8) {
     style = "Aggro";
     styleConfidence = 0.7 + Math.min(0.25, (avgCreatureRatio - 0.45) * 2);
-  } else if (avgCreatureRatio >= 0.40 && avgCmc <= 3.2) {
+  } else if (avgCreatureRatio >= 0.4 && avgCmc <= 3.2) {
     style = "Aggro";
-    styleConfidence = 0.6 + Math.min(0.2, (avgCreatureRatio - 0.40) * 2);
-  } else if (avgInstantSorceryRatio >= 0.35 && avgCreatureRatio < 0.30) {
+    styleConfidence = 0.6 + Math.min(0.2, (avgCreatureRatio - 0.4) * 2);
+  } else if (avgInstantSorceryRatio >= 0.35 && avgCreatureRatio < 0.3) {
     style = "Control";
     styleConfidence = 0.7 + Math.min(0.25, (avgInstantSorceryRatio - 0.35) * 2);
-  } else if (avgInstantSorceryRatio >= 0.25 && avgCmc >= 3.0 && avgCreatureRatio < 0.35) {
+  } else if (
+    avgInstantSorceryRatio >= 0.25 &&
+    avgCmc >= 3.0 &&
+    avgCreatureRatio < 0.35
+  ) {
     style = "Control";
     styleConfidence = 0.6 + Math.min(0.2, (avgCmc - 3.0) * 0.1);
   } else if (avgCreatureRatio < 0.25 && avgInstantSorceryRatio < 0.25) {
     style = "Combo";
     styleConfidence = 0.55;
-  } else if (avgCmc >= 3.5 && avgCreatureRatio >= 0.30) {
+  } else if (avgCmc >= 3.5 && avgCreatureRatio >= 0.3) {
     style = "Ramp";
     styleConfidence = 0.6 + Math.min(0.2, (avgCmc - 3.5) * 0.1);
-  } else if (avgCreatureRatio >= 0.30 && avgCreatureRatio < 0.45 && avgCmc >= 2.5 && avgCmc < 3.5) {
+  } else if (
+    avgCreatureRatio >= 0.3 &&
+    avgCreatureRatio < 0.45 &&
+    avgCmc >= 2.5 &&
+    avgCmc < 3.5
+  ) {
     style = "Midrange";
     styleConfidence = 0.65;
-  } else if (avgInstantSorceryRatio >= 0.30 && avgCreatureRatio >= 0.20 && avgCmc < 2.5) {
+  } else if (
+    avgInstantSorceryRatio >= 0.3 &&
+    avgCreatureRatio >= 0.2 &&
+    avgCmc < 2.5
+  ) {
     style = "Tempo";
     styleConfidence = 0.6;
   }
@@ -466,17 +514,34 @@ function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { ar
     // Usar nomes de guilds do MTG para pares de cores
     const pair = dominantColors.sort().join("");
     const guildNames: { [key: string]: string } = {
-      "BG": "Golgari", "BR": "Rakdos", "BU": "Dimir", "BW": "Orzhov",
-      "GR": "Gruul", "GU": "Simic", "GW": "Selesnya",
-      "RU": "Izzet", "RW": "Boros", "UW": "Azorius",
+      BG: "Golgari",
+      BR: "Rakdos",
+      BU: "Dimir",
+      BW: "Orzhov",
+      GR: "Gruul",
+      GU: "Simic",
+      GW: "Selesnya",
+      RU: "Izzet",
+      RW: "Boros",
+      UW: "Azorius",
     };
-    colorPrefix = guildNames[pair] || `${dominantColors.map(c => colorMap[c] || c).join("-")}`;
+    colorPrefix =
+      guildNames[pair] ||
+      `${dominantColors.map(c => colorMap[c] || c).join("-")}`;
   } else {
     // 3+ cores: usar nomes de shards/wedges ou "Multicolor"
     const triple = dominantColors.sort().join("");
     const triNames: { [key: string]: string } = {
-      "BGW": "Abzan", "BRU": "Grixis", "GRW": "Naya", "BUW": "Esper", "GRU": "Temur",
-      "BGR": "Jund", "BRW": "Mardu", "GUW": "Bant", "BRG": "Jund", "RUW": "Jeskai",
+      BGW: "Abzan",
+      BRU: "Grixis",
+      GRW: "Naya",
+      BUW: "Esper",
+      GRU: "Temur",
+      BGR: "Jund",
+      BRW: "Mardu",
+      GUW: "Bant",
+      BRG: "Jund",
+      RUW: "Jeskai",
     };
     colorPrefix = triNames[triple] || "Multicolor";
   }
@@ -492,17 +557,29 @@ function assignArchetype(clusterVectors: DeckVector[], centroid: number[]): { ar
   return { archetype, confidence };
 }
 
-
 /**
  * Implementação do algoritmo K-Means usando implementação manual robusta.
  */
-export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: number = 150): { clusters: ClusterResult[]; stats: ClusteringStats } {
+export function kMeansReal(
+  vectors: DeckVector[],
+  k: number,
+  maxIterations: number = 150
+): { clusters: ClusterResult[]; stats: ClusteringStats } {
   if (vectors.length === 0 || k <= 0) {
-    return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
+    return {
+      clusters: [],
+      stats: {
+        silhouetteScore: 0,
+        calinskiHarabaszIndex: 0,
+        daviesBouldinIndex: 0,
+        inertia: 0,
+        converged: false,
+      },
+    };
   }
 
   const adjustedK = Math.min(k, vectors.length);
-  
+
   // Extrair dados numéricos e normalizar dimensões
   const rawData = vectors.map(v => v.vector);
   const maxDim = rawData.reduce((max, vec) => Math.max(max, vec.length), 0);
@@ -519,18 +596,33 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
   const filteredVectors = vectors.filter((_, i) => validMask[i]);
 
   if (filteredData.length < adjustedK) {
-    console.warn(`[KMeans] Vetores válidos insuficientes (${filteredData.length}) para k=${adjustedK}.`);
-    return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
+    console.warn(
+      `[KMeans] Vetores válidos insuficientes (${filteredData.length}) para k=${adjustedK}.`
+    );
+    return {
+      clusters: [],
+      stats: {
+        silhouetteScore: 0,
+        calinskiHarabaszIndex: 0,
+        daviesBouldinIndex: 0,
+        inertia: 0,
+        converged: false,
+      },
+    };
   }
 
-  console.log(`[KMeans] Running robust KMeans: k=${adjustedK}, dim=${maxDim}, n=${filteredData.length}, max_iterations=${maxIterations}`);
+  console.log(
+    `[KMeans] Running robust KMeans: k=${adjustedK}, dim=${maxDim}, n=${filteredData.length}, max_iterations=${maxIterations}`
+  );
 
   const result = robustKMeans(filteredData, adjustedK, maxIterations);
 
   const assignments = result.assignments;
   const centroids = result.centroids;
 
-  console.log(`[KMeans] Clustering complete! Converged: ${result.converged}. Iterations: ${result.iterations}`);
+  console.log(
+    `[KMeans] Clustering complete! Converged: ${result.converged}. Iterations: ${result.iterations}`
+  );
 
   // Construir clusters com metadados
   const clusterMap = new Map<number, number[]>();
@@ -553,22 +645,29 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
     const intraClusterDistances = clusterDataVecs.map(vec =>
       euclideanDistance(vec, centroid)
     );
-    const avgIntraClusterDistance = intraClusterDistances.length > 0
-      ? intraClusterDistances.reduce((a, b) => a + b, 0) / intraClusterDistances.length
-      : 0;
+    const avgIntraClusterDistance =
+      intraClusterDistances.length > 0
+        ? intraClusterDistances.reduce((a, b) => a + b, 0) /
+          intraClusterDistances.length
+        : 0;
 
     // Distância inter-cluster
     const otherCentroids = centroids.filter((_, idx) => idx !== clusterId);
     let avgInterClusterDistance = 0;
     if (otherCentroids.length > 0) {
-      const distancesToOthers = otherCentroids.map(oc => euclideanDistance(centroid, oc));
-      avgInterClusterDistance = distancesToOthers.reduce((a, b) => a + b, 0) / distancesToOthers.length;
+      const distancesToOthers = otherCentroids.map(oc =>
+        euclideanDistance(centroid, oc)
+      );
+      avgInterClusterDistance =
+        distancesToOthers.reduce((a, b) => a + b, 0) / distancesToOthers.length;
     }
 
     const { archetype, confidence } = assignArchetype(clusterVectors, centroid);
-    const avgCardCount = clusterVectors.length > 0
-      ? clusterVectors.reduce((sum, dv) => sum + dv.cardCount, 0) / clusterVectors.length
-      : 0;
+    const avgCardCount =
+      clusterVectors.length > 0
+        ? clusterVectors.reduce((sum, dv) => sum + dv.cardCount, 0) /
+          clusterVectors.length
+        : 0;
 
     // Cores médias
     const colorCounts: { [key: string]: number } = {};
@@ -602,7 +701,11 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
   });
 
   // Calcular estatísticas usando os MESMOS vetores filtrados (mesma escala dos centroids)
-  const stats = calculateClusteringMetrics(clusters, filteredVectors, filteredData);
+  const stats = calculateClusteringMetrics(
+    clusters,
+    filteredVectors,
+    filteredData
+  );
 
   return { clusters, stats };
 }
@@ -610,14 +713,28 @@ export function kMeansReal(vectors: DeckVector[], k: number, maxIterations: numb
 /**
  * Executa clustering KMeans em todos os decks competitivos
  */
-export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters: ClusterResult[]; stats: ClusteringStats }> {
+export async function clusterCompetitiveDecks(
+  k: number = 8
+): Promise<{ clusters: ClusterResult[]; stats: ClusteringStats }> {
   const db = await getDb();
-  if (!db) return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
+  if (!db)
+    return {
+      clusters: [],
+      stats: {
+        silhouetteScore: 0,
+        calinskiHarabaszIndex: 0,
+        daviesBouldinIndex: 0,
+        inertia: 0,
+        converged: false,
+      },
+    };
 
   try {
     const decks = await db.select().from(competitiveDecks);
 
-    console.log(`[Clustering] Starting KMeans clustering with ${decks.length} decks, k=${k}`);
+    console.log(
+      `[Clustering] Starting KMeans clustering with ${decks.length} decks, k=${k}`
+    );
 
     const deckVectors: DeckVector[] = [];
     for (const deck of decks) {
@@ -627,11 +744,24 @@ export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters
       }
     }
 
-    console.log(`[Clustering] Converted ${deckVectors.length} decks to vectors`);
+    console.log(
+      `[Clustering] Converted ${deckVectors.length} decks to vectors`
+    );
 
     if (deckVectors.length < k) {
-      console.warn(`[Clustering] Not enough deck vectors (${deckVectors.length}) for k=${k} clusters`);
-      return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
+      console.warn(
+        `[Clustering] Not enough deck vectors (${deckVectors.length}) for k=${k} clusters`
+      );
+      return {
+        clusters: [],
+        stats: {
+          silhouetteScore: 0,
+          calinskiHarabaszIndex: 0,
+          daviesBouldinIndex: 0,
+          inertia: 0,
+          converged: false,
+        },
+      };
     }
 
     // Normalizar vetores para melhor clustering
@@ -642,11 +772,19 @@ export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters
 
     console.log(`[Clustering] Generated ${clusters.length} clusters`);
     clusters.forEach(c => {
-      console.log(`  Cluster ${c.clusterId}: ${c.archetype} (${c.deckIds.length} decks, colors=${c.avgColors}, conf=${c.confidence.toFixed(2)})`);
+      console.log(
+        `  Cluster ${c.clusterId}: ${c.archetype} (${c.deckIds.length} decks, colors=${c.avgColors}, conf=${c.confidence.toFixed(2)})`
+      );
     });
-    console.log(`[Clustering] Silhouette Score: ${stats.silhouetteScore.toFixed(3)}`);
-    console.log(`[Clustering] Calinski-Harabasz Index: ${stats.calinskiHarabaszIndex.toFixed(2)}`);
-    console.log(`[Clustering] Davies-Bouldin Index: ${stats.daviesBouldinIndex.toFixed(3)}`);
+    console.log(
+      `[Clustering] Silhouette Score: ${stats.silhouetteScore.toFixed(3)}`
+    );
+    console.log(
+      `[Clustering] Calinski-Harabasz Index: ${stats.calinskiHarabaszIndex.toFixed(2)}`
+    );
+    console.log(
+      `[Clustering] Davies-Bouldin Index: ${stats.daviesBouldinIndex.toFixed(3)}`
+    );
     console.log(`[Clustering] Inertia: ${stats.inertia.toFixed(4)}`);
 
     // Atualizar arquétipos no banco
@@ -659,12 +797,23 @@ export async function clusterCompetitiveDecks(k: number = 8): Promise<{ clusters
       }
     }
 
-    console.log(`[Clustering] Updated ${clusters.reduce((sum, c) => sum + c.deckIds.length, 0)} deck archetypes in database`);
+    console.log(
+      `[Clustering] Updated ${clusters.reduce((sum, c) => sum + c.deckIds.length, 0)} deck archetypes in database`
+    );
 
     return { clusters, stats };
   } catch (error) {
     console.error("[Clustering] Error in KMeans clustering:", error);
-    return { clusters: [], stats: { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: false } };
+    return {
+      clusters: [],
+      stats: {
+        silhouetteScore: 0,
+        calinskiHarabaszIndex: 0,
+        daviesBouldinIndex: 0,
+        inertia: 0,
+        converged: false,
+      },
+    };
   }
 }
 
@@ -678,7 +827,13 @@ export function calculateClusteringMetrics(
   filteredData?: number[][]
 ): ClusteringStats {
   if (clusters.length === 0 || vectors.length === 0) {
-    return { silhouetteScore: 0, calinskiHarabaszIndex: 0, daviesBouldinIndex: 0, inertia: 0, converged: true };
+    return {
+      silhouetteScore: 0,
+      calinskiHarabaszIndex: 0,
+      daviesBouldinIndex: 0,
+      inertia: 0,
+      converged: true,
+    };
   }
 
   // Usar filteredData se disponível (mesma escala dos centroids), senão extrair dos vectors
@@ -704,9 +859,13 @@ export function calculateClusteringMetrics(
       .map(id => deckIdToIdx.get(id))
       .filter((i): i is number => i !== undefined);
 
-    const a = sameClusterIndices.length > 0
-      ? sameClusterIndices.reduce((sum, i) => sum + euclideanDistance(dataVec, dataVectors[i]), 0) / sameClusterIndices.length
-      : 0;
+    const a =
+      sameClusterIndices.length > 0
+        ? sameClusterIndices.reduce(
+            (sum, i) => sum + euclideanDistance(dataVec, dataVectors[i]),
+            0
+          ) / sameClusterIndices.length
+        : 0;
 
     // b(i) = distância média mínima ao cluster vizinho mais próximo
     let minB = Infinity;
@@ -718,7 +877,11 @@ export function calculateClusteringMetrics(
         .filter((i): i is number => i !== undefined);
 
       if (otherIndices.length > 0) {
-        const avgDist = otherIndices.reduce((sum, i) => sum + euclideanDistance(dataVec, dataVectors[i]), 0) / otherIndices.length;
+        const avgDist =
+          otherIndices.reduce(
+            (sum, i) => sum + euclideanDistance(dataVec, dataVectors[i]),
+            0
+          ) / otherIndices.length;
         minB = Math.min(minB, avgDist);
       }
     }
@@ -735,7 +898,8 @@ export function calculateClusteringMetrics(
     validSilhouettes++;
   }
 
-  const silhouetteScore = validSilhouettes > 0 ? totalSilhouette / validSilhouettes : 0;
+  const silhouetteScore =
+    validSilhouettes > 0 ? totalSilhouette / validSilhouettes : 0;
 
   // ─── Calinski-Harabasz Index ────────────────────────────────────────
   const overallCentroid = calculateCentroid(dataVectors);
@@ -767,7 +931,8 @@ export function calculateClusteringMetrics(
 
   if (numClusters > 1 && numPoints > numClusters) {
     if (SSW > 1e-10) {
-      calinskiHarabaszIndex = (SSB / (numClusters - 1)) / (SSW / (numPoints - numClusters));
+      calinskiHarabaszIndex =
+        SSB / (numClusters - 1) / (SSW / (numPoints - numClusters));
     } else {
       calinskiHarabaszIndex = SSB > 1e-10 ? 999999 : 0;
     }
@@ -783,9 +948,14 @@ export function calculateClusteringMetrics(
       .map(id => deckIdToIdx.get(id))
       .filter((idx): idx is number => idx !== undefined);
 
-    const avgI = clusterIIndices.length > 0
-      ? clusterIIndices.reduce((sum, idx) => sum + euclideanDistance(dataVectors[idx], clusters[i].centroid), 0) / clusterIIndices.length
-      : 0;
+    const avgI =
+      clusterIIndices.length > 0
+        ? clusterIIndices.reduce(
+            (sum, idx) =>
+              sum + euclideanDistance(dataVectors[idx], clusters[i].centroid),
+            0
+          ) / clusterIIndices.length
+        : 0;
 
     for (let j = 0; j < clusters.length; j++) {
       if (i === j) continue;
@@ -794,27 +964,44 @@ export function calculateClusteringMetrics(
         .map(id => deckIdToIdx.get(id))
         .filter((idx): idx is number => idx !== undefined);
 
-      if (clusterIIndices.length === 0 || clusterJIndices.length === 0) continue;
+      if (clusterIIndices.length === 0 || clusterJIndices.length === 0)
+        continue;
 
-      const avgJ = clusterJIndices.reduce((sum, idx) => sum + euclideanDistance(dataVectors[idx], clusters[j].centroid), 0) / clusterJIndices.length;
+      const avgJ =
+        clusterJIndices.reduce(
+          (sum, idx) =>
+            sum + euclideanDistance(dataVectors[idx], clusters[j].centroid),
+          0
+        ) / clusterJIndices.length;
 
-      const centroidDistance = euclideanDistance(clusters[i].centroid, clusters[j].centroid);
-      const ratio = centroidDistance > 1e-10 ? (avgI + avgJ) / centroidDistance : 0;
+      const centroidDistance = euclideanDistance(
+        clusters[i].centroid,
+        clusters[j].centroid
+      );
+      const ratio =
+        centroidDistance > 1e-10 ? (avgI + avgJ) / centroidDistance : 0;
 
       maxRatio = Math.max(maxRatio, ratio);
     }
     totalDB += maxRatio;
   }
 
-  const daviesBouldinIndex = clusters.length > 1 ? totalDB / clusters.length : 0;
+  const daviesBouldinIndex =
+    clusters.length > 1 ? totalDB / clusters.length : 0;
 
   // ─── Inertia (Within-cluster sum of squares) ────────────────────────
   const inertia = SSW;
 
   return {
-    silhouetteScore: isFinite(silhouetteScore) ? Math.max(-1, Math.min(1, silhouetteScore)) : 0,
-    calinskiHarabaszIndex: isFinite(calinskiHarabaszIndex) ? Math.max(0, calinskiHarabaszIndex) : 0,
-    daviesBouldinIndex: isFinite(daviesBouldinIndex) ? Math.max(0, daviesBouldinIndex) : 0,
+    silhouetteScore: isFinite(silhouetteScore)
+      ? Math.max(-1, Math.min(1, silhouetteScore))
+      : 0,
+    calinskiHarabaszIndex: isFinite(calinskiHarabaszIndex)
+      ? Math.max(0, calinskiHarabaszIndex)
+      : 0,
+    daviesBouldinIndex: isFinite(daviesBouldinIndex)
+      ? Math.max(0, daviesBouldinIndex)
+      : 0,
     inertia: isFinite(inertia) ? inertia : 0,
     converged: true,
   };
@@ -823,7 +1010,9 @@ export function calculateClusteringMetrics(
 /**
  * Agrupa clusters por nome de arquétipo
  */
-export function groupClustersByArchetype(clusters: ClusterResult[]): Map<string, ClusterResult[]> {
+export function groupClustersByArchetype(
+  clusters: ClusterResult[]
+): Map<string, ClusterResult[]> {
   const grouped = new Map<string, ClusterResult[]>();
 
   clusters.forEach(cluster => {
@@ -857,8 +1046,13 @@ export function getClusterStatsByArchetype(clusters: ClusterResult[]): Array<{
   }> = [];
 
   grouped.forEach((clusterList, archetype) => {
-    const totalDecks = clusterList.reduce((sum, c) => sum + c.deckIds.length, 0);
-    const avgConfidence = clusterList.reduce((sum, c) => sum + c.confidence, 0) / clusterList.length;
+    const totalDecks = clusterList.reduce(
+      (sum, c) => sum + c.deckIds.length,
+      0
+    );
+    const avgConfidence =
+      clusterList.reduce((sum, c) => sum + c.confidence, 0) /
+      clusterList.length;
     const colors = new Set<string>();
 
     clusterList.forEach(c => {
@@ -880,14 +1074,19 @@ export function getClusterStatsByArchetype(clusters: ClusterResult[]): Array<{
 /**
  * Encontra o K ótimo usando o método do cotovelo (elbow method)
  */
-export async function findOptimalK(deckVectors: DeckVector[], maxK: number = 15): Promise<{ optimalK: number; inertias: number[]; silhouettes: number[] }> {
+export async function findOptimalK(
+  deckVectors: DeckVector[],
+  maxK: number = 15
+): Promise<{ optimalK: number; inertias: number[]; silhouettes: number[] }> {
   const inertias: number[] = [];
   const silhouettes: number[] = [];
 
   const minK = Math.max(2, Math.min(5, Math.floor(deckVectors.length / 10)));
   const testK = Math.min(maxK, deckVectors.length - 1);
 
-  console.log(`[Clustering] Testing K values from ${minK} to ${testK} for elbow method...`);
+  console.log(
+    `[Clustering] Testing K values from ${minK} to ${testK} for elbow method...`
+  );
 
   for (let k = minK; k <= testK; k++) {
     const normalized = normalizeVectors(deckVectors);
@@ -896,7 +1095,9 @@ export async function findOptimalK(deckVectors: DeckVector[], maxK: number = 15)
     inertias.push(stats.inertia);
     silhouettes.push(stats.silhouetteScore);
 
-    console.log(`[Clustering] K=${k}: Inertia=${stats.inertia.toFixed(4)}, Silhouette=${stats.silhouetteScore.toFixed(3)}`);
+    console.log(
+      `[Clustering] K=${k}: Inertia=${stats.inertia.toFixed(4)}, Silhouette=${stats.silhouetteScore.toFixed(3)}`
+    );
   }
 
   let optimalK = minK;

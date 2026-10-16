@@ -1,4 +1,21 @@
-import { bigint, boolean, bigserial, customType, index, integer, jsonb, numeric, pgEnum, pgTable, serial, text, timestamp, varchar, real, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  bigserial,
+  customType,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  varchar,
+  real,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 /**
  * Custom pgvector type for Drizzle.
@@ -71,7 +88,7 @@ export const cards = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     nameIdx: index("name_idx").on(table.name),
     typeIdx: index("type_idx").on(table.type),
     colorsIdx: index("colors_idx").on(table.colors),
@@ -86,7 +103,9 @@ export type InsertCard = typeof cards.$inferInsert;
 
 export const decks = pgTable("decks", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
   name: varchar("name", { length: 255 }).notNull(),
   format: varchar("format", { length: 50 }).notNull(),
   archetype: varchar("archetype", { length: 100 }),
@@ -103,11 +122,15 @@ export const deckCards = pgTable(
   "deck_cards",
   {
     id: serial("id").primaryKey(),
-    deckId: integer("deck_id").notNull().references(() => decks.id),
-    cardId: integer("card_id").notNull().references(() => cards.id),
+    deckId: integer("deck_id")
+      .notNull()
+      .references(() => decks.id),
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => cards.id),
     quantity: integer("quantity").notNull().default(1),
   },
-  (table) => ({
+  table => ({
     deckCardUnique: { unique: true, columns: [table.deckId, table.cardId] },
   })
 );
@@ -119,13 +142,17 @@ export const cardSynergies = pgTable(
   "card_synergies",
   {
     id: serial("id").primaryKey(),
-    card1Id: integer("card1_id").notNull().references(() => cards.id),
-    card2Id: integer("card2_id").notNull().references(() => cards.id),
+    card1Id: integer("card1_id")
+      .notNull()
+      .references(() => cards.id),
+    card2Id: integer("card2_id")
+      .notNull()
+      .references(() => cards.id),
     weight: integer("weight").notNull().default(0),
     coOccurrenceRate: integer("co_occurrence_rate").notNull().default(0),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     synergyUnique: { unique: true, columns: [table.card1Id, table.card2Id] },
   })
 );
@@ -137,7 +164,9 @@ export const metaStats = pgTable(
   "meta_stats",
   {
     id: serial("id").primaryKey(),
-    cardId: integer("card_id").notNull().references(() => cards.id),
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => cards.id),
     format: varchar("format", { length: 50 }).notNull(),
     archetype: varchar("archetype", { length: 100 }),
     playRate: integer("play_rate").notNull().default(0),
@@ -145,8 +174,11 @@ export const metaStats = pgTable(
     frequency: integer("frequency").notNull().default(0),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (table) => ({
-    metaStatsUnique: { unique: true, columns: [table.cardId, table.format, table.archetype] },
+  table => ({
+    metaStatsUnique: {
+      unique: true,
+      columns: [table.cardId, table.format, table.archetype],
+    },
   })
 );
 
@@ -155,7 +187,10 @@ export type InsertMetaStat = typeof metaStats.$inferInsert;
 
 export const embeddingsCache = pgTable("embeddings_cache", {
   id: serial("id").primaryKey(),
-  cardId: integer("card_id").notNull().unique().references(() => cards.id),
+  cardId: integer("card_id")
+    .notNull()
+    .unique()
+    .references(() => cards.id),
   vectorJson: text("vector_json").notNull(),
   modelVersion: varchar("model_version", { length: 50 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -197,26 +232,32 @@ export const competitiveDeckCards = pgTable(
   "competitive_deck_cards",
   {
     id: serial("id").primaryKey(),
-    deckId: integer("deck_id").notNull().references(() => competitiveDecks.id),
+    deckId: integer("deck_id")
+      .notNull()
+      .references(() => competitiveDecks.id),
     cardName: varchar("card_name", { length: 255 }).notNull(),
     quantity: integer("quantity").notNull().default(1),
     section: varchar("section", { length: 20 }).default("mainboard"),
   },
-  (table) => ({
-    deckCardUnique: uniqueIndex("competitive_deck_cards_deck_card_section_unique").on(
-      table.deckId,
-      table.cardName,
-      table.section,
-    ),
+  table => ({
+    deckCardUnique: uniqueIndex(
+      "competitive_deck_cards_deck_card_section_unique"
+    ).on(table.deckId, table.cardName, table.section),
     deckIdIdx: index("competitive_deck_cards_deck_id_idx").on(table.deckId),
   })
 );
 
 export type CompetitiveDeckCard = typeof competitiveDeckCards.$inferSelect;
-export type InsertCompetitiveDeckCard = typeof competitiveDeckCards.$inferInsert;
+export type InsertCompetitiveDeckCard =
+  typeof competitiveDeckCards.$inferInsert;
 
 // Log de jobs de treinamento de embeddings
-export const statusEnum = pgEnum("job_status", ["pending", "running", "completed", "failed"]);
+export const statusEnum = pgEnum("job_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
 
 export const trainingJobs = pgTable("training_jobs", {
   id: serial("id").primaryKey(),
@@ -248,7 +289,9 @@ export const trainingRuns = pgTable("training_runs", {
   candidateMetric: real("candidate_metric"),
   artifactPath: text("artifact_path"),
   gateReport: jsonb("gate_report").notNull().default({}),
-  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
@@ -281,13 +324,15 @@ export type ForgeMatch = typeof forgeMatches.$inferSelect;
 export const deckShares = pgTable("deck_shares", {
   id: serial("id").primaryKey(),
   shareId: varchar("share_id", { length: 255 }).notNull().unique(),
-  deckId: integer("deck_id").notNull().references(() => decks.id),
+  deckId: integer("deck_id")
+    .notNull()
+    .references(() => decks.id),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
   decklist: text("decklist").notNull(),
   format: varchar("format", { length: 50 }).notNull(),
-  colors: text("colors"), 
+  colors: text("colors"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at"),
 });
@@ -315,11 +360,15 @@ export const cardLearning = pgTable(
     avgScore: real("avg_score").notNull().default(0.0),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     weightIdx: index("learning_weight_idx").on(table.weight),
     weightAggroIdx: index("learning_weight_aggro_idx").on(table.weightAggro),
-    weightControlIdx: index("learning_weight_control_idx").on(table.weightControl),
-    weightMidrangeIdx: index("learning_weight_midrange_idx").on(table.weightMidrange),
+    weightControlIdx: index("learning_weight_control_idx").on(
+      table.weightControl
+    ),
+    weightMidrangeIdx: index("learning_weight_midrange_idx").on(
+      table.weightMidrange
+    ),
     weightComboIdx: index("learning_weight_combo_idx").on(table.weightCombo),
     weightRampIdx: index("learning_weight_ramp_idx").on(table.weightRamp),
   })
@@ -351,7 +400,7 @@ export const rlDecisions = pgTable(
     processed: boolean("processed").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     processedIdx: index("rl_decisions_processed_idx").on(table.processed),
     cardNameIdx: index("rl_decisions_card_idx").on(table.cardName),
   })
@@ -370,13 +419,18 @@ export const cardOracleEmbeddings = pgTable("card_oracle_embeddings", {
     .primaryKey()
     .references(() => cards.id, { onDelete: "cascade" }),
   embedding: vector(384)("embedding").notNull(),
-  modelVersion: varchar("model_version", { length: 64 }).notNull().default("all-MiniLM-L6-v2"),
+  modelVersion: varchar("model_version", { length: 64 })
+    .notNull()
+    .default("all-MiniLM-L6-v2"),
   textHash: varchar("text_hash", { length: 64 }).notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 export type CardOracleEmbedding = typeof cardOracleEmbeddings.$inferSelect;
-export type InsertCardOracleEmbedding = typeof cardOracleEmbeddings.$inferInsert;
+export type InsertCardOracleEmbedding =
+  typeof cardOracleEmbeddings.$inferInsert;
 
 /** Pillar 4 — Semantic cache for LLM responses. L0 (exact hash) + L1 (vector similarity). */
 export const semanticCache = pgTable("semantic_cache", {
@@ -388,10 +442,16 @@ export const semanticCache = pgTable("semantic_cache", {
   modelUsed: varchar("model_used", { length: 64 }).notNull(),
   inputTokens: integer("input_tokens").notNull().default(0),
   outputTokens: integer("output_tokens").notNull().default(0),
-  costUsd: numeric("cost_usd", { precision: 10, scale: 6 }).notNull().default("0"),
+  costUsd: numeric("cost_usd", { precision: 10, scale: 6 })
+    .notNull()
+    .default("0"),
   hitCount: integer("hit_count").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  lastHitAt: timestamp("last_hit_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  lastHitAt: timestamp("last_hit_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
 });
 
@@ -401,13 +461,19 @@ export type InsertSemanticCacheEntry = typeof semanticCache.$inferInsert;
 /** Pillar 4 — Hourly bucket ledger for rate limiting + budget breaker. */
 export const apiBudgetLedger = pgTable("api_budget_ledger", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  windowStart: timestamp("window_start", { withTimezone: true }).notNull().unique(),
+  windowStart: timestamp("window_start", { withTimezone: true })
+    .notNull()
+    .unique(),
   callCount: integer("call_count").notNull().default(0),
   inputTokens: integer("input_tokens").notNull().default(0),
   outputTokens: integer("output_tokens").notNull().default(0),
-  costUsd: numeric("cost_usd", { precision: 10, scale: 6 }).notNull().default("0"),
+  costUsd: numeric("cost_usd", { precision: 10, scale: 6 })
+    .notNull()
+    .default("0"),
   tripCount: integer("trip_count").notNull().default(0),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 export type ApiBudgetLedger = typeof apiBudgetLedger.$inferSelect;
@@ -421,23 +487,34 @@ export const cardContextualWeight = pgTable(
     cardId: integer("card_id")
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
-    commanderId: integer("commander_id").references(() => cards.id, { onDelete: "cascade" }),
+    commanderId: integer("commander_id").references(() => cards.id, {
+      onDelete: "cascade",
+    }),
     archetype: varchar("archetype", { length: 32 }).notNull(),
     weightVec: vector(32)("weight_vec").notNull(),
     scalarSynergy: real("scalar_synergy").notNull().default(0),
     winCount: integer("win_count").notNull().default(0),
     lossCount: integer("loss_count").notNull().default(0),
     matchCount: integer("match_count").notNull().default(0),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (table) => ({
-    scalarIdx: index("idx_card_ctx_weight_scalar").on(table.archetype, table.scalarSynergy),
-    commanderIdx: index("idx_card_ctx_weight_commander").on(table.commanderId, table.archetype),
+  table => ({
+    scalarIdx: index("idx_card_ctx_weight_scalar").on(
+      table.archetype,
+      table.scalarSynergy
+    ),
+    commanderIdx: index("idx_card_ctx_weight_commander").on(
+      table.commanderId,
+      table.archetype
+    ),
   })
 );
 
 export type CardContextualWeight = typeof cardContextualWeight.$inferSelect;
-export type InsertCardContextualWeight = typeof cardContextualWeight.$inferInsert;
+export type InsertCardContextualWeight =
+  typeof cardContextualWeight.$inferInsert;
 
 /** Pillar 7 — Toxic actions registry: deck/card combos that trigger Forge loops. */
 export const toxicActions = pgTable("toxic_actions", {
@@ -446,8 +523,12 @@ export const toxicActions = pgTable("toxic_actions", {
   deckSnap: jsonb("deck_snap").notNull(),
   triggerReason: varchar("trigger_reason", { length: 64 }).notNull(),
   triggerCount: integer("trigger_count").notNull().default(1),
-  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
-  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 export type ToxicAction = typeof toxicActions.$inferSelect;
@@ -467,12 +548,20 @@ export const mctsNodes = pgTable(
     priorWeight: real("prior_weight").notNull().default(1.0),
     depth: integer("depth").notNull().default(0),
     expanded: boolean("expanded").notNull().default(false),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (table) => ({
+  table => ({
     contextIdx: index("idx_mcts_context").on(table.deckContext),
-    ucbIdx: index("idx_mcts_ucb").on(table.deckContext, table.meanValue, table.visits),
+    ucbIdx: index("idx_mcts_ucb").on(
+      table.deckContext,
+      table.meanValue,
+      table.visits
+    ),
   })
 );
 
@@ -490,10 +579,15 @@ export const leagueState = pgTable(
     archetypeBias: varchar("archetype_bias", { length: 32 }),
     hyperparams: jsonb("hyperparams"),
     episodeRewardMean: real("episode_reward_mean"),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (table) => ({
-    agentIdx: index("idx_league_state_agent").on(table.agentId, table.generation),
+  table => ({
+    agentIdx: index("idx_league_state_agent").on(
+      table.agentId,
+      table.generation
+    ),
   })
 );
 

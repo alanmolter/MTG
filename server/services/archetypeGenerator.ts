@@ -450,16 +450,16 @@ export function scoreCommanderForArchetype(
 ): number {
   const tags = classifyCard(card);
   const type = (card.type || "").toLowerCase();
-  
+
   // Começamos com o score base da carta para o arquétipo
-  let score = scoreCardForArchetype(card, template); 
+  let score = scoreCardForArchetype(card, template);
 
   // FATOR DE APRENDIZADO (Brain): Se a IA já viu essa carta ganhar, o peso aumenta
   if (options.learnedWeights && options.learnedWeights[card.name]) {
     const learnedBoost = options.learnedWeights[card.name];
     // Dampened boost: log-scaled to prevent "winner takes all" behavior
     // normal scores are 10-50, we want weights to help but not dominate.
-    score += Math.sqrt(Math.max(0, learnedBoost)) * 2; 
+    score += Math.sqrt(Math.max(0, learnedBoost)) * 2;
   }
 
   // Bônus massivo por prioridades mecânicas do arquétipo (+10 por cada tag coincidente)
@@ -527,7 +527,7 @@ export function generateDeckByArchetype(
       creatures: Math.round(template.creatures * 1.5),
       spells: Math.round(template.spells * 1.5),
       // No Commander, Ramp e Draw são mandatórios para qualquer arquétipo
-      priorities: Array.from(new Set([...template.priorities, "ramp", "draw"]))
+      priorities: Array.from(new Set([...template.priorities, "ramp", "draw"])),
     };
   }
 
@@ -592,10 +592,10 @@ export function generateDeckByArchetype(
   // Separar terrenos, criaturas e spells
   const allLands = manaPool;
   const allCreatures = filteredPool.filter(c =>
-      (c.type || "").toLowerCase().includes("creature")
+    (c.type || "").toLowerCase().includes("creature")
   );
-  const allSpells = filteredPool.filter(c =>
-      !(c.type || "").toLowerCase().includes("creature")
+  const allSpells = filteredPool.filter(
+    c => !(c.type || "").toLowerCase().includes("creature")
   );
 
   // Ordenar por score
@@ -616,15 +616,23 @@ export function generateDeckByArchetype(
 
   // ── 0. Commander (for Commander format) ──────────────────────────────────────
   if (options.format === "commander") {
-    const legendaryCreatures = scoredCreatures.filter(c => 
-      (c.type || "").toLowerCase().includes("legendary") && 
-      (c.type || "").toLowerCase().includes("creature")
+    const legendaryCreatures = scoredCreatures.filter(
+      c =>
+        (c.type || "").toLowerCase().includes("legendary") &&
+        (c.type || "").toLowerCase().includes("creature")
     );
-    
+
     if (legendaryCreatures.length > 0) {
-      const bestCommanders = [...legendaryCreatures].sort((a, b) => 
-        scoreCommanderForArchetype(b, template, { tribes: options.tribes, learnedWeights: options.learnedWeights }) - 
-        scoreCommanderForArchetype(a, template, { tribes: options.tribes, learnedWeights: options.learnedWeights })
+      const bestCommanders = [...legendaryCreatures].sort(
+        (a, b) =>
+          scoreCommanderForArchetype(b, template, {
+            tribes: options.tribes,
+            learnedWeights: options.learnedWeights,
+          }) -
+          scoreCommanderForArchetype(a, template, {
+            tribes: options.tribes,
+            learnedWeights: options.learnedWeights,
+          })
       );
 
       // EXPLORAÇÃO: Pegamos aleatoriamente entre os top candidatos (weighted selection simplificada)
@@ -634,12 +642,14 @@ export function generateDeckByArchetype(
 
       deck.push({ ...commander, quantity: 1, role: "commander" });
       totalCards++;
-      
+
       // Remover do pool para não duplicar se houver outras vagas
       const idx = scoredCreatures.findIndex(c => c.id === commander.id);
       if (idx !== -1) scoredCreatures.splice(idx, 1);
     } else {
-      warnings.push("Nenhuma criatura lendária encontrada para ser o Comandante. O deck pode ser inválido.");
+      warnings.push(
+        "Nenhuma criatura lendária encontrada para ser o Comandante. O deck pode ser inválido."
+      );
     }
   }
 
@@ -800,7 +810,9 @@ function generateBasicLands(
 /**
  * Exporta deck no formato Arena (1 CardName por linha).
  */
-export function exportToArena(cards: (CardData & { quantity: number; role?: string })[]) {
+export function exportToArena(
+  cards: (CardData & { quantity: number; role?: string })[]
+) {
   const commander = cards.find(c => c.role === "commander");
   const deck = cards.filter(c => c.role !== "commander");
 
@@ -826,15 +838,15 @@ export function exportToText(
   const creatures = cards.filter(
     c =>
       (c.role === "creature" ||
-      ((c.type || "").toLowerCase().includes("creature") &&
-        !(c.type || "").toLowerCase().includes("land"))) &&
+        ((c.type || "").toLowerCase().includes("creature") &&
+          !(c.type || "").toLowerCase().includes("land"))) &&
       c.role !== "commander"
   );
   const spells = cards.filter(
     c =>
       (c.role === "spell" ||
-      (!(c.type || "").toLowerCase().includes("creature") &&
-        !(c.type || "").toLowerCase().includes("land"))) &&
+        (!(c.type || "").toLowerCase().includes("creature") &&
+          !(c.type || "").toLowerCase().includes("land"))) &&
       c.role !== "commander"
   );
 

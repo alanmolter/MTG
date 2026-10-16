@@ -30,12 +30,15 @@ import { getCardLearningQueue } from "../services/cardLearningQueue";
 // ── Argumentos CLI ────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const getArg = (name: string, def: string) =>
-  args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1] ?? def;
+  args.find(a => a.startsWith(`--${name}=`))?.split("=")[1] ?? def;
 
-const TOP_N      = parseInt(getArg("top", "80"));
-const ARCHETYPES = getArg("archetypes", "aggro,control,midrange,combo,ramp").split(",");
+const TOP_N = parseInt(getArg("top", "80"));
+const ARCHETYPES = getArg(
+  "archetypes",
+  "aggro,control,midrange,combo,ramp"
+).split(",");
 const BATCH_SIZE = 15; // cartas por chamada LLM (barato e suficiente)
-const MODEL      = "claude-haiku-4-5-20251001"; // ~50x mais barato que Opus
+const MODEL = "claude-haiku-4-5-20251001"; // ~50x mais barato que Opus
 
 // ── Tipos ─────────────────────────────────────────────────────────
 interface CardWeight {
@@ -52,8 +55,8 @@ interface CardWeight {
 
 interface LLMCardScore {
   name: string;
-  score: number;   // 0-100: quão boa é a carta no contexto do arquétipo
-  reason: string;  // justificativa em 1 frase
+  score: number; // 0-100: quão boa é a carta no contexto do arquétipo
+  reason: string; // justificativa em 1 frase
 }
 
 interface LLMBatchResult {
@@ -92,21 +95,16 @@ async function callHaiku(prompt: string): Promise<string> {
 }
 
 // ── Prompt compacto (barato) para avaliar batch de cartas ─────────
-function buildBatchPrompt(
-  cards: CardWeight[],
-  archetype: string
-): string {
+function buildBatchPrompt(cards: CardWeight[], archetype: string): string {
   // Anomaly-1B fix: include winrate in the prompt so the LLM can *see*
   // reality. Cards with many games and a low winrate should NOT be
   // inflated further, regardless of how "staple" they look on paper.
   const cardList = cards
-    .map((c) => {
+    .map(c => {
       const total = c.winCount + c.lossCount;
-      const wr    = total > 0 ? ((c.winCount / total) * 100).toFixed(0) : "n/a";
+      const wr = total > 0 ? ((c.winCount / total) * 100).toFixed(0) : "n/a";
       const gamesTag =
-        total === 0
-          ? "sem partidas reais"
-          : `${total} partidas · ${wr}% WR`;
+        total === 0 ? "sem partidas reais" : `${total} partidas · ${wr}% WR`;
       return `${c.cardName} (peso: ${c.weight.toFixed(1)} · ${gamesTag})`;
     })
     .join("\n");
@@ -140,7 +138,10 @@ RESPONDA APENAS em JSON válido:
 // ── Parsear resposta do LLM ───────────────────────────────────────
 function parseLLMResponse(raw: string): LLMCardScore[] {
   try {
-    const clean = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const clean = raw
+      .replace(/```json\s*/g, "")
+      .replace(/```\s*/g, "")
+      .trim();
     const result = JSON.parse(clean) as LLMBatchResult;
     return result.cards ?? [];
   } catch {
@@ -159,7 +160,7 @@ function parseLLMResponse(raw: string): LLMCardScore[] {
 // Isso impede o loop "LLM gosta de staple X → peso sobe → RL escolhe X
 // mais → X perde mais → LLM ainda gosta de X → peso sobe de novo",
 // que foi exatamente o que aconteceu com Aatchik (1% WR, peso 45).
-const VETO_WINRATE_PCT = 30;   // abaixo disso, LLM não pode subir peso
+const VETO_WINRATE_PCT = 30; // abaixo disso, LLM não pode subir peso
 const MIN_GAMES_FOR_VETO = 10; // menos que isso = "sem dados", LLM livre
 const FORCE_DOWN_WINRATE_PCT = 25; // abaixo disso com muitas partidas → delta negativo forçado
 
@@ -167,14 +168,14 @@ function scoreToDelta(
   llmScore: number,
   currentWeight: number,
   winCount: number,
-  lossCount: number,
+  lossCount: number
 ): number {
   const total = winCount + lossCount;
   const winrate = total > 0 ? (winCount / total) * 100 : -1; // -1 = sem dados
 
-  const normalized = (llmScore - 50) / 50;           // -1.0 a +1.0
-  const maxDelta   = normalized > 0 ? 0.15 : 0.10;
-  let   delta      = normalized * maxDelta;
+  const normalized = (llmScore - 50) / 50; // -1.0 a +1.0
+  const maxDelta = normalized > 0 ? 0.15 : 0.1;
+  let delta = normalized * maxDelta;
 
   // Reality guard #1: veto de delta POSITIVO quando a carta perde muito.
   if (
@@ -196,7 +197,8 @@ function scoreToDelta(
   ) {
     // Force a small negative delta proporcional ao quanto ela está abaixo
     // do threshold. Exemplo: winrate=10% → delta=-0.05; winrate=24% → -0.004.
-    const severity = (FORCE_DOWN_WINRATE_PCT - winrate) / FORCE_DOWN_WINRATE_PCT;
+    const severity =
+      (FORCE_DOWN_WINRATE_PCT - winrate) / FORCE_DOWN_WINRATE_PCT;
     const forcedDown = -0.05 * severity;
     // Mantém o mais negativo entre o que o LLM sugeriu e o forçado.
     delta = Math.min(delta, forcedDown);
@@ -241,7 +243,12 @@ export async function runLLMWeeklyCalibration(): Promise<{
 
   if (topCards.length === 0) {
     console.log("  Nenhuma carta no card_learning — rode o Self-Play primeiro");
-    return { cardsEvaluated: 0, cardsAdjusted: 0, totalCalls: 0, estimatedCostUsd: 0 };
+    return {
+      cardsEvaluated: 0,
+      cardsAdjusted: 0,
+      totalCalls: 0,
+      estimatedCostUsd: 0,
+    };
   }
 
   console.log(`  Cartas carregadas: ${topCards.length}`);
@@ -253,10 +260,12 @@ export async function runLLMWeeklyCalibration(): Promise<{
 
   // ── 2. Para cada arquétipo, avaliar em batches ────────────────
   for (const archetype of ARCHETYPES) {
-    console.log(`\n  [${archetype.toUpperCase()}] Avaliando ${topCards.length} cartas...`);
+    console.log(
+      `\n  [${archetype.toUpperCase()}] Avaliando ${topCards.length} cartas...`
+    );
 
     for (let i = 0; i < topCards.length; i += BATCH_SIZE) {
-      const batch: CardWeight[] = topCards.slice(i, i + BATCH_SIZE).map((c) => ({
+      const batch: CardWeight[] = topCards.slice(i, i + BATCH_SIZE).map(c => ({
         cardName: c.cardName,
         weight: c.weight as number,
         // Anomaly-1B fix: transportamos winrate real para o prompt + veto.
@@ -277,7 +286,7 @@ export async function runLLMWeeklyCalibration(): Promise<{
         // ── 3. Calcular deltas e enfileirar ──────────────────
         for (const scored of scores) {
           const current = batch.find(
-            (c) => c.cardName.toLowerCase() === scored.name.toLowerCase()
+            c => c.cardName.toLowerCase() === scored.name.toLowerCase()
           );
           if (!current) continue;
 
@@ -286,7 +295,7 @@ export async function runLLMWeeklyCalibration(): Promise<{
             scored.score,
             current.weight,
             current.winCount,
-            current.lossCount,
+            current.lossCount
           );
 
           // Só ajustar se o delta for significativo (>0.02)
@@ -300,16 +309,19 @@ export async function runLLMWeeklyCalibration(): Promise<{
 
             const dir = delta > 0 ? "↑" : "↓";
             process.stdout.write(
-              `\r  ${dir} ${current.cardName.slice(0, 28).padEnd(28)} LLM:${scored.score} Δ:${delta.toFixed(3)}`.padEnd(70)
+              `\r  ${dir} ${current.cardName.slice(0, 28).padEnd(28)} LLM:${scored.score} Δ:${delta.toFixed(3)}`.padEnd(
+                70
+              )
             );
           }
         }
 
         // Delay entre chamadas para respeitar rate limit
-        await new Promise((r) => setTimeout(r, 300));
-
+        await new Promise(r => setTimeout(r, 300));
       } catch (err: any) {
-        console.warn(`\n  [AVISO] Batch ${i / BATCH_SIZE + 1} falhou: ${err?.message}`);
+        console.warn(
+          `\n  [AVISO] Batch ${i / BATCH_SIZE + 1} falhou: ${err?.message}`
+        );
       }
     }
   }
@@ -322,8 +334,8 @@ export async function runLLMWeeklyCalibration(): Promise<{
 
   // Custo estimado: $0.80/MTok input + $4.00/MTok output (Haiku)
   const estimatedCostUsd =
-    (totalInputTokens / 1_000_000) * 0.80 +
-    (totalCalls * 300 / 1_000_000) * 4.00; // ~300 tokens output por call
+    (totalInputTokens / 1_000_000) * 0.8 +
+    ((totalCalls * 300) / 1_000_000) * 4.0; // ~300 tokens output por call
 
   console.log("\n════════════════════════════════════════════════════════");
   console.log("  CALIBRAÇÃO CONCLUÍDA");
@@ -345,20 +357,22 @@ export async function runLLMWeeklyCalibration(): Promise<{
 
 // ── Execução standalone ───────────────────────────────────────────
 runLLMWeeklyCalibration()
-  .catch((e) => {
+  .catch(e => {
     console.error("[LLMCalibrator] Erro fatal:", e?.message);
     // Surface the underlying Postgres error (migration missing column,
     // wrong DB, auth failure, etc). Drizzle wraps the real cause, which
     // a plain `.message` read hides.
     if (e?.cause) {
       console.error("[LLMCalibrator] Causa raiz:", e.cause?.message ?? e.cause);
-      if (e.cause?.code)   console.error("  code  :", e.cause.code);
+      if (e.cause?.code) console.error("  code  :", e.cause.code);
       if (e.cause?.detail) console.error("  detail:", e.cause.detail);
-      if (e.cause?.hint)   console.error("  hint  :", e.cause.hint);
+      if (e.cause?.hint) console.error("  hint  :", e.cause.hint);
     }
     if (e?.stack) console.error("\n[stack]\n" + e.stack);
     process.exit(1);
   })
   .finally(() => {
-    closeDb().then(() => process.exit(0)).catch(() => process.exit(1));
+    closeDb()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(1));
   });

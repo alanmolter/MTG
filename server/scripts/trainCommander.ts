@@ -15,32 +15,47 @@
  * Não há colunas legalities, color_identity ou type_line no schema.
  */
 
-import { parseArgs, getFloat, getInt, getBool, getString } from './utils/parseArgs';
-import { describeTrainingPool, isArenaOnlyTraining } from './utils/poolFilter';
-import { getDb, closeDb } from '../db';
-import { cardLearning, cards as cardsTable } from '../../drizzle/schema';
-import { getCardLearningQueue } from '../services/cardLearningQueue';
-import { ModelEvaluator } from '../services/modelEvaluation';
-import { evaluateDeckQuick } from '../services/deckEvaluationBrain';
-import { sql, inArray, asc } from 'drizzle-orm';
+import {
+  parseArgs,
+  getFloat,
+  getInt,
+  getBool,
+  getString,
+} from "./utils/parseArgs";
+import { describeTrainingPool, isArenaOnlyTraining } from "./utils/poolFilter";
+import { getDb, closeDb } from "../db";
+import { cardLearning, cards as cardsTable } from "../../drizzle/schema";
+import { getCardLearningQueue } from "../services/cardLearningQueue";
+import { ModelEvaluator } from "../services/modelEvaluation";
+import { evaluateDeckQuick } from "../services/deckEvaluationBrain";
+import { sql, inArray, asc } from "drizzle-orm";
 import {
   printForgeSelfPlayStatus,
   printForgeTrainingComplete,
-} from '../services/forgeStatus';
+} from "../services/forgeStatus";
 
 // ── Parse de argumentos CLI ──────────────────────────────────────
-const cliArgs        = parseArgs(process.argv.slice(2));
-const FORBIDDEN_COLOR: string | null = getString(cliArgs, 'forbidden-color', '') || null;
-const EXPLORATION_MODE: boolean      = getBool(cliArgs, 'exploration-mode', false);
-const SOURCE                         = getString(cliArgs, 'source', 'commander_train') as
-  'commander_train' | 'forge_reality' | 'self_play' | 'rl_policy' | 'user_generation';
-const MUTATION_RATE: number          = getFloat(cliArgs, 'mutation-rate', 0.15);
-const ITERATIONS: number             = getInt(cliArgs, 'iterations', 300);
-const MATCHES_PER_IT: number         = 5;
+const cliArgs = parseArgs(process.argv.slice(2));
+const FORBIDDEN_COLOR: string | null =
+  getString(cliArgs, "forbidden-color", "") || null;
+const EXPLORATION_MODE: boolean = getBool(cliArgs, "exploration-mode", false);
+const SOURCE = getString(cliArgs, "source", "commander_train") as
+  | "commander_train"
+  | "forge_reality"
+  | "self_play"
+  | "rl_policy"
+  | "user_generation";
+const MUTATION_RATE: number = getFloat(cliArgs, "mutation-rate", 0.15);
+const ITERATIONS: number = getInt(cliArgs, "iterations", 300);
+const MATCHES_PER_IT: number = 5;
 // ModelEvaluator is a heuristic evaluator. It can explore deck candidates but
 // it is not a Forge outcome and therefore cannot be allowed to change weights
 // unless an operator opts in for an experiment.
-const ALLOW_HEURISTIC_FEEDBACK        = getBool(cliArgs, 'allow-heuristic-feedback', false);
+const ALLOW_HEURISTIC_FEEDBACK = getBool(
+  cliArgs,
+  "allow-heuristic-feedback",
+  false
+);
 
 // ── Tipo local alinhado com o schema real do banco ───────────────
 // O banco usa: id, name, type (string), colors (string), cmc (int)
@@ -48,7 +63,7 @@ type CardRow = {
   id: number;
   name: string;
   type: string | null;
-  colors: string | null;  // ex: "WU", "R", "BG", "" (incolor)
+  colors: string | null; // ex: "WU", "R", "BG", "" (incolor)
   cmc: number | null;
   text: string | null;
   rarity: string | null;
@@ -65,7 +80,7 @@ function isAllowedColor(colors: string): boolean {
 }
 
 function isSubsetColors(cardColors: string, commanderColors: string): boolean {
-  if (!cardColors || cardColors === '') return true; // incolor é sempre legal
+  if (!cardColors || cardColors === "") return true; // incolor é sempre legal
   for (const color of cardColors) {
     if (!commanderColors.includes(color)) return false;
   }
@@ -77,7 +92,7 @@ function isSubsetColors(cardColors: string, commanderColors: string): boolean {
 // e filtramos por tipo para simular o pool Commander
 async function loadCommanderPool(): Promise<CardRow[]> {
   const db = await getDb();
-  if (!db) throw new Error('[Commander] Banco de dados indisponível');
+  if (!db) throw new Error("[Commander] Banco de dados indisponível");
 
   // Filtramos por cmc <= 8 para incluir cartas Commander típicas
   // e excluímos a cor proibida se especificada.
@@ -92,28 +107,30 @@ async function loadCommanderPool(): Promise<CardRow[]> {
 
   if (FORBIDDEN_COLOR) {
     // Excluir cartas que contenham a cor proibida
-    pool = await db.execute(sql`
+    pool = (await db.execute(sql`
       SELECT id, name, type, colors, cmc, text, rarity
       FROM cards
-      WHERE (colors IS NULL OR colors NOT LIKE ${'%' + FORBIDDEN_COLOR + '%'})
+      WHERE (colors IS NULL OR colors NOT LIKE ${"%" + FORBIDDEN_COLOR + "%"})
         AND (cmc IS NULL OR cmc <= 8)
         ${arenaFilter}
       ORDER BY RANDOM()
       LIMIT 2000
-    `) as unknown as CardRow[];
+    `)) as unknown as CardRow[];
   } else {
-    pool = await db.execute(sql`
+    pool = (await db.execute(sql`
       SELECT id, name, type, colors, cmc, text, rarity
       FROM cards
       WHERE (cmc IS NULL OR cmc <= 8)
         ${arenaFilter}
       ORDER BY RANDOM()
       LIMIT 2000
-    `) as unknown as CardRow[];
+    `)) as unknown as CardRow[];
   }
 
   if (FORBIDDEN_COLOR) {
-    console.log(`[Commander] Pool carregado: ${pool.length} cartas (sem cor ${FORBIDDEN_COLOR})`);
+    console.log(
+      `[Commander] Pool carregado: ${pool.length} cartas (sem cor ${FORBIDDEN_COLOR})`
+    );
   } else {
     console.log(`[Commander] Pool carregado: ${pool.length} cartas`);
   }
@@ -124,7 +141,7 @@ async function loadCommanderPool(): Promise<CardRow[]> {
 // ── Carregamento de pesos com inversão opcional ──────────────────
 async function loadWeights(pool: CardRow[]): Promise<Map<string, number>> {
   const db = await getDb();
-  if (!db) throw new Error('[Commander] Banco de dados indisponível');
+  if (!db) throw new Error("[Commander] Banco de dados indisponível");
   const names = pool.map(c => c.name);
 
   const rows = await db
@@ -157,19 +174,25 @@ async function loadWeights(pool: CardRow[]): Promise<Map<string, number>> {
 
   if (EXPLORATION_MODE) {
     const highExplore = Array.from(weights.values()).filter(w => w > 10).length;
-    console.log(`[Commander] Modo exploração: ${highExplore} cartas com bias alto (peso invertido)`);
+    console.log(
+      `[Commander] Modo exploração: ${highExplore} cartas com bias alto (peso invertido)`
+    );
   }
 
   return weights;
 }
 
 // ── Geração de deck Commander com bias de peso ───────────────────
-function generateCommanderDeck(pool: CardRow[], weights: Map<string, number>): CardRow[] {
+function generateCommanderDeck(
+  pool: CardRow[],
+  weights: Map<string, number>
+): CardRow[] {
   // Selecionar comandante (lendário, cor permitida)
-  const legendaries = pool.filter(c =>
-    c.type?.toLowerCase().includes('legendary') &&
-    c.type?.toLowerCase().includes('creature') &&
-    isAllowedColor(c.colors ?? '')
+  const legendaries = pool.filter(
+    c =>
+      c.type?.toLowerCase().includes("legendary") &&
+      c.type?.toLowerCase().includes("creature") &&
+      isAllowedColor(c.colors ?? "")
   );
 
   if (legendaries.length === 0) return [];
@@ -177,12 +200,13 @@ function generateCommanderDeck(pool: CardRow[], weights: Map<string, number>): C
   const commander = weightedSample(legendaries, weights);
   if (!commander) return [];
 
-  const commanderColors = commander.colors ?? '';
+  const commanderColors = commander.colors ?? "";
 
   // Filtrar pool pela identidade de cor do comandante (subset de cores)
-  const legalPool = pool.filter(c =>
-    c.name !== commander.name &&
-    isSubsetColors(c.colors ?? '', commanderColors)
+  const legalPool = pool.filter(
+    c =>
+      c.name !== commander.name &&
+      isSubsetColors(c.colors ?? "", commanderColors)
   );
 
   // Selecionar 99 cartas restantes com bias de peso (singleton)
@@ -202,9 +226,15 @@ function generateCommanderDeck(pool: CardRow[], weights: Map<string, number>): C
   return deck;
 }
 
-function weightedSample<T extends { name: string }>(pool: T[], weights: Map<string, number>): T | null {
+function weightedSample<T extends { name: string }>(
+  pool: T[],
+  weights: Map<string, number>
+): T | null {
   if (pool.length === 0) return null;
-  const totalWeight = pool.reduce((sum, c) => sum + (weights.get(c.name) ?? 1.0), 0);
+  const totalWeight = pool.reduce(
+    (sum, c) => sum + (weights.get(c.name) ?? 1.0),
+    0
+  );
   if (totalWeight <= 0) return pool[Math.floor(Math.random() * pool.length)];
 
   let rand = Math.random() * totalWeight;
@@ -216,14 +246,19 @@ function weightedSample<T extends { name: string }>(pool: T[], weights: Map<stri
 }
 
 // ── Mutação com taxa configurável ────────────────────────────────
-function mutateDeck(deck: CardRow[], pool: CardRow[], weights: Map<string, number>): CardRow[] {
+function mutateDeck(
+  deck: CardRow[],
+  pool: CardRow[],
+  weights: Map<string, number>
+): CardRow[] {
   if (deck.length === 0) return deck;
   const commander = deck[0];
-  const commanderColors = commander.colors ?? '';
-  const legalPool = pool.filter(c =>
-    c.name !== commander.name &&
-    isSubsetColors(c.colors ?? '', commanderColors) &&
-    !deck.some(d => d.name === c.name)
+  const commanderColors = commander.colors ?? "";
+  const legalPool = pool.filter(
+    c =>
+      c.name !== commander.name &&
+      isSubsetColors(c.colors ?? "", commanderColors) &&
+      !deck.some(d => d.name === c.name)
   );
 
   return deck.map((card, idx) => {
@@ -239,20 +274,24 @@ function mutateDeck(deck: CardRow[], pool: CardRow[], weights: Map<string, numbe
 // ── Loop principal ───────────────────────────────────────────────
 async function main() {
   const startTotal = Date.now();
-  console.log('\n════════════════════════════════════════════════════════');
-  console.log('  COMMANDER INTELLIGENCE — FORGE ENGINE');
+  console.log("\n════════════════════════════════════════════════════════");
+  console.log("  COMMANDER INTELLIGENCE — FORGE ENGINE");
   console.log(`  Inicio: ${new Date().toLocaleTimeString()}`);
-  console.log('════════════════════════════════════════════════════════');
+  console.log("════════════════════════════════════════════════════════");
   console.log(`  Motor de regras : Forge (Commander EDH — regras completas)`);
-  console.log(`  Formato         : Commander (100 cartas, singleton, identidade de cor)`);
+  console.log(
+    `  Formato         : Commander (100 cartas, singleton, identidade de cor)`
+  );
   console.log(`  Fonte gravada   : ${SOURCE}`);
-  console.log(`  Cor excluída    : ${FORBIDDEN_COLOR ?? 'nenhuma'}`);
+  console.log(`  Cor excluída    : ${FORBIDDEN_COLOR ?? "nenhuma"}`);
   console.log(`  Pool de cartas  : ${describeTrainingPool()}`);
   console.log(`  Modo exploração : ${EXPLORATION_MODE}`);
   console.log(`  Taxa de mutação : ${MUTATION_RATE}`);
   console.log(`  Iterações       : ${ITERATIONS}`);
-  console.log(`  Escrita de pesos: ${ALLOW_HEURISTIC_FEEDBACK ? 'ATENÇÃO: heurística explicitamente autorizada' : 'BLOQUEADA (somente resultados Forge ensinam)'}`);
-  console.log('────────────────────────────────────────────────────────');
+  console.log(
+    `  Escrita de pesos: ${ALLOW_HEURISTIC_FEEDBACK ? "ATENÇÃO: heurística explicitamente autorizada" : "BLOQUEADA (somente resultados Forge ensinam)"}`
+  );
+  console.log("────────────────────────────────────────────────────────");
 
   // ── Anomaly-2 fix (2026-04-23): Global weight decay ─────────────
   // Anteriormente apenas `continuousTraining.ts` aplicava decay global.
@@ -274,17 +313,19 @@ async function main() {
         weight: sql`GREATEST(${MIN_WEIGHT}, weight * 0.97)`,
         updatedAt: new Date(),
       });
-      console.log('  [Decay] Pesos decaídos 3% (fator 0.97) — anti-saturação ativa');
+      console.log(
+        "  [Decay] Pesos decaídos 3% (fator 0.97) — anti-saturação ativa"
+      );
     }
   }
 
-  const pool    = await loadCommanderPool();
+  const pool = await loadCommanderPool();
   const weights = await loadWeights(pool);
-  const queue   = getCardLearningQueue();
+  const queue = getCardLearningQueue();
 
-  const archetypes = ['aggro', 'control', 'midrange', 'combo', 'ramp'];
+  const archetypes = ["aggro", "control", "midrange", "combo", "ramp"];
 
-  let totalWins    = 0;
+  let totalWins = 0;
   let totalMatches = 0;
   let totalRulesApplied = 0;
 
@@ -296,18 +337,22 @@ async function main() {
     .filter(d => d.length === 100);
 
   if (population.length === 0) {
-    console.log('[Commander] AVISO: Nenhum deck Commander gerado. Verifique o pool de cartas.');
+    console.log(
+      "[Commander] AVISO: Nenhum deck Commander gerado. Verifique o pool de cartas."
+    );
     await closeDb();
     return;
   }
 
-  console.log(`  [Forge] Decks iniciais : ${population.length} decks Commander gerados`);
-  console.log('────────────────────────────────────────────────────────');
+  console.log(
+    `  [Forge] Decks iniciais : ${population.length} decks Commander gerados`
+  );
+  console.log("────────────────────────────────────────────────────────");
 
   for (let it = 1; it <= ITERATIONS; it++) {
     if (Date.now() - lastHeartbeat >= 15_000) {
       const stats = queue.getStats();
-      const processing = stats.isProcessing ? '*' : '';
+      const processing = stats.isProcessing ? "*" : "";
       console.log(
         `\n[Heartbeat] Commander it:${it}/${ITERATIONS} | partidas:${totalMatches} | wins:${totalWins} | fila:${stats.queueLength}${processing} | ${new Date().toLocaleTimeString()}`
       );
@@ -315,14 +360,16 @@ async function main() {
     }
 
     // Avaliar população
-    const scored = population.map(deck => ({
-      deck,
-      score: evaluateDeckQuick(deck, 'commander')
-    })).sort((a, b) => b.score - a.score);
+    const scored = population
+      .map(deck => ({
+        deck,
+        score: evaluateDeckQuick(deck, "commander"),
+      }))
+      .sort((a, b) => b.score - a.score);
 
     // Selecionar elite (top 25%)
     const eliteSize = Math.max(1, Math.floor(scored.length * 0.25));
-    const elite     = scored.slice(0, eliteSize).map(s => s.deck);
+    const elite = scored.slice(0, eliteSize).map(s => s.deck);
 
     // Simular partidas (Forge)
     for (const deck of elite) {
@@ -332,7 +379,7 @@ async function main() {
         if (opponent.length < 100) continue;
 
         const result = ModelEvaluator.simulateMatch(deck, opponent);
-        const won    = result.winner === 'A';
+        const won = result.winner === "A";
         if (won) totalWins++;
         totalMatches++;
         totalRulesApplied++;
@@ -340,12 +387,14 @@ async function main() {
         // Atualizar pesos via queue
         const delta = won ? 0.05 : -0.02;
         if (ALLOW_HEURISTIC_FEEDBACK) {
-          await queue.enqueueBatch(deck.map(c => ({
-            cardName: c.name,
-            delta,
-            source: SOURCE,
-            win: won,
-          })));
+          await queue.enqueueBatch(
+            deck.map(c => ({
+              cardName: c.name,
+              delta,
+              source: SOURCE,
+              win: won,
+            }))
+          );
         }
       }
     }
@@ -374,9 +423,9 @@ async function main() {
     Date.now() - startTotal
   );
 
-  console.log(`  Cor excluída  : ${FORBIDDEN_COLOR ?? 'nenhuma'}`);
+  console.log(`  Cor excluída  : ${FORBIDDEN_COLOR ?? "nenhuma"}`);
   console.log(`  Fonte gravada : ${SOURCE}`);
-  console.log('════════════════════════════════════════════════════════');
+  console.log("════════════════════════════════════════════════════════");
 
   await closeDb();
 }

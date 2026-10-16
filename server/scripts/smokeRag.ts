@@ -48,14 +48,20 @@ async function main() {
     try {
       const result = await queryWithRAG(p);
       const dt = Date.now() - t0;
-      console.log(`source=${result.source} cost=$${result.costUsd.toFixed(5)} dt=${dt}ms`);
+      console.log(
+        `source=${result.source} cost=$${result.costUsd.toFixed(5)} dt=${dt}ms`
+      );
       if (result.similarity !== undefined) {
         console.log(`similarity=${result.similarity.toFixed(4)}`);
       }
-      console.log(`text: ${result.text.slice(0, 200)}${result.text.length > 200 ? "…" : ""}`);
+      console.log(
+        `text: ${result.text.slice(0, 200)}${result.text.length > 200 ? "…" : ""}`
+      );
     } catch (err) {
       const dt = Date.now() - t0;
-      console.log(`FAILED after ${dt}ms: ${err instanceof Error ? err.message : err}`);
+      console.log(
+        `FAILED after ${dt}ms: ${err instanceof Error ? err.message : err}`
+      );
     }
   }
 
@@ -66,7 +72,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((err) => {
+  .catch(err => {
     console.error(err);
     process.exit(1);
   });

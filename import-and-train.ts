@@ -22,10 +22,17 @@ import { applyTournamentSignal } from "./server/scripts/applyTournamentSignal.ts
  */
 
 // Timeout global de 15 minutos (120 decks × ~3.5s cada + delays)
-const GLOBAL_TIMEOUT = setTimeout(() => {
-  console.log("\n[import-and-train] Timeout global atingido (15min). Encerrando...");
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
-}, 15 * 60 * 1000);
+const GLOBAL_TIMEOUT = setTimeout(
+  () => {
+    console.log(
+      "\n[import-and-train] Timeout global atingido (15min). Encerrando..."
+    );
+    closeDb()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(0));
+  },
+  15 * 60 * 1000
+);
 GLOBAL_TIMEOUT.unref();
 
 function divider(label: string) {
@@ -47,15 +54,24 @@ async function main() {
   console.log(`  Inicio: ${timestamp()}`);
   console.log("═".repeat(56));
   console.log("  Fontes  : MTGGoldfish + MTGTop8");
-  console.log("  Formatos: MTGGoldfish inclui historic; MTGTop8 usa formatos paper disponíveis");
+  console.log(
+    "  Formatos: MTGGoldfish inclui historic; MTGTop8 usa formatos paper disponíveis"
+  );
   console.log("  Volume  : 10 decks por formato por fonte (máx. 130 decks)");
-  console.log("  Método  : 1 deck/arquétipo → máxima diversidade de estratégias");
+  console.log(
+    "  Método  : 1 deck/arquétipo → máxima diversidade de estratégias"
+  );
   console.log("─".repeat(56));
 
   // ─── 1. MTGGoldfish — todos os formatos ───────────────────────────────────
   divider("1/3  MTGGoldfish — 7 Formatos (10 decks cada)");
   const t1 = Date.now();
-  let goldfishTotal = { decksImported: 0, cardsImported: 0, decksSkipped: 0, errors: [] as string[] };
+  let goldfishTotal = {
+    decksImported: 0,
+    cardsImported: 0,
+    decksSkipped: 0,
+    errors: [] as string[],
+  };
   try {
     goldfishTotal = await importAllGoldfishFormats(10);
     const dur1 = ((Date.now() - t1) / 1000).toFixed(1);
@@ -66,7 +82,9 @@ async function main() {
     console.log(`    Cartas salvas    : ${goldfishTotal.cardsImported}`);
     console.log(`    Duracao total    : ${dur1}s`);
     if (goldfishTotal.errors.length > 0) {
-      console.warn(`    Avisos (${goldfishTotal.errors.length}): ${goldfishTotal.errors.slice(0, 3).join(" | ")}`);
+      console.warn(
+        `    Avisos (${goldfishTotal.errors.length}): ${goldfishTotal.errors.slice(0, 3).join(" | ")}`
+      );
     }
   } catch (e: any) {
     console.warn(`  [AVISO] MTGGoldfish falhou: ${e?.message}. Continuando...`);
@@ -75,7 +93,12 @@ async function main() {
   // ─── 2. MTGTop8 — todos os formatos ──────────────────────────────────────
   divider("2/3  MTGTop8 — 6 Formatos (10 decks cada)");
   const t2 = Date.now();
-  let top8Total = { decksImported: 0, cardsImported: 0, decksSkipped: 0, errors: [] as string[] };
+  let top8Total = {
+    decksImported: 0,
+    cardsImported: 0,
+    decksSkipped: 0,
+    errors: [] as string[],
+  };
   try {
     top8Total = await importAllTop8Formats(10);
     const dur2 = ((Date.now() - t2) / 1000).toFixed(1);
@@ -86,7 +109,9 @@ async function main() {
     console.log(`    Cartas salvas    : ${top8Total.cardsImported}`);
     console.log(`    Duracao total    : ${dur2}s`);
     if (top8Total.errors.length > 0) {
-      console.warn(`    Avisos (${top8Total.errors.length}): ${top8Total.errors.slice(0, 3).join(" | ")}`);
+      console.warn(
+        `    Avisos (${top8Total.errors.length}): ${top8Total.errors.slice(0, 3).join(" | ")}`
+      );
     }
   } catch (e: any) {
     console.warn(`  [AVISO] MTGTop8 falhou: ${e?.message}. Continuando...`);
@@ -99,11 +124,15 @@ async function main() {
     const signalResult = await applyTournamentSignal();
     const dur3 = ((Date.now() - t3) / 1000).toFixed(1);
     console.log(`    Cartas reforçadas : ${signalResult.cardsReinforced}`);
-    console.log(`    Delta total       : +${signalResult.totalDelta.toFixed(2)}`);
+    console.log(
+      `    Delta total       : +${signalResult.totalDelta.toFixed(2)}`
+    );
     console.log(`    Decks processados : ${signalResult.decksProcessed}`);
     console.log(`    Duracao           : ${dur3}s`);
   } catch (e: any) {
-    console.warn(`  [AVISO] Sinal de torneio falhou: ${e?.message}. Continuando...`);
+    console.warn(
+      `  [AVISO] Sinal de torneio falhou: ${e?.message}. Continuando...`
+    );
   }
 
   // ─── 4. Embeddings Word2Vec ───────────────────────────────────────────────
@@ -132,18 +161,26 @@ async function main() {
   console.log("\n" + "═".repeat(56));
   console.log("  IMPORTACAO CONCLUIDA");
   console.log("═".repeat(56));
-  console.log(`  MTGGoldfish    : ${goldfishTotal.decksImported} decks | ${goldfishTotal.cardsImported} cartas`);
-  console.log(`  MTGTop8        : ${top8Total.decksImported} decks | ${top8Total.cardsImported} cartas`);
+  console.log(
+    `  MTGGoldfish    : ${goldfishTotal.decksImported} decks | ${goldfishTotal.cardsImported} cartas`
+  );
+  console.log(
+    `  MTGTop8        : ${top8Total.decksImported} decks | ${top8Total.cardsImported} cartas`
+  );
   console.log(`  TOTAL          : ${totalDecks} decks | ${totalCards} cartas`);
   console.log(`  Duracao total  : ${totalDur}s`);
   console.log(`  Fim: ${timestamp()}`);
   console.log("═".repeat(56) + "\n");
 
   clearTimeout(GLOBAL_TIMEOUT);
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+  closeDb()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(0));
 }
 
-main().catch((e) => {
+main().catch(e => {
   console.error("[import-and-train] Erro fatal:", e?.message);
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+  closeDb()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(0));
 });
