@@ -2,7 +2,13 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +33,10 @@ interface SynergyEdge {
 export default function SynergyGraph() {
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [graphData, setGraphData] = useState<{ nodes: SynergyNode[]; edges: SynergyEdge[] }>({
+  const [graphData, setGraphData] = useState<{
+    nodes: SynergyNode[];
+    edges: SynergyEdge[];
+  }>({
     nodes: [],
     edges: [],
   });
@@ -39,10 +48,9 @@ export default function SynergyGraph() {
   );
 
   // Get synergy neighbors when a card is selected
-  const synergyQuery = trpc.cards.similar.useQuery(
-    selectedCardId || 0,
-    { enabled: !!selectedCardId }
-  );
+  const synergyQuery = trpc.cards.similar.useQuery(selectedCardId || 0, {
+    enabled: !!selectedCardId,
+  });
 
   // Build graph data when we have synergy data
   useEffect(() => {
@@ -63,7 +71,9 @@ export default function SynergyGraph() {
         const nodeId = `card-${similarCard.id}`;
         nodes.push({
           id: nodeId,
-          label: similarCard.name.substring(0, 15) + (similarCard.name.length > 15 ? "..." : ""),
+          label:
+            similarCard.name.substring(0, 15) +
+            (similarCard.name.length > 15 ? "..." : ""),
           color: "#10b981",
           size: 12 + (8 - index) * 1, // Size based on similarity rank
         });
@@ -91,70 +101,75 @@ export default function SynergyGraph() {
 
     const elements = [
       ...graphData.nodes.map(node => ({
-        data: { 
-          id: node.id, 
+        data: {
+          id: node.id,
           label: node.label,
           color: node.color,
-          size: node.size * 2
-        }
+          size: node.size * 2,
+        },
       })),
       ...graphData.edges.map(edge => ({
-        data: { 
-          id: edge.id, 
-          source: edge.source, 
-          target: edge.target, 
+        data: {
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
           weight: edge.weight,
-          label: edge.label
-        }
-      }))
+          label: edge.label,
+        },
+      })),
     ];
 
     const stylesheet: any = [
       {
-        selector: 'node',
+        selector: "node",
         style: {
-          'background-color': 'data(color)',
-          'label': 'data(label)',
-          'width': 'data(size)',
-          'height': 'data(size)',
-          'color': '#fff',
-          'font-size': '10px',
-          'text-valign': 'center',
-          'text-halign': 'center',
-          'border-width': 2,
-          'border-color': '#fff'
-        }
+          "background-color": "data(color)",
+          label: "data(label)",
+          width: "data(size)",
+          height: "data(size)",
+          color: "#fff",
+          "font-size": "10px",
+          "text-valign": "center",
+          "text-halign": "center",
+          "border-width": 2,
+          "border-color": "#fff",
+        },
       },
       {
-        selector: 'edge',
+        selector: "edge",
         style: {
-          'width': 'mapData(weight, 0, 1, 1, 8)',
-          'line-color': '#8b5cf6',
-          'target-arrow-color': '#8b5cf6',
-          'target-arrow-shape': 'triangle',
-          'curve-style': 'bezier',
-          'opacity': 'mapData(weight, 0, 1, 0.3, 0.8)',
-          'label': 'data(label)',
-          'font-size': '8px',
-          'color': '#a78bfa',
-          'text-rotation': 'autorotate',
-          'text-margin-y': -10
-        }
+          width: "mapData(weight, 0, 1, 1, 8)",
+          "line-color": "#8b5cf6",
+          "target-arrow-color": "#8b5cf6",
+          "target-arrow-shape": "triangle",
+          "curve-style": "bezier",
+          opacity: "mapData(weight, 0, 1, 0.3, 0.8)",
+          label: "data(label)",
+          "font-size": "8px",
+          color: "#a78bfa",
+          "text-rotation": "autorotate",
+          "text-margin-y": -10,
+        },
       },
       {
-        selector: ':selected',
+        selector: ":selected",
         style: {
-          'border-width': 4,
-          'border-color': '#f59e0b'
-        }
-      }
+          "border-width": 4,
+          "border-color": "#f59e0b",
+        },
+      },
     ];
 
     return (
       <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-white">Interactive Synergy Network</h3>
-          <Badge variant="outline" className="text-purple-400 border-purple-400/30">
+          <h3 className="text-lg font-semibold text-white">
+            Interactive Synergy Network
+          </h3>
+          <Badge
+            variant="outline"
+            className="text-purple-400 border-purple-400/30"
+          >
             Powered by Cytoscape.js
           </Badge>
         </div>
@@ -162,10 +177,10 @@ export default function SynergyGraph() {
         <div className="h-[500px] bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
           <CytoscapeComponent
             elements={elements}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: "100%", height: "100%" }}
             stylesheet={stylesheet}
             layout={{
-              name: 'cose',
+              name: "cose",
               animate: true,
               refresh: 20,
               fit: true,
@@ -173,10 +188,10 @@ export default function SynergyGraph() {
               nodeRepulsion: 4000,
               idealEdgeLength: 100,
             }}
-            cy={(cy) => {
-              cy.on('tap', 'node', (evt) => {
+            cy={cy => {
+              cy.on("tap", "node", evt => {
                 const node = evt.target;
-                console.log('Tapped node:', node.id());
+                console.log("Tapped node:", node.id());
               });
             }}
           />
@@ -205,7 +220,9 @@ export default function SynergyGraph() {
     <div className="container mx-auto p-6">
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-white mb-2">Synergy Graph</h1>
-        <p className="text-gray-400">Explore card relationships and synergy networks</p>
+        <p className="text-gray-400">
+          Explore card relationships and synergy networks
+        </p>
       </div>
 
       <div className="grid gap-6">
@@ -225,7 +242,7 @@ export default function SynergyGraph() {
               <Input
                 placeholder="Search cards..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={e => setSearchQuery(e.target.value)}
                 className="bg-slate-800 border-purple-500/30 text-white placeholder-gray-500"
               />
             </div>
@@ -238,7 +255,7 @@ export default function SynergyGraph() {
 
             {cardSearch.data && cardSearch.data.length > 0 && (
               <div className="mt-4 max-h-48 overflow-y-auto">
-                {cardSearch.data.slice(0, 10).map((card) => (
+                {cardSearch.data.slice(0, 10).map(card => (
                   <div
                     key={card.id}
                     className="flex justify-between items-center p-2 hover:bg-slate-800/50 rounded cursor-pointer"
@@ -267,23 +284,29 @@ export default function SynergyGraph() {
                 Synergy Network
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Visual representation of card relationships based on co-occurrence in competitive decks
+                Visual representation of card relationships based on
+                co-occurrence in competitive decks
               </CardDescription>
             </CardHeader>
             <CardContent>
               {synergyQuery.isLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-                  <span className="ml-2 text-gray-400">Loading synergy data...</span>
+                  <span className="ml-2 text-gray-400">
+                    Loading synergy data...
+                  </span>
                 </div>
               ) : synergyQuery.data && synergyQuery.data.length > 0 ? (
                 renderCytoscapeGraph()
               ) : (
                 <div className="text-center py-12">
                   <Zap className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                  <p className="text-gray-400">No synergy data available for this card</p>
+                  <p className="text-gray-400">
+                    No synergy data available for this card
+                  </p>
                   <p className="text-sm text-gray-500 mt-2">
-                    Try selecting a different card or ensure embeddings have been trained
+                    Try selecting a different card or ensure embeddings have
+                    been trained
                   </p>
                 </div>
               )}
@@ -294,9 +317,12 @@ export default function SynergyGraph() {
             <CardContent className="pt-6">
               <div className="text-center py-12">
                 <Network className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-white mb-2">Select a Card to Begin</h3>
+                <h3 className="text-lg font-medium text-white mb-2">
+                  Select a Card to Begin
+                </h3>
                 <p className="text-gray-400">
-                  Choose a card above to explore its synergy relationships with other cards
+                  Choose a card above to explore its synergy relationships with
+                  other cards
                 </p>
               </div>
             </CardContent>
@@ -310,24 +336,31 @@ export default function SynergyGraph() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h4 className="text-white font-medium mb-2">Co-occurrence Analysis</h4>
+              <h4 className="text-white font-medium mb-2">
+                Co-occurrence Analysis
+              </h4>
               <p className="text-gray-400 text-sm">
-                Synergy scores are calculated based on how often cards appear together in competitive decks.
-                Higher scores indicate stronger relationships.
+                Synergy scores are calculated based on how often cards appear
+                together in competitive decks. Higher scores indicate stronger
+                relationships.
               </p>
             </div>
             <div>
-              <h4 className="text-white font-medium mb-2">Network Visualization</h4>
+              <h4 className="text-white font-medium mb-2">
+                Network Visualization
+              </h4>
               <p className="text-gray-400 text-sm">
-                The central node represents your selected card. Connected nodes show similar cards,
-                with connection strength indicating synergy strength.
+                The central node represents your selected card. Connected nodes
+                show similar cards, with connection strength indicating synergy
+                strength.
               </p>
             </div>
             <div>
               <h4 className="text-white font-medium mb-2">Data Source</h4>
               <p className="text-gray-400 text-sm">
-                Synergy data is derived from competitive deck lists imported from MTGGoldfish and MTGTop8.
-                The more decks analyzed, the more accurate the synergy scores become.
+                Synergy data is derived from competitive deck lists imported
+                from MTGGoldfish and MTGTop8. The more decks analyzed, the more
+                accurate the synergy scores become.
               </p>
             </div>
           </CardContent>

@@ -38,7 +38,14 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
   const db = await getDb();
 
   if (!db) {
-    return { jobId: -1, embeddingsTrained: 0, synergiesUpdated: 0, durationMs: 0, status: "failed", error: "DB unavailable" };
+    return {
+      jobId: -1,
+      embeddingsTrained: 0,
+      synergiesUpdated: 0,
+      durationMs: 0,
+      status: "failed",
+      error: "DB unavailable",
+    };
   }
 
   // Criar job de treinamento
@@ -61,9 +68,13 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
     const allDeckCards = await db.select().from(competitiveDeckCards);
 
     if (allDecks.length === 0) {
-      throw new Error("Nenhum deck competitivo real encontrado. Importe decks do MTGGoldfish ou MTGTop8 primeiro.");
+      throw new Error(
+        "Nenhum deck competitivo real encontrado. Importe decks do MTGGoldfish ou MTGTop8 primeiro."
+      );
     }
-    console.log(`[Trainer] Usando ${allDecks.length} decks reais para treinamento (sintéticos excluídos).`);
+    console.log(
+      `[Trainer] Usando ${allDecks.length} decks reais para treinamento (sintéticos excluídos).`
+    );
 
     // Agrupar cartas por deck
     const deckMap = new Map<number, string[]>();
@@ -74,7 +85,9 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
       for (let qi = 0; qi < dc.quantity; qi++) arr.push(dc.cardName);
     }
 
-    console.log(`[Trainer] Carregados ${allDecks.length} decks, ${allDeckCards.length} entradas de cartas`);
+    console.log(
+      `[Trainer] Carregados ${allDecks.length} decks, ${allDeckCards.length} entradas de cartas`
+    );
 
     // ── 2. Construir vocabulário ─────────────────────────────────────────────
     const cardFreq = new Map<string, number>();
@@ -89,10 +102,14 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
       .filter(([, freq]) => freq >= MIN_COUNT)
       .map(([name]) => name);
 
-    const wordToIdx = new Map<string, number>(vocab.map((w: string, i: number) => [w, i]));
+    const wordToIdx = new Map<string, number>(
+      vocab.map((w: string, i: number) => [w, i])
+    );
     const vocabSize = vocab.length;
 
-    console.log(`[Trainer] Vocabulário: ${vocabSize} cartas únicas (min_count=${MIN_COUNT})`);
+    console.log(
+      `[Trainer] Vocabulário: ${vocabSize} cartas únicas (min_count=${MIN_COUNT})`
+    );
 
     if (vocabSize < 2) {
       throw new Error("Vocabulário muito pequeno. Importe mais decks.");
@@ -109,7 +126,7 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
     for (const deckEntry of Array.from(deckMap.values())) {
       const cardList = deckEntry;
       const indices = cardList
-        .map((c) => wordToIdx.get(c))
+        .map(c => wordToIdx.get(c))
         .filter((i): i is number => i !== undefined);
 
       // Skip-gram: para cada carta, prever as vizinhas
@@ -122,7 +139,13 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
           if (contextPos < 0 || contextPos >= indices.length) continue;
 
           const contextIdx = indices[contextPos];
-          const loss = skipGramStep(W1, W2, centerIdx, contextIdx, LEARNING_RATE);
+          const loss = skipGramStep(
+            W1,
+            W2,
+            centerIdx,
+            contextIdx,
+            LEARNING_RATE
+          );
           totalLoss += loss;
           trainingSamples++;
         }
@@ -130,14 +153,23 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
     }
 
     const avgLoss = trainingSamples > 0 ? totalLoss / trainingSamples : 0;
-    console.log(`[Trainer] Treinamento concluído. Loss médio: ${avgLoss.toFixed(4)}, amostras: ${trainingSamples}`);
+    console.log(
+      `[Trainer] Treinamento concluído. Loss médio: ${avgLoss.toFixed(4)}, amostras: ${trainingSamples}`
+    );
 
     // ── 4. Salvar embeddings no banco ────────────────────────────────────────
     let embeddingsSaved = 0;
 
     // Buscar cartas do banco para mapear por nome
-    const dbCards = await db.select({ id: cards.id, name: cards.name }).from(cards);
-    const cardNameToId = new Map(dbCards.map((c: { id: number; name: string }) => [c.name.toLowerCase(), c.id]));
+    const dbCards = await db
+      .select({ id: cards.id, name: cards.name })
+      .from(cards);
+    const cardNameToId = new Map(
+      dbCards.map((c: { id: number; name: string }) => [
+        c.name.toLowerCase(),
+        c.id,
+      ])
+    );
 
     for (let i = 0; i < vocab.length; i++) {
       const cardName = vocab[i];
@@ -205,14 +237,18 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
         const existing = await db
           .select({ id: cardSynergies.card1Id })
           .from(cardSynergies)
-          .where(and(eq(cardSynergies.card1Id, c1), eq(cardSynergies.card2Id, c2)))
+          .where(
+            and(eq(cardSynergies.card1Id, c1), eq(cardSynergies.card2Id, c2))
+          )
           .limit(1);
 
         if (existing.length > 0) {
           await db
             .update(cardSynergies)
             .set({ weight, coOccurrenceRate: rate })
-            .where(and(eq(cardSynergies.card1Id, c1), eq(cardSynergies.card2Id, c2)));
+            .where(
+              and(eq(cardSynergies.card1Id, c1), eq(cardSynergies.card2Id, c2))
+            );
         } else {
           await db.insert(cardSynergies).values({
             card1Id: c1,
@@ -231,7 +267,9 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
       }
     }
 
-    console.log(`[Trainer] ${synergiesUpdated} sinergias atualizadas${synergyErrors > 0 ? ` (${synergyErrors} erros)` : ""}`);
+    console.log(
+      `[Trainer] ${synergiesUpdated} sinergias atualizadas${synergyErrors > 0 ? ` (${synergyErrors} erros)` : ""}`
+    );
 
     // ── 6. Atualizar job como concluído ──────────────────────────────────────
     await db
@@ -249,7 +287,13 @@ export async function trainEmbeddingsFromDecks(): Promise<TrainingResult> {
     const durationMs = Date.now() - startTime;
     console.log(`[Trainer] Job ${jobId} concluído em ${durationMs}ms`);
 
-    return { jobId, embeddingsTrained: embeddingsSaved, synergiesUpdated, durationMs, status: "completed" };
+    return {
+      jobId,
+      embeddingsTrained: embeddingsSaved,
+      synergiesUpdated,
+      durationMs,
+      status: "completed",
+    };
   } catch (error: any) {
     const msg = error?.message || "Erro desconhecido";
     console.error(`[Trainer] Job ${jobId} falhou:`, msg);

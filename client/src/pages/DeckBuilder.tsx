@@ -5,9 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Plus, Edit } from "lucide-react";
 import { toast } from "sonner";
@@ -85,33 +97,37 @@ export default function DeckBuilder() {
 
   // Queries
   const { data: decks, isLoading: decksLoading } = trpc.decks.list.useQuery();
-  const { data: deckCards, isLoading: cardsLoading } = trpc.decks.getCards.useQuery(
-    selectedDeck?.id ?? 0,
-    { enabled: !!selectedDeck }
-  );
+  const { data: deckCards, isLoading: cardsLoading } =
+    trpc.decks.getCards.useQuery(selectedDeck?.id ?? 0, {
+      enabled: !!selectedDeck,
+    });
 
   // Busca de cartas (é uma query, não mutation)
   const [searchEnabled, setSearchEnabled] = useState(false);
-  const { data: cardSearchData, isFetching: isSearching } = trpc.cards.search.useQuery(
-    { name: searchQuery },
-    {
+  const { data: cardSearchData, isFetching: isSearching } =
+    trpc.cards.search.useQuery({ name: searchQuery }, {
       enabled: searchEnabled && !!searchQuery.trim(),
       onSuccess: (data: CardRow[]) => {
         setSearchResults(data);
         setSearchEnabled(false);
       },
-    } as any
-  );
+    } as any);
 
   // Mutations
   const createDeckMutation = trpc.decks.create.useMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["decks.list"] });
       setIsCreating(false);
-      setNewDeck({ name: "", format: "standard", archetype: "", description: "" });
+      setNewDeck({
+        name: "",
+        format: "standard",
+        archetype: "",
+        description: "",
+      });
       toast.success("Deck criado com sucesso!");
     },
-    onError: (error: any) => toast.error(`Erro ao criar deck: ${error.message}`),
+    onError: (error: any) =>
+      toast.error(`Erro ao criar deck: ${error.message}`),
   });
 
   const deleteDeckMutation = trpc.decks.delete.useMutation({
@@ -120,27 +136,34 @@ export default function DeckBuilder() {
       setSelectedDeck(null);
       toast.success("Deck excluído com sucesso!");
     },
-    onError: (error: any) => toast.error(`Erro ao excluir deck: ${error.message}`),
+    onError: (error: any) =>
+      toast.error(`Erro ao excluir deck: ${error.message}`),
   });
 
   const addCardMutation = trpc.decks.addCard.useMutation({
     onSuccess: () => {
       if (selectedDeck) {
-        queryClient.invalidateQueries({ queryKey: [["decks", "getCards"], { input: selectedDeck.id }] });
+        queryClient.invalidateQueries({
+          queryKey: [["decks", "getCards"], { input: selectedDeck.id }],
+        });
       }
       toast.success("Carta adicionada ao deck!");
     },
-    onError: (error: any) => toast.error(`Erro ao adicionar carta: ${error.message}`),
+    onError: (error: any) =>
+      toast.error(`Erro ao adicionar carta: ${error.message}`),
   });
 
   const removeCardMutation = trpc.decks.removeCard.useMutation({
     onSuccess: () => {
       if (selectedDeck) {
-        queryClient.invalidateQueries({ queryKey: [["decks", "getCards"], { input: selectedDeck.id }] });
+        queryClient.invalidateQueries({
+          queryKey: [["decks", "getCards"], { input: selectedDeck.id }],
+        });
       }
       toast.success("Carta removida do deck!");
     },
-    onError: (error: any) => toast.error(`Erro ao remover carta: ${error.message}`),
+    onError: (error: any) =>
+      toast.error(`Erro ao remover carta: ${error.message}`),
   });
 
   const handleCreateDeck = () => {
@@ -188,8 +211,9 @@ export default function DeckBuilder() {
     setIsEditing(true);
   };
 
-  const typedDeckCards = (deckCards as unknown as DeckCardRow[] | undefined);
-  const totalCards = typedDeckCards?.reduce((sum, dc) => sum + dc.quantity, 0) || 0;
+  const typedDeckCards = deckCards as unknown as DeckCardRow[] | undefined;
+  const totalCards =
+    typedDeckCards?.reduce((sum, dc) => sum + dc.quantity, 0) || 0;
 
   return (
     <div className="container mx-auto p-6">
@@ -215,7 +239,9 @@ export default function DeckBuilder() {
                     <Input
                       id="name"
                       value={newDeck.name}
-                      onChange={(e) => setNewDeck({ ...newDeck, name: e.target.value })}
+                      onChange={e =>
+                        setNewDeck({ ...newDeck, name: e.target.value })
+                      }
                       placeholder="Nome do deck"
                     />
                   </div>
@@ -223,8 +249,15 @@ export default function DeckBuilder() {
                     <Label htmlFor="format">Formato</Label>
                     <Select
                       value={newDeck.format}
-                      onValueChange={(value) =>
-                        setNewDeck({ ...newDeck, format: value as "standard" | "modern" | "commander" | "legacy" })
+                      onValueChange={value =>
+                        setNewDeck({
+                          ...newDeck,
+                          format: value as
+                            | "standard"
+                            | "modern"
+                            | "commander"
+                            | "legacy",
+                        })
                       }
                     >
                       <SelectTrigger>
@@ -243,7 +276,9 @@ export default function DeckBuilder() {
                     <Input
                       id="archetype"
                       value={newDeck.archetype}
-                      onChange={(e) => setNewDeck({ ...newDeck, archetype: e.target.value })}
+                      onChange={e =>
+                        setNewDeck({ ...newDeck, archetype: e.target.value })
+                      }
                       placeholder="ex: Control, Aggro"
                     />
                   </div>
@@ -252,15 +287,23 @@ export default function DeckBuilder() {
                     <Textarea
                       id="description"
                       value={newDeck.description}
-                      onChange={(e) => setNewDeck({ ...newDeck, description: e.target.value })}
+                      onChange={e =>
+                        setNewDeck({ ...newDeck, description: e.target.value })
+                      }
                       placeholder="Descrição do deck"
                     />
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setIsCreating(false)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsCreating(false)}
+                    >
                       Cancelar
                     </Button>
-                    <Button onClick={handleCreateDeck} disabled={createDeckMutation.isPending}>
+                    <Button
+                      onClick={handleCreateDeck}
+                      disabled={createDeckMutation.isPending}
+                    >
                       Criar
                     </Button>
                   </div>
@@ -273,7 +316,7 @@ export default function DeckBuilder() {
             <div>Carregando decks...</div>
           ) : (
             <div className="space-y-2">
-              {(decks as unknown as DeckRow[] | undefined)?.map((deck) => (
+              {(decks as unknown as DeckRow[] | undefined)?.map(deck => (
                 <Card
                   key={deck.id}
                   className={`cursor-pointer ${selectedDeck?.id === deck.id ? "ring-2 ring-primary" : ""}`}
@@ -283,21 +326,32 @@ export default function DeckBuilder() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="font-semibold">{deck.name}</h3>
-                        <p className="text-sm text-muted-foreground">{deck.format}</p>
-                        {deck.archetype && <Badge variant="secondary">{deck.archetype}</Badge>}
+                        <p className="text-sm text-muted-foreground">
+                          {deck.format}
+                        </p>
+                        {deck.archetype && (
+                          <Badge variant="secondary">{deck.archetype}</Badge>
+                        )}
                       </div>
                       <div className="flex gap-1">
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={(e) => { e.stopPropagation(); startEditing(deck); }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            startEditing(deck);
+                          }}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={(e) => { e.stopPropagation(); setSelectedDeck(deck); handleDeleteDeck(); }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            setSelectedDeck(deck);
+                            handleDeleteDeck();
+                          }}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -317,7 +371,9 @@ export default function DeckBuilder() {
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h1 className="text-3xl font-bold">{selectedDeck.name}</h1>
-                  <p className="text-muted-foreground">{selectedDeck.format} • {totalCards} cartas</p>
+                  <p className="text-muted-foreground">
+                    {selectedDeck.format} • {totalCards} cartas
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline">Exportar</Button>
@@ -335,8 +391,8 @@ export default function DeckBuilder() {
                     <Input
                       placeholder="Buscar cartas..."
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleSearch()}
                     />
                     <Button onClick={handleSearch} disabled={isSearching}>
                       Buscar
@@ -344,13 +400,21 @@ export default function DeckBuilder() {
                   </div>
                   {searchResults.length > 0 && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                      {searchResults.map((card) => (
-                        <div key={card.id} className="flex justify-between items-center p-2 border rounded">
+                      {searchResults.map(card => (
+                        <div
+                          key={card.id}
+                          className="flex justify-between items-center p-2 border rounded"
+                        >
                           <div className="flex-1">
                             <p className="font-medium">{card.name}</p>
-                            <p className="text-sm text-muted-foreground">{card.type}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {card.type}
+                            </p>
                           </div>
-                          <Button size="sm" onClick={() => handleAddCard(card.id)}>
+                          <Button
+                            size="sm"
+                            onClick={() => handleAddCard(card.id)}
+                          >
                             Adicionar
                           </Button>
                         </div>
@@ -370,7 +434,7 @@ export default function DeckBuilder() {
                     <div>Carregando cartas...</div>
                   ) : typedDeckCards && typedDeckCards.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {typedDeckCards.map((deckCard) => (
+                      {typedDeckCards.map(deckCard => (
                         <CardCard
                           key={deckCard.id}
                           card={toCardCardData(deckCard.card)}
@@ -380,14 +444,18 @@ export default function DeckBuilder() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground">Nenhuma carta neste deck ainda.</p>
+                    <p className="text-muted-foreground">
+                      Nenhuma carta neste deck ainda.
+                    </p>
                   )}
                 </CardContent>
               </Card>
             </div>
           ) : (
             <div className="flex items-center justify-center h-96">
-              <p className="text-muted-foreground">Selecione um deck para começar a editar</p>
+              <p className="text-muted-foreground">
+                Selecione um deck para começar a editar
+              </p>
             </div>
           )}
         </div>

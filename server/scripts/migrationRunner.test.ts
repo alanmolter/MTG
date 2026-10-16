@@ -17,12 +17,16 @@ class FakeDb implements MigrationDb {
       throw new Error(`boom ${this.failSql}`);
     }
     if (sqlText.includes("SELECT filename")) {
-      return this.recorded.map((filename) => ({ filename }));
+      return this.recorded.map(filename => ({ filename }));
     }
     if (sqlText.includes("to_regclass")) {
       return [{ cards: this.cards }];
     }
-    if (params && params.length > 0 && sqlText.includes("INSERT INTO schema_migrations")) {
+    if (
+      params &&
+      params.length > 0 &&
+      sqlText.includes("INSERT INTO schema_migrations")
+    ) {
       this.recorded.push(String(params[0]));
       return [];
     }
@@ -38,10 +42,22 @@ class FakeDb implements MigrationDb {
 }
 
 const FILES: MigrationFile[] = [
-  { filename: "0000_cute_captain_flint.sql", sql: "CREATE TABLE mysql_only (id int);" },
-  { filename: "0003_postgres_init.sql", sql: "CREATE TYPE role AS ENUM ('user');" },
-  { filename: "0009_competitive_deck_import.sql", sql: "ALTER TABLE competitive_decks ADD COLUMN x int;" },
-  { filename: "0010_forge_match_provenance.sql", sql: "ALTER TABLE forge_matches ADD COLUMN seed bigint;" },
+  {
+    filename: "0000_cute_captain_flint.sql",
+    sql: "CREATE TABLE mysql_only (id int);",
+  },
+  {
+    filename: "0003_postgres_init.sql",
+    sql: "CREATE TYPE role AS ENUM ('user');",
+  },
+  {
+    filename: "0009_competitive_deck_import.sql",
+    sql: "ALTER TABLE competitive_decks ADD COLUMN x int;",
+  },
+  {
+    filename: "0010_forge_match_provenance.sql",
+    sql: "ALTER TABLE forge_matches ADD COLUMN seed bigint;",
+  },
 ];
 
 describe("applyPendingMigrations", () => {
@@ -61,7 +77,7 @@ describe("applyPendingMigrations", () => {
       "0009_competitive_deck_import.sql",
       "0010_forge_match_provenance.sql",
     ]);
-    expect(db.executed.some((sql) => sql.includes("mysql_only"))).toBe(false);
+    expect(db.executed.some(sql => sql.includes("mysql_only"))).toBe(false);
     expect(db.recorded).toEqual(result.applied);
   });
 
@@ -74,14 +90,16 @@ describe("applyPendingMigrations", () => {
       "0009_competitive_deck_import.sql",
     ]);
     expect(result.applied).toEqual(["0010_forge_match_provenance.sql"]);
-    expect(db.executed.some((sql) => sql.includes("CREATE TYPE"))).toBe(false);
-    expect(db.executed.some((sql) => sql.includes("forge_matches"))).toBe(true);
+    expect(db.executed.some(sql => sql.includes("CREATE TYPE"))).toBe(false);
+    expect(db.executed.some(sql => sql.includes("forge_matches"))).toBe(true);
   });
 
   it("fails the file and does not record it when a statement throws", async () => {
     const db = new FakeDb();
     db.failSql = "forge_matches";
-    await expect(applyPendingMigrations(db, FILES)).rejects.toThrow(/0010_forge_match_provenance/);
+    await expect(applyPendingMigrations(db, FILES)).rejects.toThrow(
+      /0010_forge_match_provenance/
+    );
     expect(db.recorded).not.toContain("0010_forge_match_provenance.sql");
     expect(db.recorded).toContain("0003_postgres_init.sql");
   });

@@ -20,7 +20,10 @@ import {
 } from "./migrationRunner";
 
 function adapt(sql: {
-  unsafe: (query: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>>;
+  unsafe: (
+    query: string,
+    params?: unknown[]
+  ) => Promise<Array<Record<string, unknown>>>;
   begin?: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 }): MigrationDb {
   return {
@@ -33,7 +36,7 @@ function adapt(sql: {
     },
     transaction(fn) {
       if (typeof sql.begin !== "function") return fn(adapt(sql));
-      return sql.begin((tx) => fn(adapt(tx as typeof sql)));
+      return sql.begin(tx => fn(adapt(tx as typeof sql)));
     },
   };
 }
@@ -57,23 +60,28 @@ async function applyMigration() {
     const drizzleDir = path.join(process.cwd(), "drizzle");
     const files = fs
       .readdirSync(drizzleDir)
-      .filter((filename) => isPostgresMigration(filename))
+      .filter(filename => isPostgresMigration(filename))
       .sort()
-      .map((filename) => ({
+      .map(filename => ({
         filename,
         sql: fs.readFileSync(path.join(drizzleDir, filename), "utf-8"),
       }));
 
     if (files.length === 0) {
-      console.error("[Migration] Nenhum arquivo PostgreSQL 00NN_*.sql encontrado.");
+      console.error(
+        "[Migration] Nenhum arquivo PostgreSQL 00NN_*.sql encontrado."
+      );
       process.exitCode = 1;
       return;
     }
 
-    const result = await applyPendingMigrations(adapt(client as unknown as Parameters<typeof adapt>[0]), files);
+    const result = await applyPendingMigrations(
+      adapt(client as unknown as Parameters<typeof adapt>[0]),
+      files
+    );
     console.log(
       `[Migration] applied=${result.applied.join(",") || "(none)"} ` +
-        `stamped=${result.stamped.length} skipped=${result.skipped.length}`,
+        `stamped=${result.stamped.length} skipped=${result.skipped.length}`
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

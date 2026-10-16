@@ -1,11 +1,16 @@
-import { extractCardFeatures, CardFeatures, simulateTurns, calculateDeckMetrics } from "./gameFeatureEngine";
+import {
+  extractCardFeatures,
+  CardFeatures,
+  simulateTurns,
+  calculateDeckMetrics,
+} from "./gameFeatureEngine";
 import { evaluateDeckWithBrain } from "./deckEvaluationBrain";
 import { getMetaDecksForArchetype } from "./metaDecks";
 import { MetaAnalytics } from "./metaAnalytics";
 
 /**
  * Model Evaluation & Regression Testing Service
- * 
+ *
  * Este serviço implementa a infraestrutura de "Startup Real" para medir o progresso do modelo.
  */
 
@@ -52,10 +57,13 @@ export class ModelEvaluator {
       }
 
       // Ameaças novas neste turno (ordenadas por CMC asc — sequência real de jogo)
-      const newThreatsA = this.calculateTurnPower(featuresA, turn) * handFactorA;
+      const newThreatsA =
+        this.calculateTurnPower(featuresA, turn) * handFactorA;
       // Board acumula 85% das criaturas anteriores (remoções tiram ~15%)
       boardPowerA = boardPowerA * 0.85 + newThreatsA;
-      const interactB = this.calculateInteraction(featuresB, turn) * (0.7 + Math.random() * 0.6);
+      const interactB =
+        this.calculateInteraction(featuresB, turn) *
+        (0.7 + Math.random() * 0.6);
       lifeB -= Math.max(0, boardPowerA - interactB);
 
       if (lifeB <= 0) break;
@@ -69,9 +77,12 @@ export class ModelEvaluator {
         }
       }
 
-      const newThreatsB = this.calculateTurnPower(featuresB, turn) * handFactorB;
+      const newThreatsB =
+        this.calculateTurnPower(featuresB, turn) * handFactorB;
       boardPowerB = boardPowerB * 0.85 + newThreatsB;
-      const interactA = this.calculateInteraction(featuresA, turn) * (0.7 + Math.random() * 0.6);
+      const interactA =
+        this.calculateInteraction(featuresA, turn) *
+        (0.7 + Math.random() * 0.6);
       lifeA -= Math.max(0, boardPowerB - interactA);
 
       turn++;
@@ -79,16 +90,26 @@ export class ModelEvaluator {
 
     if (lifeA > 0 && lifeB > 0) {
       if (lifeA === lifeB) {
-        return { winner: Math.random() < 0.5 ? "A" : "B", turns: turn, finalLifeA: lifeA, finalLifeB: lifeB };
+        return {
+          winner: Math.random() < 0.5 ? "A" : "B",
+          turns: turn,
+          finalLifeA: lifeA,
+          finalLifeB: lifeB,
+        };
       }
-      return { winner: lifeA > lifeB ? "A" : "B", turns: turn, finalLifeA: lifeA, finalLifeB: lifeB };
+      return {
+        winner: lifeA > lifeB ? "A" : "B",
+        turns: turn,
+        finalLifeA: lifeA,
+        finalLifeB: lifeB,
+      };
     }
 
     return {
       winner: lifeB <= 0 ? "A" : "B",
       turns: turn,
       finalLifeA: Math.max(0, lifeA),
-      finalLifeB: Math.max(0, lifeB)
+      finalLifeB: Math.max(0, lifeB),
     };
   }
 
@@ -96,11 +117,16 @@ export class ModelEvaluator {
    * Detecta se um deck tem combo win condition e estima o turno de execução.
    * Critério: engine recorrente (whenever/untap) + tutor OU (sacrifice + token).
    */
-  private static detectCombo(features: CardFeatures[]): { hasCombo: boolean; comboTurn: number } {
+  private static detectCombo(features: CardFeatures[]): {
+    hasCombo: boolean;
+    comboTurn: number;
+  } {
     const hasEngine = features.some(f => f.roles.includes("engine"));
-    const hasTutor  = features.some(f => f.roles.includes("tutor"));
-    const hasSacrifice = features.some(f => f.mechanicTags.includes("sacrifice"));
-    const hasToken     = features.some(f => f.mechanicTags.includes("token"));
+    const hasTutor = features.some(f => f.roles.includes("tutor"));
+    const hasSacrifice = features.some(f =>
+      f.mechanicTags.includes("sacrifice")
+    );
+    const hasToken = features.some(f => f.mechanicTags.includes("token"));
     const hasCombo = hasEngine && (hasTutor || (hasSacrifice && hasToken));
 
     // Turno do combo ≈ CMC do enabler mais barato + 2 turnos de setup
@@ -114,24 +140,44 @@ export class ModelEvaluator {
   /**
    * Conta counterspells disponíveis na mão simulada para intercepção de combo.
    */
-  private static calculateCounterspellCount(features: CardFeatures[], turn: number): number {
-    return features.filter(f => f.cmc <= turn && f.roles.includes("counterspell")).length;
+  private static calculateCounterspellCount(
+    features: CardFeatures[],
+    turn: number
+  ): number {
+    return features.filter(
+      f => f.cmc <= turn && f.roles.includes("counterspell")
+    ).length;
   }
 
-  private static calculateTurnPower(features: CardFeatures[], turn: number): number {
-    const playable = features.filter(f => f.cmc <= turn && f.roles.includes("threat"));
+  private static calculateTurnPower(
+    features: CardFeatures[],
+    turn: number
+  ): number {
+    const playable = features.filter(
+      f => f.cmc <= turn && f.roles.includes("threat")
+    );
     if (playable.length === 0) return 0;
 
     const handSize = Math.min(playable.length, 6 + turn);
     // Ordenar por CMC asc: jogadores reais jogam ameaças baratas primeiro
-    const sampled = [...playable].sort((a, b) => a.cmc - b.cmc).slice(0, handSize);
-    const avgImpact = sampled.reduce((s, f) => s + f.impactScore, 0) / sampled.length;
+    const sampled = [...playable]
+      .sort((a, b) => a.cmc - b.cmc)
+      .slice(0, handSize);
+    const avgImpact =
+      sampled.reduce((s, f) => s + f.impactScore, 0) / sampled.length;
     return avgImpact * (turn * 0.4);
   }
 
-  private static calculateInteraction(features: CardFeatures[], turn: number): number {
+  private static calculateInteraction(
+    features: CardFeatures[],
+    turn: number
+  ): number {
     const interaction = features.filter(
-      f => f.cmc <= turn && (f.roles.includes("removal") || f.roles.includes("counterspell") || f.roles.includes("board_wipe"))
+      f =>
+        f.cmc <= turn &&
+        (f.roles.includes("removal") ||
+          f.roles.includes("counterspell") ||
+          f.roles.includes("board_wipe"))
     );
     const available = Math.min(interaction.length, 3 + Math.floor(turn / 2));
     return available * 0.3;
@@ -140,10 +186,16 @@ export class ModelEvaluator {
   /**
    * Calcula o Winrate de um deck contra um conjunto de oponentes (Meta)
    */
-  public static async evaluateWinrate(deck: any[], archetype: string, iterations: number = 20): Promise<number> {
+  public static async evaluateWinrate(
+    deck: any[],
+    archetype: string,
+    iterations: number = 20
+  ): Promise<number> {
     const opponentsRaw = await getMetaDecksForArchetype(archetype);
-    const opponents = await Promise.all(opponentsRaw.map(dl => MetaAnalytics.parseDecklist(dl)));
-    
+    const opponents = await Promise.all(
+      opponentsRaw.map(dl => MetaAnalytics.parseDecklist(dl))
+    );
+
     let wins = 0;
     for (const opponent of opponents) {
       for (let i = 0; i < iterations; i++) {
@@ -158,7 +210,9 @@ export class ModelEvaluator {
   /**
    * Executa Testes de Regressão Automatizados
    */
-  public static async runRegressionTests(currentGenerator: (arch: string) => Promise<any[]>): Promise<any> {
+  public static async runRegressionTests(
+    currentGenerator: (arch: string) => Promise<any[]>
+  ): Promise<any> {
     const testArchetypes = ["aggro", "control", "midrange"];
     const results: any[] = [];
 
@@ -174,7 +228,7 @@ export class ModelEvaluator {
         normalizedScore: brain.normalizedScore,
         winrate,
         tier: brain.tier,
-        consistency: metrics.consistencyScore
+        consistency: metrics.consistencyScore,
       });
     }
 
@@ -192,7 +246,7 @@ export class ExperimentTracker {
     const entry = {
       timestamp: new Date().toISOString(),
       name,
-      metrics
+      metrics,
     };
     this.logs.push(entry);
     // Log silencioso: armazena em memória para getHistory().

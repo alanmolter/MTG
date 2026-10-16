@@ -3,7 +3,7 @@ import { searchCards } from "./scryfall";
 
 /**
  * Meta Analytics Service
- * 
+ *
  * Este serviço analisa decks reais (MTGGoldfish, MTGTop8) para extrair padrões de "Gold Standard".
  * Permite que o Cérebro de Avaliação use benchmarks reais em vez de teóricos.
  */
@@ -15,7 +15,7 @@ export interface MetaBenchmark {
   avgTags: Record<string, number>;
   sampleSize: number;
   lastUpdated: string;
-  topCards: { name: string, count: number }[];
+  topCards: { name: string; count: number }[];
 }
 
 export class MetaAnalytics {
@@ -34,14 +34,14 @@ export class MetaAnalytics {
       if (match) {
         const qty = parseInt(match[1]);
         const name = match[2].trim();
-        
+
         // Buscar info da carta no banco local
         const cardData = await getCardByName(name);
         if (cardData) {
           deck.push({
             ...cardData,
             name: cardData.name,
-            quantity: qty
+            quantity: qty,
           });
         }
       }
@@ -96,7 +96,7 @@ export class MetaAnalytics {
 
     for (const deck of decks) {
       const analysis = MetaAnalytics.analyzeDeck(deck);
-      
+
       // Agregar Curve
       for (const [cmcStr, count] of Object.entries(analysis.curve)) {
         const cmc = parseInt(cmcStr);
@@ -138,7 +138,7 @@ export class MetaAnalytics {
       avgTags,
       sampleSize: n,
       lastUpdated: new Date().toISOString(),
-      topCards: [] // TODO: extrair cartas mais frequentes
+      topCards: [], // TODO: extrair cartas mais frequentes
     };
 
     this.benchmarks[archetype] = benchmark;

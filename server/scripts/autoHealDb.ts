@@ -35,7 +35,9 @@ function banner(title: string, char = "═") {
 }
 
 function isCorruptionError(msg: string): boolean {
-  return /invalid page in block/i.test(msg) || /could not read block/i.test(msg);
+  return (
+    /invalid page in block/i.test(msg) || /could not read block/i.test(msg)
+  );
 }
 
 async function scanTable(sql: any, table: string): Promise<ScanResult> {
@@ -57,7 +59,10 @@ async function scanAll(sql: any): Promise<Record<string, ScanResult>> {
   return out;
 }
 
-function reportScan(results: Record<string, ScanResult>): { healthy: boolean; corrupted: string[] } {
+function reportScan(results: Record<string, ScanResult>): {
+  healthy: boolean;
+  corrupted: string[];
+} {
   const corrupted: string[] = [];
   for (const [table, r] of Object.entries(results)) {
     if (r.ok) {
@@ -112,9 +117,15 @@ async function tryRebuildCardSynergies(sql: any): Promise<boolean> {
         CONSTRAINT card_synergies_pair_unique UNIQUE (card1_id, card2_id)
       )
     `);
-    await sql.unsafe(`CREATE INDEX idx_card_synergies_c1 ON card_synergies(card1_id)`);
-    await sql.unsafe(`CREATE INDEX idx_card_synergies_c2 ON card_synergies(card2_id)`);
-    console.log(`    OK (dados perdidos — serão recriados nos próximos treinos)`);
+    await sql.unsafe(
+      `CREATE INDEX idx_card_synergies_c1 ON card_synergies(card1_id)`
+    );
+    await sql.unsafe(
+      `CREATE INDEX idx_card_synergies_c2 ON card_synergies(card2_id)`
+    );
+    console.log(
+      `    OK (dados perdidos — serão recriados nos próximos treinos)`
+    );
     return true;
   } catch (e: any) {
     console.log(`    FALHOU: ${e?.message}`);
@@ -155,7 +166,9 @@ export async function healTable(
     console.log(
       `    ↳ Rebuild automático não disponível para "${table}" (dados insubstituíveis).`
     );
-    console.log(`      Ação manual necessária — verifique o disco e considere restore de backup.`);
+    console.log(
+      `      Ação manual necessária — verifique o disco e considere restore de backup.`
+    );
   }
 
   return null;
@@ -180,7 +193,9 @@ async function run() {
   }
 
   if (DRY_RUN) {
-    console.log(`\n  [dry-run] ${corrupted.length} tabela(s) corrompida(s). Nenhum reparo executado.`);
+    console.log(
+      `\n  [dry-run] ${corrupted.length} tabela(s) corrompida(s). Nenhum reparo executado.`
+    );
     await closeDb();
     process.exit(2);
   }
@@ -199,29 +214,40 @@ async function run() {
 
   console.log(`\n  Resumo do reparo:`);
   for (const [table, step] of Object.entries(healed)) {
-    console.log(`    ▸ ${table.padEnd(18)} ${step ? `reparado via ${step.toUpperCase()}` : "NÃO REPARADO"}`);
+    console.log(
+      `    ▸ ${table.padEnd(18)} ${step ? `reparado via ${step.toUpperCase()}` : "NÃO REPARADO"}`
+    );
   }
 
   await closeDb();
 
   if (postReport.healthy) {
-    console.log(`\n  ✅ Banco totalmente reparado. Pipeline pode prosseguir.\n`);
+    console.log(
+      `\n  ✅ Banco totalmente reparado. Pipeline pode prosseguir.\n`
+    );
     process.exit(0);
   } else {
-    console.error(`\n  ❌ Corrupção persiste em: ${postReport.corrupted.join(", ")}`);
-    console.error(`     Considere restore de backup ou intervenção manual no disco.\n`);
+    console.error(
+      `\n  ❌ Corrupção persiste em: ${postReport.corrupted.join(", ")}`
+    );
+    console.error(
+      `     Considere restore de backup ou intervenção manual no disco.\n`
+    );
     process.exit(2);
   }
 }
 
 // Apenas executa se chamado como script (permite importar `healTable` em testes)
-const isMain = import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}` ||
+const isMain =
+  import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}` ||
   process.argv[1]?.endsWith("autoHealDb.ts");
 
 if (isMain) {
-  run().catch(async (e) => {
+  run().catch(async e => {
     console.error("[autoHealDb] Erro fatal:", e?.message || e);
-    try { await closeDb(); } catch {}
+    try {
+      await closeDb();
+    } catch {}
     process.exit(1);
   });
 }

@@ -21,7 +21,13 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 export const CTX_WEIGHT_DIM = 32;
 
-export type Archetype = "aggro" | "control" | "midrange" | "combo" | "ramp" | "unknown";
+export type Archetype =
+  | "aggro"
+  | "control"
+  | "midrange"
+  | "combo"
+  | "ramp"
+  | "unknown";
 
 export interface WeightContext {
   commanderId?: number | null;
@@ -115,7 +121,9 @@ export async function getNearestByCentroid(
   topK = 20
 ): Promise<ContextualWeightRow[]> {
   if (centroid.length !== CTX_WEIGHT_DIM) {
-    throw new Error(`[ContextualWeights] centroid dim ${centroid.length} !== ${CTX_WEIGHT_DIM}`);
+    throw new Error(
+      `[ContextualWeights] centroid dim ${centroid.length} !== ${CTX_WEIGHT_DIM}`
+    );
   }
   const db = await getDb();
   if (!db) return [];
@@ -139,7 +147,7 @@ export async function getNearestByCentroid(
   `);
 
   const rows = asArray<any>(result);
-  return rows.map((r) => ({
+  return rows.map(r => ({
     cardId: r.card_id,
     commanderId: r.commander_id,
     archetype: r.archetype,
@@ -156,9 +164,13 @@ export async function getNearestByCentroid(
  * Usado pelo pipeline de treinamento (Python → Node via bridge, ou direto
  * em TypeScript vindo do regressionTest).
  */
-export async function upsertContextualWeight(params: UpsertWeightParams): Promise<void> {
+export async function upsertContextualWeight(
+  params: UpsertWeightParams
+): Promise<void> {
   if (params.weightVec.length !== CTX_WEIGHT_DIM) {
-    throw new Error(`[ContextualWeights] weightVec dim ${params.weightVec.length} !== ${CTX_WEIGHT_DIM}`);
+    throw new Error(
+      `[ContextualWeights] weightVec dim ${params.weightVec.length} !== ${CTX_WEIGHT_DIM}`
+    );
   }
   const db = await getDb();
   if (!db) return;
@@ -230,7 +242,7 @@ export function computeCentroid(rows: ContextualWeightRow[]): number[] {
   for (const row of rows) {
     for (let i = 0; i < CTX_WEIGHT_DIM; i++) sum[i] += row.weightVec[i] ?? 0;
   }
-  return sum.map((v) => v / rows.length);
+  return sum.map(v => v / rows.length);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -239,7 +251,12 @@ export function computeCentroid(rows: ContextualWeightRow[]): number[] {
 
 function asArray<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];
-  if (result && typeof result === "object" && "rows" in result && Array.isArray((result as any).rows)) {
+  if (
+    result &&
+    typeof result === "object" &&
+    "rows" in result &&
+    Array.isArray((result as any).rows)
+  ) {
     return (result as any).rows as T[];
   }
   return [];
@@ -257,11 +274,13 @@ function parseVector(raw: unknown): number[] {
   return [];
 }
 
-function normalizeRow(row: typeof cardContextualWeight.$inferSelect): ContextualWeightRow {
+function normalizeRow(
+  row: typeof cardContextualWeight.$inferSelect
+): ContextualWeightRow {
   return {
     cardId: row.cardId,
     commanderId: row.commanderId,
-    archetype: (row.archetype as Archetype),
+    archetype: row.archetype as Archetype,
     weightVec: parseVector(row.weightVec),
     scalarSynergy: row.scalarSynergy,
     winCount: row.winCount,

@@ -1,5 +1,10 @@
 import { getDb } from "../db";
-import { embeddingsCache, EmbeddingsCache, cards, Card } from "../../drizzle/schema";
+import {
+  embeddingsCache,
+  EmbeddingsCache,
+  cards,
+  Card,
+} from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
 // Deve coincidir com o modelVersion gerado pelo embeddingTrainer.ts
@@ -8,15 +13,70 @@ const MODEL_VERSION = "v2.0-real";
 // Vocabulário fixo de 64 termos MTG relevantes — cada dimensão representa
 // a frequência normalizada desse termo no texto oracle da carta.
 const MTG_VOCAB: string[] = [
-  "destroy","exile","counter","draw","search","library","creature","instant",
-  "sorcery","land","flying","haste","trample","token","sacrifice","graveyard",
-  "discard","hexproof","vigilance","lifelink","deathtouch","flash","equip",
-  "enchant","whenever","beginning","planeswalker","artifact","target","each",
-  "player","damage","life","turn","mana","add","tapped","untap","attack",
-  "block","combat","control","permanent","battlefield","hand","enter","copy",
-  "cast","return","bounce","mill","reveal","shuffle","loyalty","power",
-  "toughness","double","strike","reach","indestructible","shroud","prowess",
-  "protection","basic",
+  "destroy",
+  "exile",
+  "counter",
+  "draw",
+  "search",
+  "library",
+  "creature",
+  "instant",
+  "sorcery",
+  "land",
+  "flying",
+  "haste",
+  "trample",
+  "token",
+  "sacrifice",
+  "graveyard",
+  "discard",
+  "hexproof",
+  "vigilance",
+  "lifelink",
+  "deathtouch",
+  "flash",
+  "equip",
+  "enchant",
+  "whenever",
+  "beginning",
+  "planeswalker",
+  "artifact",
+  "target",
+  "each",
+  "player",
+  "damage",
+  "life",
+  "turn",
+  "mana",
+  "add",
+  "tapped",
+  "untap",
+  "attack",
+  "block",
+  "combat",
+  "control",
+  "permanent",
+  "battlefield",
+  "hand",
+  "enter",
+  "copy",
+  "cast",
+  "return",
+  "bounce",
+  "mill",
+  "reveal",
+  "shuffle",
+  "loyalty",
+  "power",
+  "toughness",
+  "double",
+  "strike",
+  "reach",
+  "indestructible",
+  "shroud",
+  "prowess",
+  "protection",
+  "basic",
 ];
 
 /**
@@ -48,7 +108,13 @@ function generateTextEmbedding(card: Card): number[] {
   const DIM = 64;
   const embedding: number[] = new Array(DIM).fill(0);
 
-  const text = ((card.text ?? "") + " " + (card.type ?? "") + " " + (card.name ?? ""))
+  const text = (
+    (card.text ?? "") +
+    " " +
+    (card.type ?? "") +
+    " " +
+    (card.name ?? "")
+  )
     .toLowerCase()
     .replace(/[{}()\[\].,;:'"!?]/g, " ");
   const tokens = text.split(/\s+/).filter(Boolean);
@@ -65,7 +131,12 @@ function generateTextEmbedding(card: Card): number[] {
   embedding[62] = Math.min((card.cmc ?? 0) / 10, 1.0);
 
   // Dimensão 63: valor de raridade
-  const rarityMap: Record<string, number> = { common: 0.1, uncommon: 0.3, rare: 0.6, mythic: 0.9 };
+  const rarityMap: Record<string, number> = {
+    common: 0.1,
+    uncommon: 0.3,
+    rare: 0.6,
+    mythic: 0.9,
+  };
   embedding[63] = rarityMap[card.rarity ?? ""] ?? 0.5;
 
   // L2-normalização
@@ -80,7 +151,9 @@ function generateTextEmbedding(card: Card): number[] {
 /**
  * Obtém ou gera embedding para uma carta
  */
-export async function getCardEmbedding(cardId: number): Promise<number[] | null> {
+export async function getCardEmbedding(
+  cardId: number
+): Promise<number[] | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -89,7 +162,12 @@ export async function getCardEmbedding(cardId: number): Promise<number[] | null>
     const cached = await db
       .select()
       .from(embeddingsCache)
-      .where(and(eq(embeddingsCache.cardId, cardId), eq(embeddingsCache.modelVersion, MODEL_VERSION)))
+      .where(
+        and(
+          eq(embeddingsCache.cardId, cardId),
+          eq(embeddingsCache.modelVersion, MODEL_VERSION)
+        )
+      )
       .limit(1);
 
     if (cached.length > 0) {
@@ -149,8 +227,8 @@ export async function findSimilarCards(
     // Calcular similaridade com cada carta
     const similarities = await Promise.all(
       allCards
-        .filter((c) => c.id !== cardId)
-        .map(async (card) => {
+        .filter(c => c.id !== cardId)
+        .map(async card => {
           const embedding = await getCardEmbedding(card.id);
           if (!embedding) return { card, similarity: 0 };
 
@@ -163,7 +241,7 @@ export async function findSimilarCards(
     return similarities
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit)
-      .map((item) => ({
+      .map(item => ({
         ...item.card,
         similarity: item.similarity,
       }));
@@ -185,10 +263,10 @@ export async function findSimilarCardsForDeck(
   try {
     // Calcular embedding médio do deck
     const embeddings = await Promise.all(
-      deckCardIds.map((id) => getCardEmbedding(id))
+      deckCardIds.map(id => getCardEmbedding(id))
     );
 
-    const validEmbeddings = embeddings.filter((e) => e !== null) as number[][];
+    const validEmbeddings = embeddings.filter(e => e !== null) as number[][];
     if (validEmbeddings.length === 0) return [];
 
     const dim = validEmbeddings[0].length;
@@ -208,8 +286,8 @@ export async function findSimilarCardsForDeck(
     // Calcular similaridade com cada carta
     const similarities = await Promise.all(
       allCards
-        .filter((c) => !deckCardIds.includes(c.id))
-        .map(async (card) => {
+        .filter(c => !deckCardIds.includes(c.id))
+        .map(async card => {
           const embedding = await getCardEmbedding(card.id);
           if (!embedding) return { card, similarity: 0 };
 
@@ -222,7 +300,7 @@ export async function findSimilarCardsForDeck(
     return similarities
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit)
-      .map((item) => ({
+      .map(item => ({
         ...item.card,
         similarity: item.similarity,
       }));

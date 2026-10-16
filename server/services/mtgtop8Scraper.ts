@@ -65,11 +65,11 @@ async function runInBatches<T>(
 ): Promise<T[]> {
   const results: T[] = [];
   for (let i = 0; i < tasks.length; i += concurrency) {
-    const batch = tasks.slice(i, i + concurrency).map((fn) => fn());
+    const batch = tasks.slice(i, i + concurrency).map(fn => fn());
     const batchResults = await Promise.all(batch);
     results.push(...batchResults);
     if (delayMs > 0 && i + concurrency < tasks.length) {
-      await new Promise((r) => setTimeout(r, delayMs));
+      await new Promise(r => setTimeout(r, delayMs));
     }
   }
   return results;
@@ -140,7 +140,10 @@ async function getDeckIdsFromArchetype(
     const seen = new Set<string>();
     const results: Array<{ e: string; d: string; name: string }> = [];
     let match;
-    while ((match = deckRegex.exec(html)) !== null && results.length < maxDecks) {
+    while (
+      (match = deckRegex.exec(html)) !== null &&
+      results.length < maxDecks
+    ) {
       const key = `${match[1]}_${match[2]}`;
       if (!seen.has(key)) {
         seen.add(key);
@@ -327,7 +330,7 @@ export async function importMTGTop8Decks(
       if (deckEntries.length >= decksPerFormat) break;
       deckEntries.push({ ...entry, archetype: arch.name });
     }
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 150));
   }
 
   console.log(
@@ -343,7 +346,7 @@ export async function importMTGTop8Decks(
 
   // Downloads paralelos em batches
   let completed = 0;
-  const downloadTasks = deckEntries.map((entry) => async () => {
+  const downloadTasks = deckEntries.map(entry => async () => {
     const detail = await downloadDeck(
       entry.e,
       entry.d,
@@ -410,9 +413,13 @@ export async function importAllTop8Formats(
     errors: [],
   };
 
-  console.log(`\n  [MTGTop8] Importando ${decksPerFormat} decks de cada formato:`);
+  console.log(
+    `\n  [MTGTop8] Importando ${decksPerFormat} decks de cada formato:`
+  );
   console.log(`  [MTGTop8] Formatos: ${TOP8_FORMATS.join(", ")}`);
-  console.log(`  [MTGTop8] Total máximo: ${TOP8_FORMATS.length * decksPerFormat} decks\n`);
+  console.log(
+    `  [MTGTop8] Total máximo: ${TOP8_FORMATS.length * decksPerFormat} decks\n`
+  );
 
   for (const format of TOP8_FORMATS) {
     const r = await importMTGTop8Decks(format, decksPerFormat);
@@ -421,7 +428,7 @@ export async function importAllTop8Formats(
     totals.decksSkipped += r.decksSkipped;
     totals.errors.push(...r.errors);
     // Delay entre formatos
-    await new Promise((res) => setTimeout(res, 1000));
+    await new Promise(res => setTimeout(res, 1000));
   }
 
   console.log(`\n  [MTGTop8] TOTAL GERAL:`);

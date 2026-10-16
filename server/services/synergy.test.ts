@@ -214,7 +214,11 @@ describe("Synergy Engine", () => {
 
       const result = await updateSynergy(1, 2, 90, 95);
 
-      expect(result).toEqual({ ...mockSynergy, weight: 90, coOccurrenceRate: 95 });
+      expect(result).toEqual({
+        ...mockSynergy,
+        weight: 90,
+        coOccurrenceRate: 95,
+      });
       expect(mockDb.update).toHaveBeenCalled();
       expect(mockDb.set).toHaveBeenCalledWith({
         weight: 90,
@@ -369,15 +373,27 @@ describe("Synergy Engine", () => {
       // Iteration order in calculateDeckSynergy:
       //   (1,2), (1,3), (1,4), (1,5), (2,3), (2,4), (2,5), (3,4), (3,5), (4,5)
       const pairOrder: [number, number][] = [
-        [1, 2], [1, 3], [1, 4], [1, 5],
-        [2, 3], [2, 4], [2, 5],
-        [3, 4], [3, 5],
+        [1, 2],
+        [1, 3],
+        [1, 4],
+        [1, 5],
+        [2, 3],
+        [2, 4],
+        [2, 5],
+        [3, 4],
+        [3, 5],
         [4, 5],
       ];
       const synergyMatrix: { [key: string]: number } = {
-        "1-2": 10, "1-3": 15, "1-4": 5, "1-5": 8,
-        "2-3": 12, "2-4": 20, "2-5": 6,
-        "3-4": 18, "3-5": 9,
+        "1-2": 10,
+        "1-3": 15,
+        "1-4": 5,
+        "1-5": 8,
+        "2-3": 12,
+        "2-4": 20,
+        "2-5": 6,
+        "3-4": 18,
+        "3-5": 9,
         "4-5": 14,
       };
 
@@ -398,7 +414,10 @@ describe("Synergy Engine", () => {
 
       const result = await calculateDeckSynergy(cardIds);
 
-      const expectedTotal = Object.values(synergyMatrix).reduce((s, v) => s + v, 0);
+      const expectedTotal = Object.values(synergyMatrix).reduce(
+        (s, v) => s + v,
+        0
+      );
       expect(result).toBe(expectedTotal);
     });
 

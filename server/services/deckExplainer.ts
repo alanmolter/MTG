@@ -57,9 +57,9 @@ function buildExplainerPrompt(
   }
 
   const cardList = Array.from(uniqueCards.values())
-    .filter((c) => !c.type?.toLowerCase().includes("land"))
+    .filter(c => !c.type?.toLowerCase().includes("land"))
     .slice(0, 60)
-    .map((c) => {
+    .map(c => {
       const qty = c.quantity > 1 ? `${c.quantity}x ` : "";
       const text = c.text ? c.text.slice(0, 120).replace(/\n/g, " ") : "";
       return `${qty}${c.name} [CMC:${c.cmc ?? "?"}] — ${text}`;
@@ -184,32 +184,38 @@ const ARCHETYPE_SEQUENCES: Record<
     late: "Feche o jogo com feitiços de dano direto ou efeitos de haste. Evite entrar em jogo longo.",
   },
   burn: {
-    early: "Use mágicas de dano de 1-2 mana para reduzir a vida do oponente rapidamente.",
+    early:
+      "Use mágicas de dano de 1-2 mana para reduzir a vida do oponente rapidamente.",
     mid: "Combine dano direto com criaturas com haste para maximizar o dano por turno.",
     late: "Feche com feitiços de dano que atingem o oponente diretamente. 20 de dano em 4-5 turnos é o objetivo.",
   },
   control: {
-    early: "Segure mana aberto para contramágicas e remoção barata. Evite desenvolver o board.",
+    early:
+      "Segure mana aberto para contramágicas e remoção barata. Evite desenvolver o board.",
     mid: "Estabilize com sweepers e compre cartas. Estabeleça vantagem de cartas permanente.",
     late: "Jogue sua win condition protegida por counterspells. Cada spell do oponente deve ter resposta.",
   },
   midrange: {
-    early: "Jogue ramp e criaturas pequenas de alta eficiência. Responda às ameaças do oponente.",
+    early:
+      "Jogue ramp e criaturas pequenas de alta eficiência. Responda às ameaças do oponente.",
     mid: "Desenvolva criaturas versáteis que ganham vantagem — draw, remoção ou tokens.",
     late: "Domine o board com criaturas maiores. Sua vantagem de recursos deve superar o oponente.",
   },
   ramp: {
-    early: "Priorize todas as fontes de ramp. Jogue mana rocks e criaturas de ramp antes de tudo.",
+    early:
+      "Priorize todas as fontes de ramp. Jogue mana rocks e criaturas de ramp antes de tudo.",
     mid: "Use o mana extra para jogar ameaças muito acima da curva do oponente.",
     late: "Uma ou duas criaturas gigantes ou spells de alto impacto devem encerrar o jogo.",
   },
   combo: {
-    early: "Desenvolva mana, jogue peças do combo e busque tutors para encontrar o restante.",
+    early:
+      "Desenvolva mana, jogue peças do combo e busque tutors para encontrar o restante.",
     mid: "Proteja suas peças com counterspells ou respostas. Monte o combo no momento certo.",
     late: "Execute o combo quando tiver proteção suficiente. Uma única abertura pode encerrar o jogo.",
   },
   tempo: {
-    early: "Jogue criaturas eficientes de 1-2 mana e mantenha mana para responses.",
+    early:
+      "Jogue criaturas eficientes de 1-2 mana e mantenha mana para responses.",
     mid: "Ataque com criaturas enquanto usa bounce e counterspells para atrasar o oponente.",
     late: "Suas criaturas com evasão devem ter fechado o jogo antes do oponente estabilizar.",
   },
@@ -220,7 +226,7 @@ function buildRuleBasedExplanation(
   archetype: string
 ): DeckExplanation {
   const winResult = detectWinConditions(
-    cards.map((c) => ({ name: c.name, type: c.type, text: c.text }))
+    cards.map(c => ({ name: c.name, type: c.type, text: c.text }))
   );
 
   // Contagem de papéis funcionais
@@ -228,7 +234,11 @@ function buildRuleBasedExplanation(
   for (const card of cards) {
     const text = (card.text || "").toLowerCase();
     const type = (card.type || "").toLowerCase();
-    if (text.includes("destroy") || text.includes("exile") || text.includes("damage") && text.includes("target creature")) {
+    if (
+      text.includes("destroy") ||
+      text.includes("exile") ||
+      (text.includes("damage") && text.includes("target creature"))
+    ) {
       (roleCounts["removal"] ??= []).push(card.name);
     }
     if (text.includes("draw") && text.includes("card")) {
@@ -237,7 +247,10 @@ function buildRuleBasedExplanation(
     if (text.includes("search your library") && !text.includes("basic land")) {
       (roleCounts["tutor"] ??= []).push(card.name);
     }
-    if (text.includes("add {") || (text.includes("add") && text.includes("mana"))) {
+    if (
+      text.includes("add {") ||
+      (text.includes("add") && text.includes("mana"))
+    ) {
       (roleCounts["ramp"] ??= []).push(card.name);
     }
     if (text.includes("counter target")) {
@@ -261,51 +274,71 @@ function buildRuleBasedExplanation(
   const synergies: KeySynergy[] = [];
   if (roleCounts["token"] && roleCounts["sacrifice"]) {
     synergies.push({
-      cards: [...(roleCounts["token"] ?? []).slice(0, 2), ...(roleCounts["sacrifice"] ?? []).slice(0, 1)],
-      description: "Geração de tokens alimenta o motor de sacrifício para vantagem contínua de mana ou cartas",
+      cards: [
+        ...(roleCounts["token"] ?? []).slice(0, 2),
+        ...(roleCounts["sacrifice"] ?? []).slice(0, 1),
+      ],
+      description:
+        "Geração de tokens alimenta o motor de sacrifício para vantagem contínua de mana ou cartas",
       type: "engine",
     });
   }
   if (roleCounts["tutor"] && roleCounts["draw"]) {
     synergies.push({
-      cards: [...(roleCounts["tutor"] ?? []).slice(0, 1), ...(roleCounts["draw"] ?? []).slice(0, 1)],
-      description: "Tutors buscam as peças certas enquanto card draw mantém a mão cheia de opções",
+      cards: [
+        ...(roleCounts["tutor"] ?? []).slice(0, 1),
+        ...(roleCounts["draw"] ?? []).slice(0, 1),
+      ],
+      description:
+        "Tutors buscam as peças certas enquanto card draw mantém a mão cheia de opções",
       type: "value",
     });
   }
   if (roleCounts["ramp"] && roleCounts["haste"]) {
     synergies.push({
-      cards: [...(roleCounts["ramp"] ?? []).slice(0, 1), ...(roleCounts["haste"] ?? []).slice(0, 1)],
-      description: "Ramp permite jogar criaturas com haste muito antes do esperado, criando pressão imediata",
+      cards: [
+        ...(roleCounts["ramp"] ?? []).slice(0, 1),
+        ...(roleCounts["haste"] ?? []).slice(0, 1),
+      ],
+      description:
+        "Ramp permite jogar criaturas com haste muito antes do esperado, criando pressão imediata",
       type: "engine",
     });
   }
   if (roleCounts["counterspell"] && roleCounts["draw"]) {
     synergies.push({
-      cards: [...(roleCounts["counterspell"] ?? []).slice(0, 1), ...(roleCounts["draw"] ?? []).slice(0, 1)],
-      description: "Counterspells protegem a estratégia enquanto card draw garante sempre ter respostas na mão",
+      cards: [
+        ...(roleCounts["counterspell"] ?? []).slice(0, 1),
+        ...(roleCounts["draw"] ?? []).slice(0, 1),
+      ],
+      description:
+        "Counterspells protegem a estratégia enquanto card draw garante sempre ter respostas na mão",
       type: "protection",
     });
   }
   if (roleCounts["graveyard"]) {
     synergies.push({
       cards: (roleCounts["graveyard"] ?? []).slice(0, 2),
-      description: "Cartas com recursão do cemitério criam vantagem de recursos ao longo do jogo",
+      description:
+        "Cartas com recursão do cemitério criam vantagem de recursos ao longo do jogo",
       type: "value",
     });
   }
 
   // Key cards — mais impactantes por CMC
   const nonLands = cards
-    .filter((c) => !c.type?.toLowerCase().includes("land"))
+    .filter(c => !c.type?.toLowerCase().includes("land"))
     .sort((a, b) => (b.cmc ?? 0) - (a.cmc ?? 0));
-  const keyCards = nonLands.slice(0, 5).map((c) => {
+  const keyCards = nonLands.slice(0, 5).map(c => {
     const text = (c.text || "").toLowerCase();
     let role = "Ameaça principal";
     if (text.includes("search your library")) role = "Buscador de peças chave";
-    else if (text.includes("draw") && text.includes("card")) role = "Motor de card draw";
-    else if (text.includes("counter target")) role = "Proteção via counterspell";
-    else if (text.includes("destroy") || text.includes("exile")) role = "Remoção versátil";
+    else if (text.includes("draw") && text.includes("card"))
+      role = "Motor de card draw";
+    else if (text.includes("counter target"))
+      role = "Proteção via counterspell";
+    else if (text.includes("destroy") || text.includes("exile"))
+      role = "Remoção versátil";
     else if (text.includes("add {")) role = "Aceleração de mana";
     else if (text.includes("haste")) role = "Ameaça de resposta imediata";
     else if (text.includes("flying")) role = "Ameaça de dano aéreo";
@@ -315,13 +348,26 @@ function buildRuleBasedExplanation(
   // Win conditions
   const winConditions: string[] = [];
   if (winResult.types.includes("combo_engine")) {
-    winConditions.push(...winResult.details.filter((d) => d.includes("Named combo") || d.includes("tutor")));
+    winConditions.push(
+      ...winResult.details.filter(
+        d => d.includes("Named combo") || d.includes("tutor")
+      )
+    );
   }
-  if (winResult.types.includes("aggro_damage")) winConditions.push("Dano direto — reduzir vida do oponente para 0 com criaturas e feitiços de dano");
-  if (winResult.types.includes("alternate_win")) winConditions.push("Condição alternativa de vitória via efeito de carta");
-  if (winResult.types.includes("mill_win")) winConditions.push("Mill — forçar o oponente a comprar de um deck vazio");
-  if (winResult.types.includes("poison_win")) winConditions.push("10 contadores de veneno via criaturas com infect");
-  if (winConditions.length === 0) winConditions.push("Dominância do board — vença no combate com mais criaturas ou mais eficientes");
+  if (winResult.types.includes("aggro_damage"))
+    winConditions.push(
+      "Dano direto — reduzir vida do oponente para 0 com criaturas e feitiços de dano"
+    );
+  if (winResult.types.includes("alternate_win"))
+    winConditions.push("Condição alternativa de vitória via efeito de carta");
+  if (winResult.types.includes("mill_win"))
+    winConditions.push("Mill — forçar o oponente a comprar de um deck vazio");
+  if (winResult.types.includes("poison_win"))
+    winConditions.push("10 contadores de veneno via criaturas com infect");
+  if (winConditions.length === 0)
+    winConditions.push(
+      "Dominância do board — vença no combate com mais criaturas ou mais eficientes"
+    );
 
   // Texto da estratégia
   const topRoles = Object.entries(roleCounts)
@@ -330,13 +376,20 @@ function buildRuleBasedExplanation(
     .map(([role]) => ROLE_LABELS[role] || role);
 
   const archLower = archetype.toLowerCase();
-  const styleKey = Object.keys(ARCHETYPE_STYLE).find((k) => archLower.includes(k)) ?? "midrange";
-  const sequence = ARCHETYPE_SEQUENCES[styleKey] ?? ARCHETYPE_SEQUENCES.midrange;
+  const styleKey =
+    Object.keys(ARCHETYPE_STYLE).find(k => archLower.includes(k)) ?? "midrange";
+  const sequence =
+    ARCHETYPE_SEQUENCES[styleKey] ?? ARCHETYPE_SEQUENCES.midrange;
 
-  const overview = `Deck ${ARCHETYPE_STYLE[styleKey] ?? archetype}. ` +
-    `Conta com ${cards.filter((c) => !c.type?.toLowerCase().includes("land")).reduce((s, c) => s + c.quantity, 0)} cartas não-terrenos. ` +
-    (topRoles.length > 0 ? `As principais funções são: ${topRoles.join(", ")}. ` : "") +
-    (winResult.hasWinCondition ? `Condição de vitória identificada: ${winConditions[0]}.` : "Estratégia baseada em dominância de board.");
+  const overview =
+    `Deck ${ARCHETYPE_STYLE[styleKey] ?? archetype}. ` +
+    `Conta com ${cards.filter(c => !c.type?.toLowerCase().includes("land")).reduce((s, c) => s + c.quantity, 0)} cartas não-terrenos. ` +
+    (topRoles.length > 0
+      ? `As principais funções são: ${topRoles.join(", ")}. `
+      : "") +
+    (winResult.hasWinCondition
+      ? `Condição de vitória identificada: ${winConditions[0]}.`
+      : "Estratégia baseada em dominância de board.");
 
   return {
     deckStyle: ARCHETYPE_STYLE[styleKey] ?? archetype,

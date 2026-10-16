@@ -26,7 +26,7 @@ const MYSQL_PREFIXES = ["0000_", "0001_", "0002_"];
 
 export function isPostgresMigration(filename: string): boolean {
   if (!/^00\d{2}_.+\.sql$/.test(filename)) return false;
-  return !MYSQL_PREFIXES.some((prefix) => filename.startsWith(prefix));
+  return !MYSQL_PREFIXES.some(prefix => filename.startsWith(prefix));
 }
 
 /**
@@ -63,7 +63,7 @@ export function splitStatements(sqlText: string): string[] {
   const leftover = current.trim().replace(/;$/, "");
   if (leftover.length > 0) result.push(leftover);
 
-  return result.filter((stmt) => stmt.replace(/--.*$/gm, "").trim().length > 0);
+  return result.filter(stmt => stmt.replace(/--.*$/gm, "").trim().length > 0);
 }
 
 export interface ApplyResult {
@@ -74,10 +74,10 @@ export interface ApplyResult {
 
 export async function applyPendingMigrations(
   db: MigrationDb,
-  files: MigrationFile[],
+  files: MigrationFile[]
 ): Promise<ApplyResult> {
   const ordered = [...files]
-    .filter((file) => isPostgresMigration(file.filename))
+    .filter(file => isPostgresMigration(file.filename))
     .sort((a, b) => a.filename.localeCompare(b.filename));
 
   await db.query(`
@@ -88,18 +88,20 @@ export async function applyPendingMigrations(
   `);
 
   const existing = await db.query(`SELECT filename FROM ${MIGRATIONS_TABLE}`);
-  const recorded = new Set(existing.map((row) => String(row.filename)));
+  const recorded = new Set(existing.map(row => String(row.filename)));
   const stamped: string[] = [];
 
   if (recorded.size === 0) {
-    const tables = await db.query(`SELECT to_regclass('public.cards') AS cards`);
+    const tables = await db.query(
+      `SELECT to_regclass('public.cards') AS cards`
+    );
     const cards = tables[0]?.cards;
     if (cards) {
       for (const file of ordered) {
         if (file.filename <= BASELINE_THROUGH) {
           await db.query(
             `INSERT INTO ${MIGRATIONS_TABLE} (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING`,
-            [file.filename],
+            [file.filename]
           );
           recorded.add(file.filename);
           stamped.push(file.filename);
@@ -117,13 +119,13 @@ export async function applyPendingMigrations(
     }
     const statements = splitStatements(file.sql);
     try {
-      await db.transaction(async (tx) => {
+      await db.transaction(async tx => {
         for (const statement of statements) {
           await tx.query(statement);
         }
         await tx.query(
           `INSERT INTO ${MIGRATIONS_TABLE} (filename) VALUES ($1)`,
-          [file.filename],
+          [file.filename]
         );
       });
     } catch (err) {

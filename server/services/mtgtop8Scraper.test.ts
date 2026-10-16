@@ -6,9 +6,11 @@ global.fetch = vi.fn();
 
 // Mock db — source uses `getRawClient()` (postgres.js tagged-template).
 function makeFakePg() {
-  const pg = vi.fn(async (_strings: TemplateStringsArray, ..._values: any[]) => {
-    return [{ id: 1 }];
-  });
+  const pg = vi.fn(
+    async (_strings: TemplateStringsArray, ..._values: any[]) => {
+      return [{ id: 1 }];
+    }
+  );
   return Object.assign(pg, {
     begin: async (fn: (tx: typeof pg) => Promise<unknown>) => fn(pg),
   });
@@ -41,9 +43,18 @@ describe("importMTGTop8Decks", () => {
     const deckTxt = `4 Lightning Bolt\n20 Mountain\nSideboard\n1 Pyroblast`;
 
     (global.fetch as any)
-      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(metagameHtml) })
-      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(archetypeHtml) })
-      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(deckTxt) });
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(metagameHtml),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(archetypeHtml),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(deckTxt),
+      });
 
     const result = await importMTGTop8Decks("modern", 1);
 

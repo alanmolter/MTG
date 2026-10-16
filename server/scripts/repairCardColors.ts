@@ -32,13 +32,13 @@ import { cards } from "../../drizzle/schema";
 import { eq, or, isNull, sql } from "drizzle-orm";
 
 const SCRYFALL_CARD_BY_ID = "https://api.scryfall.com/cards";
-const REQUEST_DELAY_MS    = 120; // rate-limit friendly
+const REQUEST_DELAY_MS = 120; // rate-limit friendly
 
 // ── CLI args ─────────────────────────────────────────────────────────────
-const args  = process.argv.slice(2);
+const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
 const LIMIT = (() => {
-  const arg = args.find((a) => a.startsWith("--limit="));
+  const arg = args.find(a => a.startsWith("--limit="));
   return arg ? parseInt(arg.split("=")[1], 10) : 0; // 0 = no limit
 })();
 
@@ -53,12 +53,12 @@ function resolveCardColors(card: any): string | null {
       if (Array.isArray(face.colors)) for (const c of face.colors) union.add(c);
     }
     if (union.size > 0) {
-      return ["W", "U", "B", "R", "G"].filter((c) => union.has(c)).join("");
+      return ["W", "U", "B", "R", "G"].filter(c => union.has(c)).join("");
     }
   }
   if (Array.isArray(card.color_identity) && card.color_identity.length > 0) {
     return ["W", "U", "B", "R", "G"]
-      .filter((c) => card.color_identity.includes(c))
+      .filter(c => card.color_identity.includes(c))
       .join("");
   }
   return null;
@@ -81,13 +81,19 @@ async function main() {
     process.exit(1);
   }
 
-  const client = postgres(dbUrl, { max: 1, idle_timeout: 5, connect_timeout: 10 });
-  const db     = drizzle(client);
+  const client = postgres(dbUrl, {
+    max: 1,
+    idle_timeout: 5,
+    connect_timeout: 10,
+  });
+  const db = drizzle(client);
 
   console.log("\n════════════════════════════════════════════════════════");
   console.log("  REPAIR CARD COLORS — Anomaly-3 retroactive fix");
   console.log("════════════════════════════════════════════════════════");
-  console.log(`  Modo    : ${APPLY ? "APPLY (gravando)" : "DRY-RUN (sem gravar)"}`);
+  console.log(
+    `  Modo    : ${APPLY ? "APPLY (gravando)" : "DRY-RUN (sem gravar)"}`
+  );
   console.log(`  Limite  : ${LIMIT || "sem limite"}`);
   console.log("────────────────────────────────────────────────────────");
 
@@ -114,7 +120,7 @@ async function main() {
 
     for (let i = 0; i < targets.length; i++) {
       const row = targets[i];
-      const sc  = await fetchScryfallCard(row.scryfallId);
+      const sc = await fetchScryfallCard(row.scryfallId);
       if (!sc) {
         failed++;
         process.stdout.write(
@@ -123,7 +129,7 @@ async function main() {
       } else {
         const resolved = resolveCardColors(sc);
         const newValue = resolved ?? ""; // persist "" (colorless) distinct from null
-        const changed  = (row.colors ?? "") !== newValue;
+        const changed = (row.colors ?? "") !== newValue;
 
         if (changed && resolved && resolved.length > 0) {
           fixed++;
@@ -134,7 +140,9 @@ async function main() {
               .where(eq(cards.id, row.id));
           }
           process.stdout.write(
-            `\r  [${i + 1}/${targets.length}] FIX  ${row.name.slice(0, 28).padEnd(28)} → ${newValue}`.padEnd(80)
+            `\r  [${i + 1}/${targets.length}] FIX  ${row.name.slice(0, 28).padEnd(28)} → ${newValue}`.padEnd(
+              80
+            )
           );
         } else {
           stillColorless++;
@@ -150,7 +158,7 @@ async function main() {
       }
 
       // Rate-limit politely
-      await new Promise((r) => setTimeout(r, REQUEST_DELAY_MS));
+      await new Promise(r => setTimeout(r, REQUEST_DELAY_MS));
     }
 
     process.stdout.write("\n");
@@ -168,7 +176,11 @@ async function main() {
     console.error("\n[repair-colors] erro fatal:", err?.message ?? err);
     process.exitCode = 1;
   } finally {
-    try { await client.end({ timeout: 3 }); } catch { /* noop */ }
+    try {
+      await client.end({ timeout: 3 });
+    } catch {
+      /* noop */
+    }
   }
 }
 

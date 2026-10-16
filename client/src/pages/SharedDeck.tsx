@@ -1,7 +1,13 @@
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Copy, ExternalLink, Share2 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,7 +30,11 @@ export default function SharedDeck() {
   const shareId = (params as any).shareId as string | undefined;
 
   // Get shared deck data usando hook nativo do tRPC
-  const { data: sharedDeck, isLoading, error } = trpc.sharing.getSharedDeck.useQuery(
+  const {
+    data: sharedDeck,
+    isLoading,
+    error,
+  } = trpc.sharing.getSharedDeck.useQuery(
     { shareId: shareId ?? "" },
     { enabled: !!shareId }
   );
@@ -74,7 +84,7 @@ export default function SharedDeck() {
           </CardHeader>
           <CardContent>
             <Button
-              onClick={() => window.location.href = "/"}
+              onClick={() => (window.location.href = "/")}
               className="w-full bg-purple-600 hover:bg-purple-700"
             >
               Ir para o Início
@@ -93,7 +103,9 @@ export default function SharedDeck() {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h1 className="text-4xl font-bold text-white mb-2">{typedDeck.title}</h1>
+                <h1 className="text-4xl font-bold text-white mb-2">
+                  {typedDeck.title}
+                </h1>
                 <p className="text-gray-400">{typedDeck.description}</p>
               </div>
               <div className="flex gap-2">
@@ -120,9 +132,13 @@ export default function SharedDeck() {
 
             {/* Deck Metadata */}
             <div className="flex gap-2 flex-wrap">
-              {typedDeck.format && <Badge variant="secondary">{typedDeck.format}</Badge>}
+              {typedDeck.format && (
+                <Badge variant="secondary">{typedDeck.format}</Badge>
+              )}
               {typedDeck.colors?.map((color: string) => (
-                <Badge key={color} variant="outline">{color}</Badge>
+                <Badge key={color} variant="outline">
+                  {color}
+                </Badge>
               ))}
             </div>
           </div>
@@ -166,16 +182,20 @@ export default function SharedDeck() {
           <div className="mt-8 text-center">
             <p className="text-gray-500 text-sm mb-4">
               {typedDeck.createdAt && (
-                <>Compartilhado em {new Date(typedDeck.createdAt).toLocaleDateString('pt-BR')}</>
+                <>
+                  Compartilhado em{" "}
+                  {new Date(typedDeck.createdAt).toLocaleDateString("pt-BR")}
+                </>
               )}
               {typedDeck.expiresAt && (
                 <span className="ml-2">
-                  • Expira em {new Date(typedDeck.expiresAt).toLocaleDateString('pt-BR')}
+                  • Expira em{" "}
+                  {new Date(typedDeck.expiresAt).toLocaleDateString("pt-BR")}
                 </span>
               )}
             </p>
             <Button
-              onClick={() => window.location.href = "/"}
+              onClick={() => (window.location.href = "/")}
               variant="outline"
               className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
             >

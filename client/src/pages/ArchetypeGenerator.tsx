@@ -297,24 +297,41 @@ const MANA_COLORS: {
 ];
 
 const TRIBES = [
-  "Elf", "Goblin", "Zombie", "Human", "Dragon", 
-  "Merfolk", "Vampire", "Angel", "Wizard", "Warrior", 
-  "Soldier", "Shaman", "Rogue", "Cleric", "Beast"
+  "Elf",
+  "Goblin",
+  "Zombie",
+  "Human",
+  "Dragon",
+  "Merfolk",
+  "Vampire",
+  "Angel",
+  "Wizard",
+  "Warrior",
+  "Soldier",
+  "Shaman",
+  "Rogue",
+  "Cleric",
+  "Beast",
 ];
 
 const CARD_TYPES = [
-  "creature", "instant", "sorcery", "enchantment", "artifact", "planeswalker"
+  "creature",
+  "instant",
+  "sorcery",
+  "enchantment",
+  "artifact",
+  "planeswalker",
 ];
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function TemplatePreview({ 
-  archetype, 
-  format, 
-  playstyle, 
-  powerLevel, 
-  consistency 
-}: { 
+function TemplatePreview({
+  archetype,
+  format,
+  playstyle,
+  powerLevel,
+  consistency,
+}: {
   archetype: ArchetypeName;
   format: FormatName;
   playstyle?: string;
@@ -322,26 +339,83 @@ function TemplatePreview({
   consistency?: Consistency;
 }) {
   const baseTemplates: Record<ArchetypeName, any> = {
-    aggro: { curve: { 1: 12, 2: 14, 3: 8, 4: 4 }, lands: 22, creatures: 28, spells: 10, priorities: ["haste"] },
-    burn: { curve: { 1: 16, 2: 12, 3: 6, 4: 2 }, lands: 20, creatures: 8, spells: 32, priorities: ["direct_damage"] },
-    control: { curve: { 2: 6, 3: 10, 4: 10, 5: 6 }, lands: 26, creatures: 6, spells: 28, priorities: ["removal"] },
-    combo: { curve: { 1: 6, 2: 10, 3: 12, 4: 8 }, lands: 24, creatures: 12, spells: 24, priorities: ["draw"] },
-    midrange: { curve: { 2: 8, 3: 12, 4: 10, 5: 6 }, lands: 24, creatures: 22, spells: 14, priorities: ["value"] },
-    ramp: { curve: { 1: 4, 2: 8, 3: 8, 4: 4, 5: 8, 6: 4 }, lands: 22, creatures: 16, spells: 22, priorities: ["ramp"] },
-    tempo: { curve: { 1: 8, 2: 14, 3: 10, 4: 4 }, lands: 20, creatures: 16, spells: 24, priorities: ["counter"] },
+    aggro: {
+      curve: { 1: 12, 2: 14, 3: 8, 4: 4 },
+      lands: 22,
+      creatures: 28,
+      spells: 10,
+      priorities: ["haste"],
+    },
+    burn: {
+      curve: { 1: 16, 2: 12, 3: 6, 4: 2 },
+      lands: 20,
+      creatures: 8,
+      spells: 32,
+      priorities: ["direct_damage"],
+    },
+    control: {
+      curve: { 2: 6, 3: 10, 4: 10, 5: 6 },
+      lands: 26,
+      creatures: 6,
+      spells: 28,
+      priorities: ["removal"],
+    },
+    combo: {
+      curve: { 1: 6, 2: 10, 3: 12, 4: 8 },
+      lands: 24,
+      creatures: 12,
+      spells: 24,
+      priorities: ["draw"],
+    },
+    midrange: {
+      curve: { 2: 8, 3: 12, 4: 10, 5: 6 },
+      lands: 24,
+      creatures: 22,
+      spells: 14,
+      priorities: ["value"],
+    },
+    ramp: {
+      curve: { 1: 4, 2: 8, 3: 8, 4: 4, 5: 8, 6: 4 },
+      lands: 22,
+      creatures: 16,
+      spells: 22,
+      priorities: ["ramp"],
+    },
+    tempo: {
+      curve: { 1: 8, 2: 14, 3: 10, 4: 4 },
+      lands: 20,
+      creatures: 16,
+      spells: 24,
+      priorities: ["counter"],
+    },
   };
 
   const playstyleMods: Record<string, any> = {
     go_wide: { curve: { 1: 16, 2: 16, 3: 10, 4: 4 }, priorities: ["token"] },
-    go_tall: { curve: { 1: 6, 2: 10, 3: 12, 4: 12 }, priorities: ["counter_synergy"] },
-    burn_hybrid: { curve: { 1: 14, 2: 14, 3: 8, 4: 2 }, priorities: ["direct_damage"] },
-    draw_go: { curve: { 1: 2, 2: 8, 3: 12, 4: 10, 5: 6 }, priorities: ["draw", "counter"] },
-    tap_out: { curve: { 2: 4, 3: 10, 4: 14, 5: 10, 6: 4 }, priorities: ["removal"] },
-    hard_control: { curve: { 1: 2, 2: 6, 3: 8, 4: 12, 5: 10, 6: 6 }, priorities: ["counter", "board_wipe"] },
+    go_tall: {
+      curve: { 1: 6, 2: 10, 3: 12, 4: 12 },
+      priorities: ["counter_synergy"],
+    },
+    burn_hybrid: {
+      curve: { 1: 14, 2: 14, 3: 8, 4: 2 },
+      priorities: ["direct_damage"],
+    },
+    draw_go: {
+      curve: { 1: 2, 2: 8, 3: 12, 4: 10, 5: 6 },
+      priorities: ["draw", "counter"],
+    },
+    tap_out: {
+      curve: { 2: 4, 3: 10, 4: 14, 5: 10, 6: 4 },
+      priorities: ["removal"],
+    },
+    hard_control: {
+      curve: { 1: 2, 2: 6, 3: 8, 4: 12, 5: 10, 6: 6 },
+      priorities: ["counter", "board_wipe"],
+    },
   };
 
   let t = { ...baseTemplates[archetype] };
-  
+
   if (playstyle && playstyleMods[playstyle]) {
     const mod = playstyleMods[playstyle];
     t = {
@@ -373,13 +447,16 @@ function TemplatePreview({
     curve: Object.fromEntries(
       Object.entries(t.curve).map(([cmc, count]) => [
         cmc,
-        Math.max(0, (count as number) + curveShift * (parseInt(cmc) <= 2 ? 2 : -1)),
+        Math.max(
+          0,
+          (count as number) + curveShift * (parseInt(cmc) <= 2 ? 2 : -1)
+        ),
       ])
     ),
   };
 
   const cmcs = [1, 2, 3, 4, 5, 6];
-  const maxVal = Math.max(...Object.values(t.curve) as number[]);
+  const maxVal = Math.max(...(Object.values(t.curve) as number[]));
 
   return (
     <div className="space-y-4">
@@ -387,22 +464,31 @@ function TemplatePreview({
         <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">
           Estrutura Projetada (Preview)
         </p>
-        <Badge variant="outline" className="text-[9px] h-4 border-purple-500/30 font-normal">
+        <Badge
+          variant="outline"
+          className="text-[9px] h-4 border-purple-500/30 font-normal"
+        >
           {format.toUpperCase()}
         </Badge>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-slate-950/40 p-2 rounded border border-purple-500/10 text-center">
-          <p className="text-red-400 text-lg font-black leading-none">{t.creatures}</p>
+          <p className="text-red-400 text-lg font-black leading-none">
+            {t.creatures}
+          </p>
           <p className="text-[9px] text-gray-600 uppercase mt-1">Crits</p>
         </div>
         <div className="bg-slate-950/40 p-2 rounded border border-purple-500/10 text-center">
-          <p className="text-blue-400 text-lg font-black leading-none">{t.spells}</p>
+          <p className="text-blue-400 text-lg font-black leading-none">
+            {t.spells}
+          </p>
           <p className="text-[9px] text-gray-600 uppercase mt-1">Sps</p>
         </div>
         <div className="bg-slate-950/40 p-2 rounded border border-purple-500/10 text-center">
-          <p className="text-green-400 text-lg font-black leading-none">{t.lands}</p>
+          <p className="text-green-400 text-lg font-black leading-none">
+            {t.lands}
+          </p>
           <p className="text-[9px] text-gray-600 uppercase mt-1">Lands</p>
         </div>
       </div>
@@ -413,14 +499,19 @@ function TemplatePreview({
             const val = t.curve[cmc] || 0;
             const h = maxVal > 0 ? (val / maxVal) * 100 : 0;
             return (
-              <div key={cmc} className="flex-1 flex flex-col items-center gap-1 group">
+              <div
+                key={cmc}
+                className="flex-1 flex flex-col items-center gap-1 group"
+              >
                 <div className="w-full bg-slate-800/50 rounded-t-sm relative h-full overflow-hidden">
-                  <div 
-                    className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-purple-600 to-pink-500 rounded-t-sm transition-all duration-300" 
+                  <div
+                    className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-purple-600 to-pink-500 rounded-t-sm transition-all duration-300"
                     style={{ height: `${h}%` }}
                   />
                 </div>
-                <span className="text-[9px] text-gray-700 font-bold">{cmc}</span>
+                <span className="text-[9px] text-gray-700 font-bold">
+                  {cmc}
+                </span>
               </div>
             );
           })}
@@ -441,16 +532,21 @@ function ScoreBar({
   color: string;
   isNormalized?: boolean;
 }) {
-  const pct = isNormalized 
+  const pct = isNormalized
     ? Math.max(0, Math.min(100, value))
     : Math.max(0, Math.min(100, ((value + 30) / 80) * 100));
-  
+
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-gray-400">
         <span>{label}</span>
-        <span className={value >= (isNormalized ? 50 : 0) ? "text-green-400" : "text-red-400"}>
-          {value.toFixed(1)}{isNormalized ? "%" : ""}
+        <span
+          className={
+            value >= (isNormalized ? 50 : 0) ? "text-green-400" : "text-red-400"
+          }
+        >
+          {value.toFixed(1)}
+          {isNormalized ? "%" : ""}
         </span>
       </div>
       <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -1028,8 +1124,8 @@ export default function ArchetypeGenerator() {
             {/* Template Preview */}
             <Card className="bg-slate-900/50 border-purple-500/30">
               <CardContent className="pt-4">
-                <TemplatePreview 
-                  archetype={archetype} 
+                <TemplatePreview
+                  archetype={archetype}
                   format={format}
                   playstyle={playstyle}
                   powerLevel={powerLevel}
@@ -1186,7 +1282,9 @@ export default function ArchetypeGenerator() {
                     {/* Tab: Lista */}
                     {activeTab === "list" && (
                       <div className="max-h-[600px] overflow-y-auto space-y-4 pr-1">
-                        {(["commander", "land", "creature", "spell"] as const).map(role => {
+                        {(
+                          ["commander", "land", "creature", "spell"] as const
+                        ).map(role => {
                           const cards =
                             result.deck?.filter((c: any) => c.role === role) ||
                             [];
@@ -1216,63 +1314,69 @@ export default function ArchetypeGenerator() {
                                 )
                               </p>
                               <div className="space-y-1">
-                                  {cards.map((card: any, idx: number) => (
-                                    <div
-                                      key={idx}
-                                      className={`group flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border transition-colors ${
-                                        role === "commander" 
-                                          ? "border-amber-500/50 bg-amber-950/20" 
-                                          : "border-purple-500/10 hover:border-purple-500/30"
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        {/* Miniatura da Imagem Real */}
-                                        <div className="w-10 h-10 rounded overflow-hidden bg-slate-700 border border-slate-600 shrink-0">
-                                          {card.imageUrl ? (
-                                            <img 
-                                              src={card.imageUrl} 
-                                              alt={card.name} 
-                                              className="w-full h-full object-cover transition-transform group-hover:scale-125"
-                                              loading="lazy"
-                                            />
-                                          ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-500">
-                                              No Art
-                                            </div>
-                                          )}
-                                        </div>
-                                        
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-white text-sm font-medium truncate">
-                                            {card.name}
-                                          </p>
-                                          <p className="text-gray-500 text-xs truncate">
-                                            {card.type}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-3 ml-3 shrink-0">
-                                        {card.cmc != null && (
-                                          <span className="text-gray-500 text-xs">
-                                            CMC {card.cmc}
-                                          </span>
-                                        )}
-                                        {card.colors && card.colors.length > 0 && (
-                                          <div className="flex gap-0.5">
-                                            {card.colors.split("").map((c: string, ci: number) => (
-                                              <span key={ci} className="text-[10px] bg-slate-700 px-1 border border-slate-600 rounded text-gray-300">
-                                                {c}
-                                              </span>
-                                            ))}
+                                {cards.map((card: any, idx: number) => (
+                                  <div
+                                    key={idx}
+                                    className={`group flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border transition-colors ${
+                                      role === "commander"
+                                        ? "border-amber-500/50 bg-amber-950/20"
+                                        : "border-purple-500/10 hover:border-purple-500/30"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                      {/* Miniatura da Imagem Real */}
+                                      <div className="w-10 h-10 rounded overflow-hidden bg-slate-700 border border-slate-600 shrink-0">
+                                        {card.imageUrl ? (
+                                          <img
+                                            src={card.imageUrl}
+                                            alt={card.name}
+                                            className="w-full h-full object-cover transition-transform group-hover:scale-125"
+                                            loading="lazy"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-500">
+                                            No Art
                                           </div>
                                         )}
-                                        <span className="text-purple-300 font-extrabold text-sm w-8 text-right bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                                          {card.quantity}×
-                                        </span>
+                                      </div>
+
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-white text-sm font-medium truncate">
+                                          {card.name}
+                                        </p>
+                                        <p className="text-gray-500 text-xs truncate">
+                                          {card.type}
+                                        </p>
                                       </div>
                                     </div>
-                                  ))}
+
+                                    <div className="flex items-center gap-3 ml-3 shrink-0">
+                                      {card.cmc != null && (
+                                        <span className="text-gray-500 text-xs">
+                                          CMC {card.cmc}
+                                        </span>
+                                      )}
+                                      {card.colors &&
+                                        card.colors.length > 0 && (
+                                          <div className="flex gap-0.5">
+                                            {card.colors
+                                              .split("")
+                                              .map((c: string, ci: number) => (
+                                                <span
+                                                  key={ci}
+                                                  className="text-[10px] bg-slate-700 px-1 border border-slate-600 rounded text-gray-300"
+                                                >
+                                                  {c}
+                                                </span>
+                                              ))}
+                                          </div>
+                                        )}
+                                      <span className="text-purple-300 font-extrabold text-sm w-8 text-right bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                        {card.quantity}×
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           );
@@ -1492,22 +1596,28 @@ export default function ArchetypeGenerator() {
                         {/* Winrate e Meta Performance */}
                         <div className="p-4 bg-gradient-to-r from-emerald-900/40 to-blue-900/40 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-500/5">
                           <div className="flex justify-between items-center mb-2">
-                             <div className="flex items-center gap-2">
-                               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                               <p className="text-xs font-bold text-emerald-300 uppercase tracking-tighter">Winrate Estimado vs Meta Pro</p>
-                             </div>
-                             <span className="text-2xl font-black text-white italic">
-                               {((result.metrics.winrate || 0) * 100).toFixed(0)}%
-                             </span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                              <p className="text-xs font-bold text-emerald-300 uppercase tracking-tighter">
+                                Winrate Estimado vs Meta Pro
+                              </p>
+                            </div>
+                            <span className="text-2xl font-black text-white italic">
+                              {((result.metrics.winrate || 0) * 100).toFixed(0)}
+                              %
+                            </span>
                           </div>
                           <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                            <div 
+                            <div
                               className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 transition-all duration-1000"
-                              style={{ width: `${(result.metrics.winrate || 0) * 100}%` }}
+                              style={{
+                                width: `${(result.metrics.winrate || 0) * 100}%`,
+                              }}
                             />
                           </div>
                           <p className="mt-2 text-[10px] text-emerald-400/60 leading-tight">
-                            *Baseado em 10 simulações de partida contra arquétipos Tier 1 do meta atual.
+                            *Baseado em 10 simulações de partida contra
+                            arquétipos Tier 1 do meta atual.
                           </p>
                         </div>
                         {result.metrics.mechanicTagCounts &&
