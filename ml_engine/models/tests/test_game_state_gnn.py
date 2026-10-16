@@ -112,6 +112,26 @@ def test_abilities_on_same_permanent_have_distinct_policy_scores():
     assert logits[0, 1] != logits[0, 2]
 
 
+def test_padded_edges_drop_the_sentinel_and_keep_card_zero():
+    """(0, 0) is a real edge into the first node. (-1, -1) is padding."""
+    # [B, 2, E]: edge 0 is card 0 -> player 0, edge 1 is padding.
+    edges = torch.tensor([[[0, 1], [0, -1]]], dtype=torch.long)
+    obs = {
+        "card_feats": torch.zeros((1, 4, 400)),
+        "player_feats": torch.zeros((1, 2, 15)),
+        "controlled_by_edges": edges,
+        "in_zone_edges": torch.full((1, 2, 2), -1, dtype=torch.long),
+        "synergy_edges": torch.full((1, 2, 2), -1, dtype=torch.long),
+        "attacks_edges": torch.full((1, 2, 2), -1, dtype=torch.long),
+    }
+    data = _batched_dict_to_hetero(obs, GameStateGNN.EDGE_RELATIONS)
+    controlled = data[("card", "controlled_by", "player")].edge_index
+    assert controlled.shape == (2, 1)
+    assert int(controlled[0, 0]) == 0
+    assert int(controlled[1, 0]) == 0
+    assert data[("card", "in_zone", "player")].edge_index.shape[1] == 0
+
+
 def test_forge_observation_shape_runs_through_gnn():
     model = _small_model()
     obs = {

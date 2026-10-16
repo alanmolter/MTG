@@ -52,6 +52,67 @@ class TestCanonicalStateHash:
         s2["random_junk"] = "this should be ignored"
         assert canonical_state_hash(s1) == canonical_state_hash(s2)
 
+    def test_rlbridge_source_emits_the_hash_fields(self):
+        """The Java snapshot must keep emitting the keys this hash reads.
+
+        mana_pool_* is present but hardcoded to 0 in the current bridge, so a
+        mana-only delta does not move the hash. Phase, battlefield size, power
+        and land counts do, which is what stops the old constant-hash false loop.
+        """
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parents[3]
+            / "rlbridge_src/src/main/java/forge/rlbridge/ForgeRLBridge.java"
+        ).read_text(encoding="utf-8")
+        for key in (
+            "turn_phase",
+            "life_you",
+            "life_opp",
+            "battlefield_you",
+            "battlefield_opp",
+            "hand_you_size",
+            "hand_opp_size",
+            "graveyard_you_size",
+            "graveyard_opp_size",
+            "mana_pool_you",
+            "mana_pool_opp",
+            "power_you",
+            "power_opp",
+            "lands_you",
+            "lands_opp",
+        ):
+            assert f'"{key}"' in source
+
+    def test_bridge_payload_phase_and_battlefield_are_part_of_the_hash(self):
+        """ForgeRLBridge emits these flat keys; a phase change must not look like a loop."""
+        base = {
+            "turn": 3,
+            "turn_phase": 2,
+            "life_you": 20,
+            "life_opp": 20,
+            "battlefield_you": 1,
+            "battlefield_opp": 1,
+            "hand_you_size": 7,
+            "hand_opp_size": 7,
+            "graveyard_you_size": 0,
+            "graveyard_opp_size": 0,
+            "mana_pool_you": 0,
+            "mana_pool_opp": 0,
+            "power_you": 2,
+            "power_opp": 2,
+        }
+        assert canonical_state_hash(base) != canonical_state_hash({**base, "turn_phase": 3})
+        assert canonical_state_hash(base) != canonical_state_hash({**base, "battlefield_you": 2})
+        assert canonical_state_hash(base) != canonical_state_hash({**base, "lands_you": 1})
+
+    def test_nested_you_block_aliases_when_flat_keys_are_missing(self):
+        """A payload that only has the player blocks still distinguishes life totals."""
+        you_20 = {"you": {"life": 20, "hand_size": 7}, "opp": {"life": 20, "hand_size": 7}, "phase": "MAIN1"}
+        you_18 = {"you": {"life": 18, "hand_size": 7}, "opp": {"life": 20, "hand_size": 7}, "phase": "MAIN1"}
+        assert canonical_state_hash(you_20) != canonical_state_hash(you_18)
+        assert canonical_state_hash(you_20) != canonical_state_hash({**you_20, "phase": "COMBAT"})
+
 
 class TestLoopGuard:
     def test_unique_states_no_loop(self):

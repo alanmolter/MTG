@@ -159,7 +159,7 @@ def test_promotion_report_passes_only_when_candidate_beats_controls():
     )
     # Pass is a deliberate loss in _FakeEnv.  Use an explicit losing policy as
     # the legal-random control so the comparison remains deterministic.
-    passed, _ = evaluate_policy(
+    passed, pass_episodes = evaluate_policy(
         AlwaysPassPolicy(), _factory, [_matchup()], episodes_per_matchup=1, max_steps=2
     )
     random_control = passed
@@ -172,8 +172,16 @@ def test_promotion_report_passes_only_when_candidate_beats_controls():
         thresholds=_permissive_thresholds(
             min_win_rate_delta_vs_legal_random=1.0,
             min_life_difference_delta_vs_legal_random=30.0,
+            require_forge_ai_baseline=False,
+            require_verified_disjoint_holdout=False,
         ),
+        candidate_episodes=candidate_episodes,
+        pass_episodes=pass_episodes,
+        random_episodes=pass_episodes,
         candidate_errors=candidate_episodes,
+        checkpoint_sha256="ab" * 32,
+        checkpoint_hash_algorithm="relative_posix_path_NUL_file_sha256_LF",
+        checkpoint_file_count=1,
         generated_at="2026-10-15T00:00:00+00:00",
     )
 

@@ -1,45 +1,18 @@
-"""
-Pillar 6 — Dense Reward Shaping.
+"""Potential-based reward shaping for Forge episodes.
 
-The Forge sparse reward (+1 win / -1 loss at game end) is correct but lousy to
-learn from: early in training, an agent picks random moves for 20 turns before
-getting any signal at all. Dense shaping hands out small, bounded rewards on
-every transition so gradients start flowing from turn 1.
+The sparse outcome (+1 win / -1 loss / 0 draw) is the learning target. Dense
+shaping exists only to shorten the credit-assignment gap, and it is the
+Ng, Harada & Russell (1999) potential:
 
-Terms (all normalized, caps at ±0.1 per turn):
+    F(s, s') = w * (gamma * Phi(s') - Phi(s))
 
-    r_total = r_outcome                        # {-1, 0, +1} at game end
-            + α * Δlife_advantage              # you - opponent, per turn
-            + ζ * mana_efficiency              # mana_used / mana_available (anti-flood)
-            + γ * Δcard_advantage              # cards in hand, you - opponent
-            + δ * Δboard_control                # power on battlefield, you - opp
-            + ε * turn_progression_bonus        # converge toward win condition
-            + archetype_modifier                # e.g. control gets +bonus for
-                                                 #      passing turn with mana+instants
-
-Weights are conservative: even if all dense terms accidentally align they
-produce |r_shape| ≤ 0.5, leaving r_outcome dominant. Paper reference:
-Ng, Harada & Russell 1999, "Policy invariance under reward transformations" —
-potential-based shaping theorem.
-
-Phase 1 (Quick-Win): replaced raw mana tempo (`beta_tempo * mana_value_played`)
-with *mana efficiency* (`zeta_efficiency * used/available`). Premia o agente
-por **gastar bem o mana disponível**, não apenas por soltar cartas caras. O
-modificador `control_mana_open_bonus` dá um micro-reforço para arquétipos
-control que passam o turno com mana aberta + instants na mão (jogo reativo).
-
-You wire this on the Python side inside MtgForgeEnv.step():
-
-    from ml_engine.forge_worker.reward_shaper import RewardShaper
-    shaper = RewardShaper()
-
-    def step(self, action):
-        prev = self._snapshot()
-        self.forge.apply(action)
-        curr = self._snapshot()
-        terminal = self.forge.is_terminal()
-        r = shaper.shape(prev, curr, outcome=self.forge.outcome() if terminal else None)
-        return obs, r, terminal, info
+Phi depends only on the state (life, useful cards, board power, mana
+development, and a control "mana open" indicator). It does not pay a fresh
+bonus for repeating the same position, and moving a card from hand onto the
+battlefield is not a card-advantage loss. On a true terminal state Phi is 0,
+so the shaping telescopes and cannot swamp the outcome. An episode cap is a
+second guardrail. ``w`` is an annealing weight: it can decay to 0 so late
+training optimizes the win/loss signal alone.
 """
 
 from __future__ import annotations
@@ -48,117 +21,134 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-# ── Config ──────────────────────────────────────────────────────────────────
-
-
 @dataclass
 class ShapingConfig:
-    """Reward weights. Tuned on 1000 games vs random opponent.
+    """Weights inside Phi, plus the discount and the annealing schedule.
 
-    # ── Anomaly-1A fix (2026-04-23) ─────────────────────────────────────
-    Before this fix the shaper could hand out up to `step_cap=0.1` per
-    transition, uncapped across an episode. In a 30-turn game that meant
-    dense shaping could reach ±3.0 cumulative, completely drowning out the
-    terminal `outcome_weight=±1.0`. Agents that lost the game would still
-    net POSITIVE total reward by farming mana efficiency + progress bonuses
-    turn after turn — exactly what we saw in production with Aatchik (1% WR,
-    weight 45) and Aang (3% WR, weight 42.29).
-
-    Two fixes compound to guarantee the terminal signal dominates:
-      1. `step_cap` lowered from 0.1 → 0.04   (caps per-step magnitude)
-      2. `episode_shape_cap = 0.5` (NEW)       (caps cumulative per-episode)
-
-    With both caps in place, worst-case |Σ r_shape| ≤ 0.5, so the final
-    outcome (+1 win / -1 loss) is ALWAYS the decisive contribution to the
-    episode return. This is the shaper-math equivalent of the Ng-Harada-
-    Russell potential-invariance guarantee, but enforced at runtime instead
-    of by construction, because Forge state is noisy and we can't trust
-    a pure potential function here.
+    Phi terms are already scaled to roughly [-1, 1] before the weights, so
+    the default weights keep a single potential well below the ±1 outcome.
+    ``episode_shape_cap`` bounds the sum of F over one episode.
     """
-    alpha_life: float = 0.02        # per 1 life advantage swing
-    # NOTE: beta_tempo kept for backward-compat but deprecated. Prefer
-    # zeta_efficiency below, which uses mana_used/mana_available ratio.
-    beta_tempo: float = 0.0         # (deprecated; retained so tests using it
-                                    #  explicitly still compile / run)
-    gamma_cards: float = 0.03       # per 1 card advantage
-    delta_board: float = 0.015      # per 1 total power on battlefield
-    epsilon_progress: float = 0.005  # per turn closer to lethal
 
-    # ── Phase 1 additions ───────────────────────────────────────────────
-    zeta_efficiency: float = 0.03           # per unit mana efficiency (0..1)
-    control_mana_open_bonus: float = 0.015  # added when control passes turn
-                                            #   with untapped lands + instants
-
-    outcome_weight: float = 1.0     # sparse terminal (+1 / -1)
-    # Anomaly-1A fix: step_cap lowered from 0.1 to 0.04 (per-step magnitude)
-    step_cap: float = 0.04          # cap on per-step shaped reward magnitude
-    # Anomaly-1A fix: NEW — cumulative per-episode cap. Guarantees that
-    # dense shaping can never exceed ±0.5 across an entire game, so the
-    # terminal ±1.0 reward always dominates the episode return.
+    w_life: float = 0.20
+    w_cards: float = 0.15
+    w_board: float = 0.10
+    w_mana: float = 0.15
+    w_control_open: float = 0.05
+    gamma: float = 0.99
+    shaping_weight: float = 1.0
+    shaping_weight_final: float = 0.0
+    shaping_anneal_episodes: int = 0
+    outcome_weight: float = 1.0
     episode_shape_cap: float = 0.5
     penalty_illegal_action: float = -0.05
+    # Retained so older call sites that still pass these kwargs keep working.
+    # They are not added on top of the potential.
+    step_cap: float = 0.0
+    alpha_life: float = 0.0
+    beta_tempo: float = 0.0
+    gamma_cards: float = 0.0
+    delta_board: float = 0.0
+    epsilon_progress: float = 0.0
+    zeta_efficiency: float = 0.0
+    control_mana_open_bonus: float = 0.0
 
 
 @dataclass
 class GameStateSnapshot:
-    """Minimal subset of game state needed for shaped reward.
+    """State features the potential reads. Missing bridge fields stay at 0."""
 
-    Forge exposes these via its Java API; MtgForgeEnv serializes them into
-    this dataclass before passing to shape().
-
-    Phase 1 adds fields used by the new efficiency + archetype shaping. All
-    new fields carry sane defaults so older call-sites keep compiling.
-    """
     turn: int
     life_you: int
     life_opp: int
     hand_you: int
     hand_opp: int
-    power_you: int     # sum of power of creatures you control
+    power_you: int
     power_opp: int
-    mana_value_played: int  # sum of CMC resolved THIS step
-
-    # ── Phase 1 fields ──────────────────────────────────────────────────
-    mana_available_you: int = 0     # total mana that *could* have been spent this turn
-    untapped_lands_you: int = 0     # untapped lands at end-of-turn snapshot
-    instants_in_hand_you: int = 0   # instants (or flash) in hand
-    archetype: str = ""             # "aggro" | "control" | "midrange" | "combo" | "ramp"
-    turn_ended: bool = False        # true iff this snapshot is end-of-turn
-
+    mana_value_played: int = 0
+    mana_available_you: int = 0
+    untapped_lands_you: int = 0
+    instants_in_hand_you: int = 0
+    archetype: str = ""
+    turn_ended: bool = False
+    lands_you: int = 0
+    lands_opp: int = 0
+    nonland_permanents_you: int = 0
+    nonland_permanents_opp: int = 0
+    untapped_lands_opp: int = 0
     is_terminal: bool = False
     illegal_action: bool = False
 
 
-# ── Implementation ──────────────────────────────────────────────────────────
+def is_control_archetype(name: str) -> bool:
+    """True for ``control`` and Arena ids such as ``control_uw``.
+
+    Matching the whole string against ``"control"`` never fired: the training
+    pool names archetypes ``control_uw``, ``control_blue``, and ``control_ub``.
+    """
+
+    tokens = [token for token in (name or "").strip().lower().replace("-", "_").split("_") if token]
+    return "control" in tokens
 
 
 class RewardShaper:
-    """Reward shaper with per-step AND per-episode caps.
-
-    # ── Anomaly-1A fix (2026-04-23) ─────────────────────────────────────
-    The shaper now also tracks cumulative shaped reward across an episode
-    so that (a) dense shaping can never swamp the terminal outcome and
-    (b) a losing agent can NEVER net positive total reward by gaming the
-    mana-efficiency bonus turn after turn.
-
-    Lifecycle:
-      - `reset_episode()` is called at env.reset(). Clears cumulative.
-      - Each call to `shape()` adds to `_episode_shape_total`.
-      - When the running total would exceed ±episode_shape_cap, the
-        addition is clipped so the total stops growing.
-      - On a terminal transition, the cumulative is returned to zero so
-        the same RewardShaper instance can be reused across episodes.
-    """
+    """Potential-based shaper with an episode cap and an annealing weight."""
 
     def __init__(self, config: Optional[ShapingConfig] = None):
         self.config = config or ShapingConfig()
-        # Cumulative shaped reward for the current episode. Does NOT include
-        # the terminal outcome or the illegal-action penalty.
         self._episode_shape_total: float = 0.0
+        self._weight: float = float(self.config.shaping_weight)
 
     def reset_episode(self) -> None:
-        """Call at env.reset() to clear the per-episode cumulative cap."""
+        """Clear the per-episode shaping budget. Called from ``env.reset()``."""
         self._episode_shape_total = 0.0
+
+    def set_episode_index(self, episode_index: int) -> None:
+        """Anneal ``w`` across episodes. Index is 1-based.
+
+        With ``shaping_anneal_episodes <= 0`` the weight stays at
+        ``shaping_weight``. Otherwise it moves linearly to
+        ``shaping_weight_final`` and holds there.
+        """
+
+        span = int(self.config.shaping_anneal_episodes)
+        start = float(self.config.shaping_weight)
+        final = float(self.config.shaping_weight_final)
+        if span <= 0:
+            self._weight = start
+            return
+        progress = min(1.0, max(0.0, (int(episode_index) - 1) / float(span)))
+        self._weight = (1.0 - progress) * start + progress * final
+
+    @property
+    def shaping_weight(self) -> float:
+        return self._weight
+
+    def potential(self, state: GameStateSnapshot) -> float:
+        """Phi(s). Terminal callers must pass 0 instead of calling this."""
+
+        cfg = self.config
+        life = (state.life_you - state.life_opp) / 20.0
+        useful_you = state.hand_you + state.nonland_permanents_you
+        useful_opp = state.hand_opp + state.nonland_permanents_opp
+        cards = (useful_you - useful_opp) / 10.0
+        board = (state.power_you - state.power_opp) / 10.0
+        mana = _mana_development(state.lands_you) - _mana_development(state.lands_opp)
+        control = 0.0
+        if (
+            state.turn_ended
+            and is_control_archetype(state.archetype)
+            and state.untapped_lands_you >= 2
+            and state.instants_in_hand_you >= 1
+        ):
+            control = 1.0
+        return (
+            cfg.w_life * life
+            + cfg.w_cards * cards
+            + cfg.w_board * board
+            + cfg.w_mana * mana
+            + cfg.w_control_open * control
+        )
 
     def shape(
         self,
@@ -166,129 +156,38 @@ class RewardShaper:
         curr: GameStateSnapshot,
         outcome: Optional[int] = None,
     ) -> float:
-        """Compute shaped reward for the transition prev → curr.
+        """Return F(s, s') plus the terminal outcome, with the episode cap applied to F."""
 
-        `outcome` is the sparse terminal reward:
-            +1 = agent won
-            -1 = agent lost
-             0 = draw
-           None = non-terminal step (will be ignored, only dense shaping applies)
-
-        Returns a scalar. With the episode cap, worst-case return of a
-        single call is ±(outcome_weight + episode_shape_cap) = ±1.5; across
-        an entire episode the sum of dense shaping is bounded to ±0.5, so
-        the ±1.0 terminal ALWAYS dominates.
-        """
         if curr.illegal_action:
-            # Illegal actions are a separate channel — they don't count
-            # against the shaping budget.
             return self.config.penalty_illegal_action
 
-        # ── Sparse terminal term ────────────────────────────────────────────
         r_terminal = 0.0
         if curr.is_terminal and outcome is not None:
             r_terminal = self.config.outcome_weight * float(outcome)
 
-        # ── Dense shaping terms ─────────────────────────────────────────────
-        d_life = (curr.life_you - curr.life_opp) - (prev.life_you - prev.life_opp)
-        d_hand = (curr.hand_you - curr.hand_opp) - (prev.hand_you - prev.hand_opp)
-        d_power = (curr.power_you - curr.power_opp) - (prev.power_you - prev.power_opp)
+        phi_prev = self.potential(prev)
+        phi_curr = 0.0 if curr.is_terminal else self.potential(curr)
+        r_shape = self._weight * (self.config.gamma * phi_curr - phi_prev)
+        r_shape = self._clip_to_episode_budget(r_shape)
+        if curr.is_terminal:
+            self._episode_shape_total = 0.0
+        return r_terminal + r_shape
 
-        r_life = self.config.alpha_life * d_life
-        # Legacy tempo term (kept at 0.0 by default so efficiency dominates).
-        r_tempo = self.config.beta_tempo * curr.mana_value_played
-        r_cards = self.config.gamma_cards * d_hand
-        r_board = self.config.delta_board * d_power
-        r_progress = self._progress_bonus(curr)
-        r_efficiency = self._mana_efficiency_bonus(prev, curr)
-        r_archetype = self._archetype_modifier(curr)
-
-        r_shape = (
-            r_life + r_tempo + r_cards + r_board
-            + r_progress + r_efficiency + r_archetype
-        )
-
-        # ── Per-step cap (Anomaly-1A fix: lowered to 0.04) ──────────────────
-        if r_shape > self.config.step_cap:
-            r_shape = self.config.step_cap
-        elif r_shape < -self.config.step_cap:
-            r_shape = -self.config.step_cap
-
-        # ── Per-episode cap (Anomaly-1A fix: NEW cumulative guard) ──────────
-        # Clip r_shape so that adding it to the running total never pushes
-        # |_episode_shape_total| beyond episode_shape_cap. This is the key
-        # invariant: Σ r_shape over the episode ∈ [-cap, +cap].
-        cap = self.config.episode_shape_cap
+    def _clip_to_episode_budget(self, r_shape: float) -> float:
+        cap = abs(float(self.config.episode_shape_cap))
         projected = self._episode_shape_total + r_shape
         if projected > cap:
             r_shape = cap - self._episode_shape_total
         elif projected < -cap:
             r_shape = -cap - self._episode_shape_total
         self._episode_shape_total += r_shape
-
-        # On terminal, reset cumulative so the same shaper works for the
-        # next episode without needing explicit reset_episode() from the env.
-        if curr.is_terminal:
-            self._episode_shape_total = 0.0
-
-        return r_terminal + r_shape
-
-    def _progress_bonus(self, curr: GameStateSnapshot) -> float:
-        """Bonus for being on a faster clock — encourages aggression over stalling.
-
-        We approximate "turns to lethal" as opp_life / max(1, power_you) and
-        hand out a small bonus proportional to 1/(turns_to_lethal+1).
-        """
-        if curr.power_you <= 0:
-            return 0.0
-        turns_to_lethal = max(1.0, curr.life_opp / max(1, curr.power_you))
-        return self.config.epsilon_progress / turns_to_lethal
-
-    def _mana_efficiency_bonus(
-        self, prev: GameStateSnapshot, curr: GameStateSnapshot
-    ) -> float:
-        """Reward **using the mana you had**, not just casting expensive cards.
-
-        efficiency = mana_value_played / max(1, mana_available_you)
-                   ∈ [0, 1+]  (capped implicitly by step_cap)
-
-        - Full use of 4 available mana → bonus ≈ zeta_efficiency
-        - Floating 3 of 4 mana → bonus ≈ zeta_efficiency * 0.25
-        - No mana_available info → falls back to 0 (no spurious reward)
-        """
-        # Forge snapshots are captured *after* a chosen spell pays its cost.
-        # Measuring only the current untapped-land count would often produce
-        # zero precisely when the agent spent all its mana.  Use the amount
-        # available before the action as the opportunity budget.  The current
-        # snapshot remains a fallback for callbacks that add mana during the
-        # same transition.
-        avail = max(0, prev.mana_available_you, curr.mana_available_you)
-        if avail <= 0:
-            return 0.0
-        used = max(0, curr.mana_value_played)
-        # Clamp ratio at 1.0 — over-casting (rituals etc.) shouldn't inflate
-        efficiency = min(1.0, used / float(avail))
-        return self.config.zeta_efficiency * efficiency
-
-    def _archetype_modifier(self, curr: GameStateSnapshot) -> float:
-        """Archetype-specific micro-rewards.
-
-        control: +control_mana_open_bonus at end-of-turn if the agent passed
-                 with ≥2 untapped lands AND ≥1 instant in hand. Teaches the
-                 "pass with mana open" concept without hard-coding a play.
-        """
-        if not curr.turn_ended:
-            return 0.0
-        archetype = (curr.archetype or "").strip().lower()
-        if archetype == "control":
-            if curr.untapped_lands_you >= 2 and curr.instants_in_hand_you >= 1:
-                return self.config.control_mana_open_bonus
-        return 0.0
+        return r_shape
 
 
-# ── Convenience API ─────────────────────────────────────────────────────────
+def _mana_development(lands: int) -> float:
+    """Diminishing land development, saturated at 7 lands."""
+    return min(7, max(0, int(lands))) / 7.0
 
 
 def default_shaper() -> RewardShaper:
-    """Singleton-ish helper for MtgForgeEnv usage."""
     return RewardShaper()

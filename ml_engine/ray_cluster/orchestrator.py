@@ -199,6 +199,9 @@ def build_impala_config(
     deck_seed: Optional[int] = None,
     turn_limit: int = DEFAULT_TURN_LIMIT_FOR_TRAINING,
     gpu_per_trial: Optional[float] = None,
+    shaping_weight: float = 1.0,
+    shaping_weight_final: float = 0.0,
+    shaping_anneal_episodes: int = 0,
 ) -> Dict[str, Any]:
     """Compose an IMPALA config with our custom env + GNN model + PBT-friendly hparams.
 
@@ -254,6 +257,10 @@ def build_impala_config(
         # available for the future combat/target-aware policy.
         "use_autoregressive_actions": False,
         "require_policy_control": True,
+        # Potential-based shaping weight. 0 anneal episodes keeps it constant.
+        "shaping_weight": shaping_weight,
+        "shaping_weight_final": shaping_weight_final,
+        "shaping_anneal_episodes": shaping_anneal_episodes,
     }
 
     if arena_only:
@@ -305,8 +312,15 @@ def build_impala_config(
         .debugging(
             log_level="WARN",
         )
+        .callbacks(_episode_metrics_callback())
     )
     return cfg.to_dict()
+
+
+def _episode_metrics_callback():
+    """Import the callback lazily so config helpers stay importable with Ray."""
+    from ml_engine.ray_cluster.episode_metrics import MtgEpisodeMetrics
+    return MtgEpisodeMetrics
 
 
 # ── League scheduling ───────────────────────────────────────────────────────
@@ -530,6 +544,10 @@ def run(
     turn_limit: int = DEFAULT_TURN_LIMIT_FOR_TRAINING,
     archetypes: Optional[str] = None,
     gpu_per_trial: Optional[float] = None,
+    pbt_metric: str = "win_rate",
+    shaping_weight: float = 1.0,
+    shaping_weight_final: float = 0.0,
+    shaping_anneal_episodes: int = 0,
 ):
     """Kick off the PBT + IMPALA job."""
     unsupported = _unsupported_cuda_devices()
@@ -596,14 +614,13 @@ def run(
     Path(storage_path).mkdir(parents=True, exist_ok=True)
     opponent_pool_path = os.path.join(storage_path, "league_state.json")
 
-    # Ray 2.11+ exposes episode rewards under `env_runners/episode_reward_mean`
-    # (nested metric name), not the legacy top-level `episode_reward_mean`.
-    # Ray 2.40+ further renamed `*_reward_mean` to `*_return_mean` in IMPALA's
-    # progress.csv (visible in trial result tables). PBT still resolves the old
-    # name internally, so we keep `metric_key` as the PBT contract; for the
-    # post-run print we read both keys (see _read_best_reward below).
-    metric_key = "env_runners/episode_reward_mean"
-    metric_key_alt = "env_runners/episode_return_mean"
+    # Default objective is decisive-game win rate. Shaped return remains
+    # available with pbt_metric="reward" for a comparison run. Ray 2.40 renamed
+    # reward_mean to return_mean; the reward mode still reads both.
+    from ml_engine.ray_cluster.training_metrics import promotion_decision, resolve_pbt_metric
+    selected_metric = resolve_pbt_metric(pbt_metric)
+    metric_key = selected_metric.primary_key
+    metric_key_alt = selected_metric.history_keys[-1]
     # A two-member population should immediately replace a persistently losing
     # member with a mutated copy of the leader. Larger populations retain more
     # exploration rather than collapsing into the first apparent winner.
@@ -627,6 +644,9 @@ def run(
         deck_seed=deck_seed,
         turn_limit=turn_limit,
         gpu_per_trial=allocated_gpu,
+        shaping_weight=shaping_weight,
+        shaping_weight_final=shaping_weight_final,
+        shaping_anneal_episodes=shaping_anneal_episodes,
     )
 
     if resume:
@@ -669,7 +689,7 @@ def run(
 
     analysis = tune.run("IMPALA", **tune_kwargs)
 
-    metric_keys = [metric_key, metric_key_alt, "episode_reward_mean", "episode_return_mean"]
+    metric_keys = list(selected_metric.history_keys)
     best, stable_score, trial_summaries = _select_stable_trial(list(analysis.trials), metric_keys)
     if best:
         # Ray reports the metric under different keys depending on version
@@ -697,17 +717,25 @@ def run(
             previous = json.loads(champion_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             pass
-        baseline = float(previous.get("reward", 0.0) or 0.0)
-        promoted = checkpoint is not None and reward > 0.0 and reward > baseline
+        decision = promotion_decision(
+            None if checkpoint is None else reward,
+            previous,
+            selected_metric.mode,
+        )
+        promoted = bool(decision["promoted"]) and checkpoint is not None
+        baseline = float(decision["baseline"])
         report = {
             "trial_id": best.trial_id,
             "reward": reward,
-            "selection_metric": "mean_of_last_20_recorded_reward_windows",
+            "metric_mode": selected_metric.mode,
+            "metric_value": reward,
+            "selection_metric": selected_metric.primary_key,
+            "selection_window": "mean_of_last_20_recorded_windows",
             "trial_summaries": trial_summaries,
             "baseline_reward": baseline,
             "checkpoint": checkpoint,
             "promoted": promoted,
-            "reason": "strictly_beats_positive_stable_baseline" if promoted else "did_not_beat_positive_stable_baseline",
+            "reason": decision["reason"] if checkpoint is not None else "missing_checkpoint",
             "visible_gpus": available_gpus,
             "gpu_per_trial": allocated_gpu,
             "pbt_resample_probability": pbt_resample_probability,
@@ -805,6 +833,26 @@ def main():
              "Lower (e.g. 30) reduces episode-length variance and speeds throughput.",
     )
     p.add_argument(
+        "--pbt-metric",
+        choices=("win_rate", "reward"),
+        default="win_rate",
+        help="objective PBT perturbs on and promotion compares. "
+             "win_rate (default) is custom_metrics/win_mean over decisive games. "
+             "reward is the legacy shaped episode return.",
+    )
+    p.add_argument(
+        "--shaping-weight",
+        type=float,
+        default=1.0,
+        help="initial multiplier on potential-based shaping (gamma*Phi' - Phi)",
+    )
+    p.add_argument(
+        "--shaping-anneal-episodes",
+        type=int,
+        default=0,
+        help="episodes over which shaping_weight decays to 0. 0 keeps it constant.",
+    )
+    p.add_argument(
         "--archetypes",
         type=str,
         default=None,
@@ -829,6 +877,9 @@ def main():
         turn_limit=args.turn_limit,
         archetypes=args.archetypes,
         gpu_per_trial=args.gpu_per_trial,
+        pbt_metric=args.pbt_metric,
+        shaping_weight=args.shaping_weight,
+        shaping_anneal_episodes=args.shaping_anneal_episodes,
     )
 
 

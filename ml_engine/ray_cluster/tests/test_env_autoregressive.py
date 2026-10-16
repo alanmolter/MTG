@@ -120,14 +120,17 @@ def test_illegal_action_flag_from_bridge_is_respected():
     assert reward <= 0.0
 
 
-def test_policy_control_loss_terminates_episode_fail_closed():
+def test_policy_control_loss_truncates_without_a_loss_penalty():
     env = _make_env()
     env._proc = _FakeProc([_minimal_state(turn=2, policy_controlled=False)])
 
-    _, _, terminated, _, info = env.step(0)
+    _, reward, terminated, truncated, info = env.step(0)
 
-    assert terminated is True
+    assert terminated is False
+    assert truncated is True
+    assert reward == 0.0
     assert info["error"] == "forge_policy_control_lost"
+    assert info["episode_metrics"]["win"] is None
 
 
 def test_unapplied_policy_action_is_penalized():
@@ -337,6 +340,166 @@ def test_card_controller_zone_and_combat_state_are_visible():
     assert cards[0, 395] == 1 and cards[0, 399] == 1
     assert cards[1, 395] == 0 and cards[1, 396] == 1
     assert cards[2, 397] == 1 and cards[3, 398] == 1
+
+
+def test_read_state_times_out_while_stdout_blocks():
+    import subprocess
+    import threading
+
+    class _BlockingStdout:
+        def __init__(self) -> None:
+            self.release = threading.Event()
+
+        def readline(self) -> str:
+            self.release.wait(timeout=5)
+            return ""
+
+    env = _make_env()
+    env.step_timeout = 0.2
+    stdout = _BlockingStdout()
+    env._proc = _FakeProc([])
+    env._proc.stdout = stdout
+    try:
+        with pytest.raises(subprocess.TimeoutExpired):
+            env._read_state()
+    finally:
+        stdout.release.set()
+
+
+def test_timeout_and_dead_process_are_truncations_not_losses():
+    import threading
+
+    class _BlockingStdout:
+        def __init__(self) -> None:
+            self.release = threading.Event()
+
+        def readline(self) -> str:
+            self.release.wait(timeout=5)
+            return ""
+
+    class _DeadProc(_FakeProc):
+        def poll(self):
+            return 1
+
+    env = _make_env()
+    env.step_timeout = 0.2
+    stdout = _BlockingStdout()
+    env._proc = _FakeProc([])
+    env._proc.stdout = stdout
+    try:
+        _, reward, terminated, truncated, info = env.step(0)
+    finally:
+        stdout.release.set()
+    assert terminated is False
+    assert truncated is True
+    assert reward == 0.0
+    assert info["error"] == "forge_step_timeout"
+    assert info["episode_metrics"]["win"] is None
+    assert env.shaper._episode_shape_total == 0.0
+
+    env = _make_env()
+    env.shaper._episode_shape_total = 0.4
+    env._proc = _DeadProc([])
+    _, reward, terminated, truncated, info = env.step(0)
+    assert terminated is False and truncated is True
+    assert reward == 0.0
+    assert info["error"] == "forge_subprocess_dead"
+    assert env.shaper._episode_shape_total == 0.0
+
+
+def test_reset_clears_shaping_budget_and_records_seed(monkeypatch):
+    env = _make_env()
+    env.shaper._episode_shape_total = 0.5
+    env.agent_deck = "4 Lightning Bolt\n56 Mountain"
+    env.opponent_deck = "4 Counterspell\n56 Island"
+    env._proc = _FakeProc([_minimal_state()])
+    monkeypatch.setattr(env, "_ensure_subprocess", lambda: None)
+
+    _obs, info = env.reset(seed=11)
+
+    assert env.shaper._episode_shape_total == 0.0
+    assert info["seed"] == 11
+    assert info["agent_deck_sha256"]
+    assert env._episode_seed == 11
+
+
+def test_arena_reset_updates_archetype_name(monkeypatch):
+    env = _make_env()
+    env.arena_only = True
+    env.archetype = "aggro"
+    env._proc = _FakeProc([_minimal_state()])
+    monkeypatch.setattr(env, "_ensure_subprocess", lambda: None)
+
+    def _matchup(**_kwargs):
+        return "4 Island\n56 Island", "4 Mountain\n56 Mountain", "control_uw", "aggro_red"
+
+    monkeypatch.setattr(
+        "ml_engine.ray_cluster.arena_pool.resolve_training_matchup",
+        _matchup,
+    )
+    env.reset(seed=3)
+    assert env.archetype == "control_uw"
+
+
+def test_turn_limit_truncates_and_does_not_leak_shaping_budget():
+    env = _make_env()
+    env.turn_limit = 2
+    env.shaper._episode_shape_total = env.shaper.config.episode_shape_cap
+    env._proc = _FakeProc([_minimal_state(turn=2)])
+
+    _, _reward, terminated, truncated, info = env.step(0)
+
+    assert terminated is False
+    assert truncated is True
+    assert env.shaper._episode_shape_total == 0.0
+    assert info["episode_metrics"]["truncated"] == 1.0
+    assert info["episode_metrics"]["win"] is None
+    assert "seed" in info["episode_metrics"]
+
+
+def test_terminal_win_logs_decisive_metrics():
+    env = _make_env()
+    env._begin_episode_tracking(9)
+    env._proc = _FakeProc([_minimal_state(terminal=True, outcome=1, turn=6, lands_you=3)])
+
+    _, reward, terminated, truncated, info = env.step(0)
+
+    assert terminated is True and truncated is False
+    assert reward > 0.5
+    metrics = info["episode_metrics"]
+    assert metrics["win"] == 1.0
+    assert metrics["passes"] == 1.0
+    assert metrics["seed"] == 9
+    assert metrics["steps"] == 1.0
+
+
+def test_edge_padding_uses_sentinel_and_keeps_card_zero():
+    env = _make_env()
+    state = _minimal_state(controlled_by_edges=[[0, 0], [1, 0]])
+    observation = env._encode_observation(state)
+    edges = observation["controlled_by_edges"]
+    assert edges[0, 0] == 0 and edges[1, 0] == 0
+    assert edges[0, 1] == 1 and edges[1, 1] == 0
+    assert edges[0, 2] == -1 and edges[1, 2] == -1
+    assert env.observation_space.contains(observation)
+
+
+def test_life_library_and_turn_are_scaled_next_to_binary_flags():
+    env = _make_env()
+    state = _minimal_state(cards=[{"name": "Bear", "mana_value": 10, "power": 2, "is_creature": True}])
+    state["you"]["life"] = 20
+    state["you"]["library_size"] = 30
+    state["turn"] = 20
+    observation = env._encode_observation(state)
+    players = observation["player_feats"]
+    assert players[0, 0] == pytest.approx(1.0)       # life / 20
+    assert players[0, 9] == pytest.approx(0.5)       # library / 60
+    assert players[0, 12] == pytest.approx(1.0)      # turn / 20
+    assert players[0, 13] == pytest.approx(1.0)      # is_active stays binary
+    assert players[0, 14] == pytest.approx(1.0)      # is_you stays binary
+    assert observation["card_feats"][0, 0] == pytest.approx(1.0)  # mana value / 10
+    assert observation["card_feats"][0, 1] == pytest.approx(0.2)  # power / 10
+    assert observation["card_feats"][0, 4] == pytest.approx(1.0)  # creature flag
 
 
 def test_malformed_active_response_kills_forge_worker():

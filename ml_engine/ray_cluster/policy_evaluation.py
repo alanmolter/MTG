@@ -927,7 +927,7 @@ def _at_least(value: Optional[float], threshold: float) -> bool:
     return value is not None and value >= threshold
 
 
-def _baseline_status(metrics: AggregateMetrics) -> str:
+def _baseline_status(metrics: AggregateMetrics, require_actions: bool = True) -> str:
     """Whether a baseline is usable for a promotion comparison.
 
     A baseline can lose every game and still pass: quality is not the point of
@@ -937,16 +937,129 @@ def _baseline_status(metrics: AggregateMetrics) -> str:
     evidence that the candidate won.
     """
 
-    required = (
+    required = [
         metrics.episodes > 0,
         metrics.completed_episodes == metrics.episodes,
         metrics.system_errors == 0,
-        metrics.action_legality_rate is not None,
-        metrics.action_applied_rate is not None,
         metrics.mean_life_difference is not None,
         metrics.win_rate is not None,
-    )
+    ]
+    if require_actions:
+        # Forge-AI baselines finish inside reset and record no external actions.
+        required.extend([
+            metrics.action_legality_rate is not None,
+            metrics.action_applied_rate is not None,
+        ])
     return "passed" if all(required) else "failed"
+
+
+def _valid_sha256(value: Optional[str]) -> bool:
+    if not isinstance(value, str) or len(value) != 64:
+        return False
+    try:
+        int(value, 16)
+    except ValueError:
+        return False
+    return True
+
+
+def _episode_evidence_valid(
+    episode_sets: Mapping[str, Sequence[EpisodeResult]],
+    metrics_by_name: Mapping[str, Optional[AggregateMetrics]],
+) -> bool:
+    """Every reported metric block must be backed by the episode rows that produced it."""
+
+    for name, episodes in episode_sets.items():
+        metrics = metrics_by_name.get(name)
+        if metrics is None:
+            if episodes:
+                return False
+            continue
+        if len(episodes) != metrics.episodes:
+            return False
+        completed = sum(1 for item in episodes if item.completed and item.error is None)
+        errors = sum(1 for item in episodes if item.error)
+        if completed != metrics.completed_episodes or errors != metrics.system_errors:
+            return False
+    return True
+
+
+def _paired_comparison(
+    candidate: Optional[AggregateMetrics],
+    baseline: Optional[AggregateMetrics],
+    candidate_episodes: Sequence[EpisodeResult],
+    baseline_episodes: Sequence[EpisodeResult],
+) -> Dict[str, Any]:
+    """Paired win-rate and life deltas on the shared (matchup, seed) keys.
+
+    The point estimates fall back to the aggregate metrics when a side has no
+    episode rows (older callers). The bootstrap interval is only defined for
+    the pairs that actually exist; a single pair's interval is that pair.
+    """
+
+    empty = {
+        "win_rate_delta": None,
+        "mean_life_difference_delta": None,
+        "win_rate_delta_lower_bound_95": None,
+        "life_difference_delta_lower_bound_95": None,
+        "paired_terminal_episodes": 0,
+        "paired_episodes": 0,
+    }
+    if candidate is None or baseline is None:
+        return empty
+
+    win_pairs: list[float] = []
+    life_pairs: list[float] = []
+    baseline_by_key = {
+        (item.matchup_id, item.seed): item
+        for item in baseline_episodes
+        if _is_paired_terminal(item)
+    }
+    for item in candidate_episodes:
+        if not _is_paired_terminal(item):
+            continue
+        other = baseline_by_key.get((item.matchup_id, item.seed))
+        if other is None or item.outcome is None or other.outcome is None:
+            continue
+        win_pairs.append(float(item.outcome == 1) - float(other.outcome == 1))
+        if item.final_life_difference is not None and other.final_life_difference is not None:
+            life_pairs.append(float(item.final_life_difference) - float(other.final_life_difference))
+
+    win_delta = _mean(win_pairs) if win_pairs else _difference(candidate.win_rate, baseline.win_rate)
+    life_delta = (
+        _mean(life_pairs) if life_pairs
+        else _difference(candidate.mean_life_difference, baseline.mean_life_difference)
+    )
+    return {
+        "win_rate_delta": win_delta,
+        "mean_life_difference_delta": life_delta,
+        "win_rate_delta_lower_bound_95": _paired_bootstrap_lower(win_pairs),
+        "life_difference_delta_lower_bound_95": _paired_bootstrap_lower(life_pairs),
+        "paired_terminal_episodes": len(win_pairs),
+        "paired_episodes": len(win_pairs),
+    }
+
+
+def _is_paired_terminal(item: EpisodeResult) -> bool:
+    return bool(
+        item.completed and item.terminal and item.error is None and item.outcome in (-1, 0, 1)
+    )
+
+
+def _paired_bootstrap_lower(
+    values: Sequence[float], draws: int = 2000, seed: int = 0
+) -> Optional[float]:
+    """2.5th percentile of the paired-mean bootstrap. One pair returns itself."""
+
+    if not values:
+        return None
+    if len(values) == 1:
+        return float(values[0])
+    sample = np.asarray(values, dtype=np.float64)
+    rng = np.random.default_rng(seed)
+    indexes = rng.integers(0, sample.size, size=(draws, sample.size))
+    means = sample[indexes].mean(axis=1)
+    return float(np.quantile(means, 0.025))
 
 
 def _wilson_lower_bound(successes: int, total: int, z: float = 1.959963984540054) -> Optional[float]:
