@@ -2,7 +2,13 @@
 // Uses mock data until the `deck_evaluations` table and `evaluation.*` tRPC
 // procedures exist (see /workspace/mtg/ui_fase4.md). Not routed yet.
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export interface OpponentResult {
   opponentDeckId: string;
@@ -53,16 +59,35 @@ const MOCK: DeckEvaluation = {
   wins: 34,
   avgTurns: 8.2,
   perOpponent: [
-    { opponentDeckId: "p1", name: "Azorius Control", archetype: "control", n: 20, wins: 9 },
-    { opponentDeckId: "p2", name: "Golgari Midrange", archetype: "midrange", n: 20, wins: 12 },
-    { opponentDeckId: "p3", name: "Izzet Tempo", archetype: "tempo", n: 20, wins: 13 },
+    {
+      opponentDeckId: "p1",
+      name: "Azorius Control",
+      archetype: "control",
+      n: 20,
+      wins: 9,
+    },
+    {
+      opponentDeckId: "p2",
+      name: "Golgari Midrange",
+      archetype: "midrange",
+      n: 20,
+      wins: 12,
+    },
+    {
+      opponentDeckId: "p3",
+      name: "Izzet Tempo",
+      archetype: "tempo",
+      n: 20,
+      wins: 13,
+    },
   ],
 };
 
 function WinRateBadge({ wins, n }: { wins: number; n: number }) {
   const [lo, hi] = wilson95(wins, n);
   const wr = n ? wins / n : 0;
-  const variant = n < MIN_GAMES ? "secondary" : lo >= 0.5 ? "default" : "destructive";
+  const variant =
+    n < MIN_GAMES ? "secondary" : lo >= 0.5 ? "default" : "destructive";
   return (
     <Badge variant={variant}>
       {pct(wr)} [{pct(lo)}–{pct(hi)}] n={n}
@@ -78,12 +103,15 @@ export default function DeckEvaluation() {
         <CardHeader>
           <CardTitle>{ev.deckName}</CardTitle>
           <CardDescription>
-            Piloto {ev.pilot} ({ev.pilotVersion}) · Painel {ev.panelVersion} · {ev.status}
+            Piloto {ev.pilot} ({ev.pilotVersion}) · Painel {ev.panelVersion} ·{" "}
+            {ev.status}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center gap-4">
           <WinRateBadge wins={ev.wins} n={ev.n} />
-          {ev.avgTurns !== null && <span className="text-sm">Turnos médios: {ev.avgTurns}</span>}
+          {ev.avgTurns !== null && (
+            <span className="text-sm">Turnos médios: {ev.avgTurns}</span>
+          )}
         </CardContent>
       </Card>
       <Card>
