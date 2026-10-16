@@ -216,7 +216,7 @@ export const competitiveDeckCards = pgTable(
     quantity: integer("quantity").notNull().default(1),
     section: varchar("section", { length: 20 }).default("mainboard"),
     // Canonical card identity (Scryfall oracle_id). No FK until backfill ends.
-    oracleId: uuid("oracle_id"),
+    oracleId: varchar("oracle_id", { length: 64 }),
     rawName: text("raw_name"),
     resolved: boolean("resolved"),
   },

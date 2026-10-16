@@ -1,5 +1,5 @@
 {
-  "id": "be6f88f1-793f-424d-b2f8-95e33b5fc939",
+  "id": "e613bfae-3fbc-499c-b473-e996c331786b",
   "prevId": "fa3b17fa-032b-49c2-b981-aa90be2732e7",
   "version": "7",
   "dialect": "postgresql",
@@ -802,7 +802,7 @@
         },
         "oracle_id": {
           "name": "oracle_id",
-          "type": "uuid",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": false
         },

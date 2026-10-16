@@ -201,3 +201,21 @@ drift que **não** foi corrigido neste PR:
 Antes de rodar o primeiro `db:generate` de verdade, vale alinhar `schema.ts` a esses
 pontos (ou gerar uma migração de reconciliação revisada à mão), senão a migração
 gerada pode tentar criar índices duplicados ou mexer em constraints.
+
+## Rollback: 20261016234006_competitive_decks_provenance
+
+Down script proposto pelo DBA na revisão do PR #8. Sem a função `immutable_unaccent`, que saiu desta migração. Rodar à mão, numa transação, fora do pipeline de importação. Antes, ter `pg_dump`: as colunas removidas levam junto o backfill e o arquivamento.
+
+```sql
+BEGIN;
+DROP INDEX IF EXISTS competitive_deck_cards_oracle_id_idx;
+ALTER TABLE competitive_deck_cards DROP COLUMN IF EXISTS oracle_id, DROP COLUMN IF EXISTS raw_name, DROP COLUMN IF EXISTS resolved;
+ALTER TABLE competitive_decks DROP COLUMN IF EXISTS download_status, DROP COLUMN IF EXISTS archived_at, DROP COLUMN IF EXISTS archive_reason,
+  DROP COLUMN IF EXISTS source_url, DROP COLUMN IF EXISTS collected_at, DROP COLUMN IF EXISTS content_hash,
+  DROP COLUMN IF EXISTS parser_version, DROP COLUMN IF EXISTS last_fetch_error, DROP COLUMN IF EXISTS import_run_id;
+DROP TYPE IF EXISTS deck_download_status;
+DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1792194006561;
+COMMIT;
+```
+
+`created_at` é o `when` da entrada no `drizzle/meta/_journal.json`.
