@@ -10,7 +10,7 @@ on:
       - "server/scripts/checkMigrations.ts"
       - "server/scripts/migrationBaseline*.ts"
       - "server/scripts/migrations.integration.test.ts"
-      - "ci/migrations.yml"
+      - ".github/workflows/migrations.yml"
   push:
     branches: [main, develop, wip/local-sync-2026-10-16]
     paths:
