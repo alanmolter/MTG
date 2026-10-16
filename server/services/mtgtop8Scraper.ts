@@ -182,6 +182,16 @@ async function fetchWithTimeout(
   return new Response(body, { status: response.status });
 }
 
+/**
+ * Fetch text through the same robots.txt check, rate limit and cache as the
+ * importer. Returns null on a non-2xx response. Throws RobotsDisallowedError.
+ */
+export async function politeFetchText(url: string): Promise<string | null> {
+  const response = await fetchWithTimeout(url);
+  if (!response.ok) return null;
+  return response.text();
+}
+
 function bar(current: number, total: number, width = 20): string {
   const filled = total > 0 ? Math.round((current / total) * width) : 0;
   return "[" + "█".repeat(filled) + "░".repeat(width - filled) + "]";

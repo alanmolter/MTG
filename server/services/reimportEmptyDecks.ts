@@ -27,11 +27,47 @@ export interface EmptyDeckRow {
   rawJson: string | null;
 }
 
+export type DeckOutcome =
+  | "reimported"
+  | "would_reimport"
+  | "skipped"
+  | "failed"
+  | "not_empty_anymore";
+
+export interface DeckLogEntry {
+  id: number;
+  sourceId: string;
+  source: string;
+  outcome: DeckOutcome;
+  via?: "raw_json" | "refetch";
+  url?: string;
+  mainCards?: number;
+  sideCards?: number;
+  detail?: string;
+}
+
 export interface ReimportReport {
   considered: number;
   reimported: number;
   skipped: string[];
   failed: string[];
+  /** One entry per deck processed, in order. */
+  log: DeckLogEntry[];
+  batches: number;
+  dryRun: boolean;
+}
+
+export interface ReimportOptions {
+  /** List what would be written; never call save. */
+  dryRun?: boolean;
+  /** Decks per batch (default 50). */
+  batchSize?: number;
+  /** Stop after this many batches (default: all). */
+  maxBatches?: number;
+  /** Only rows whose source matches (case-insensitive). */
+  source?: string;
+  /** Called after each batch, e.g. to print progress. */
+  onBatch?: (batch: number, entries: DeckLogEntry[]) => void;
 }
 
 type CardLine = { cardName: string; quantity: number };
@@ -48,7 +84,10 @@ export function refetchUrls(row: EmptyDeckRow): string[] {
       `${GOLDFISH}/deck/download/${id}`,
     ];
   }
-  const top8 = /^top8-(e=\d+&d=\d+)$/.exec(row.sourceId);
+  // MTGTop8 ids come as `top8-e=N&d=N` (current scraper) or bare `e=N&d=N`
+  // (March 2026 import). The bare form is only trusted for source=mtgtop8.
+  const top8 = /^top8-(e=\d+&d=\d+)$/.exec(row.sourceId)
+    ?? (row.source.toLowerCase() === "mtgtop8" ? /^(e=\d+&d=\d+)$/.exec(row.sourceId) : null);
   if (top8) return [`${TOP8}/mtgo?${top8[1]}`];
   return [];
 }
@@ -118,59 +157,105 @@ export async function reimportEmptyDecks(deps: {
   listEmpty: () => Promise<EmptyDeckRow[]>;
   fetchText: (url: string) => Promise<string | null>;
   save: (deck: CompetitiveDeckWrite) => Promise<{ imported: boolean; cards: number }>;
-}): Promise<ReimportReport> {
-  const rows = await deps.listEmpty();
+  /** Re-checked right before writing so a deck filled meanwhile is not touched. */
+  isStillEmpty?: (row: EmptyDeckRow) => Promise<boolean>;
+}, options: ReimportOptions = {}): Promise<ReimportReport> {
+  const batchSize = Math.max(1, Math.floor(options.batchSize ?? 50));
+  const wanted = options.source?.toLowerCase();
+  const all = await deps.listEmpty();
+  const rows = wanted ? all.filter((row) => row.source.toLowerCase() === wanted) : all;
   const report: ReimportReport = {
     considered: rows.length,
     reimported: 0,
     skipped: [],
     failed: [],
+    log: [],
+    batches: 0,
+    dryRun: Boolean(options.dryRun),
   };
 
-  for (const row of rows) {
-    const label = `${row.id} ${row.sourceId}`;
-    try {
-      let deck = deckFromStoredJson(row);
-      if (!deck) {
-        const urls = refetchUrls(row);
-        if (urls.length === 0) {
-          report.skipped.push(`${label}: no raw_json and no known source url`);
-          continue;
-        }
-        for (const url of urls) {
-          const body = await deps.fetchText(url);
-          if (!body) continue;
-          const parsed = parseDeckExport(body);
-          if (!parsed) continue;
-          deck = {
-            sourceId: row.sourceId,
-            source: row.source,
-            name: row.name,
-            format: row.format,
-            archetype: row.archetype,
-            author: row.author,
-            mainboard: parsed.mainboard,
-            sideboard: parsed.sideboard,
-          };
-          break;
-        }
-      }
-      if (!deck) {
-        report.failed.push(`${label}: download had no mainboard`);
-        continue;
-      }
-      const saved = await deps.save(deck);
-      if (!saved.imported || saved.cards <= 0) {
-        report.failed.push(`${label}: write stored no cards`);
-        continue;
-      }
-      report.reimported += 1;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      report.failed.push(`${label}: ${message}`);
+  for (let start = 0; start < rows.length; start += batchSize) {
+    if (options.maxBatches !== undefined && report.batches >= options.maxBatches) break;
+    const entries: DeckLogEntry[] = [];
+    for (const row of rows.slice(start, start + batchSize)) {
+      const entry = await processRow(row, deps, report, Boolean(options.dryRun));
+      entries.push(entry);
+      report.log.push(entry);
     }
+    report.batches += 1;
+    options.onBatch?.(report.batches, entries);
   }
   return report;
+}
+
+async function processRow(
+  row: EmptyDeckRow,
+  deps: Parameters<typeof reimportEmptyDecks>[0],
+  report: ReimportReport,
+  dryRun: boolean,
+): Promise<DeckLogEntry> {
+  const label = `${row.id} ${row.sourceId}`;
+  const base = { id: row.id, sourceId: row.sourceId, source: row.source };
+  try {
+    let deck = deckFromStoredJson(row);
+    let via: DeckLogEntry["via"] = deck ? "raw_json" : undefined;
+    let usedUrl: string | undefined;
+    if (!deck) {
+      const urls = refetchUrls(row);
+      if (urls.length === 0) {
+        const detail = "no raw_json and no known source url";
+        report.skipped.push(`${label}: ${detail}`);
+        return { ...base, outcome: "skipped", detail };
+      }
+      if (dryRun) {
+        return { ...base, outcome: "would_reimport", via: "refetch", url: urls[0] };
+      }
+      for (const url of urls) {
+        const body = await deps.fetchText(url);
+        if (!body) continue;
+        const parsed = parseDeckExport(body);
+        if (!parsed) continue;
+        deck = {
+          sourceId: row.sourceId,
+          source: row.source,
+          name: row.name,
+          format: row.format,
+          archetype: row.archetype,
+          author: row.author,
+          mainboard: parsed.mainboard,
+          sideboard: parsed.sideboard,
+        };
+        via = "refetch";
+        usedUrl = url;
+        break;
+      }
+    }
+    if (!deck) {
+      const detail = "download had no mainboard";
+      report.failed.push(`${label}: ${detail}`);
+      return { ...base, outcome: "failed", via, detail };
+    }
+    const mainCards = deck.mainboard.reduce((sum, card) => sum + card.quantity, 0);
+    const sideCards = deck.sideboard.reduce((sum, card) => sum + card.quantity, 0);
+    if (dryRun) {
+      return { ...base, outcome: "would_reimport", via, mainCards, sideCards };
+    }
+    if (deps.isStillEmpty && !(await deps.isStillEmpty(row))) {
+      return { ...base, outcome: "not_empty_anymore", via, url: usedUrl };
+    }
+    const saved = await deps.save(deck);
+    if (!saved.imported || saved.cards <= 0) {
+      const detail = "write stored no cards";
+      report.failed.push(`${label}: ${detail}`);
+      return { ...base, outcome: "failed", via, url: usedUrl, detail };
+    }
+    report.reimported += 1;
+    return { ...base, outcome: "reimported", via, url: usedUrl, mainCards, sideCards };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    report.failed.push(`${label}: ${message}`);
+    return { ...base, outcome: "failed", detail: message };
+  }
 }
 
 export { saveCompetitiveDeck };

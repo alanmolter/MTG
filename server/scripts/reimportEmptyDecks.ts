@@ -1,13 +1,26 @@
 /**
  * Re-import competitive decks that currently have no card rows.
  *
- * Safe to re-run: the query is only decks with zero competitive_deck_cards.
- * Decks that already have cards are left alone. Needs DATABASE_URL in .env
- * (or the environment). Does not start Docker.
+ * Safe to re-run: only decks with zero competitive_deck_cards are selected,
+ * and each deck is checked again right before its write. Decks with cards are
+ * never touched. Needs DATABASE_URL. Does not start Docker.
  *
- *   npm run db:reimport-empty-decks
+ *   npx tsx server/scripts/reimportEmptyDecks.ts --dry-run
+ *   npx tsx server/scripts/reimportEmptyDecks.ts --batch-size 50 --max-batches 1
+ *
+ * Flags:
+ *   --dry-run            list what would be fetched/written; no writes, no fetches
+ *   --batch-size N       decks per batch (default 50)
+ *   --max-batches N      stop after N batches (default: all)
+ *   --source S           only this source (default mtgtop8; "all" for every source)
+ *   --report FILE        write the per-deck log as JSON lines
+ *
+ * MTGTop8 requests go through the importer's polite fetch: robots.txt is
+ * checked first, one request every 2 s, responses cached in .cache/mtgtop8.
+ * Env overrides: MTGTOP8_MIN_DELAY_MS, MTGTOP8_CACHE_DIR, MTGTOP8_CHECK_ROBOTS.
  */
 import "dotenv/config";
+import { appendFileSync, writeFileSync } from "node:fs";
 import { closeDb, getRawClient } from "../db";
 import {
   EMPTY_DECK_SQL,
@@ -15,6 +28,12 @@ import {
   type EmptyDeckRow,
 } from "../services/reimportEmptyDecks";
 import { saveCompetitiveDeck } from "../services/competitiveDeckStore";
+import { CardNameResolver } from "../services/cardNameResolver";
+
+process.env.MTGTOP8_CHECK_ROBOTS ??= "1";
+process.env.MTGTOP8_MIN_DELAY_MS ??= "2000";
+process.env.MTGTOP8_CACHE_DIR ??= ".cache/mtgtop8";
+process.env.MTGTOP8_USER_AGENT ??= "mtg-deck-mvp-reimport/1.0 (+https://github.com/alanmolter/MTG)";
 
 type RawRow = {
   id: number;
@@ -27,16 +46,27 @@ type RawRow = {
   raw_json: string | null;
 };
 
-async function fetchText(url: string): Promise<string | null> {
-  const response = await fetch(url, {
-    headers: { "User-Agent": "MTG-RL-reimport/1.0" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) return null;
-  return response.text();
+function arg(name: string): string | undefined {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+function positiveInt(name: string, fallback?: number): number | undefined {
+  const raw = arg(name);
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) throw new Error(`${name} must be a positive integer`);
+  return n;
 }
 
 async function main() {
+  const dryRun = process.argv.includes("--dry-run");
+  const batchSize = positiveInt("--batch-size", 50)!;
+  const maxBatches = positiveInt("--max-batches");
+  const sourceArg = arg("--source") ?? "mtgtop8";
+  const source = sourceArg === "all" ? undefined : sourceArg;
+  const reportFile = arg("--report");
+
   if (!process.env.DATABASE_URL) {
     console.error("[reimport] DATABASE_URL is not set. Put it in .env and run again.");
     process.exitCode = 1;
@@ -48,31 +78,74 @@ async function main() {
     process.exitCode = 1;
     return;
   }
+  // Loaded lazily so the scraper module reads the env defaults above.
+  const { politeFetchText } = await import("../services/mtgtop8Scraper");
 
-  const report = await reimportEmptyDecks({
-    listEmpty: async () => {
-      const rows = (await pg.unsafe(EMPTY_DECK_SQL)) as RawRow[];
-      return rows.map((row): EmptyDeckRow => ({
-        id: Number(row.id),
-        sourceId: row.source_id,
-        source: row.source,
-        name: row.name,
-        format: row.format,
-        archetype: row.archetype,
-        author: row.author,
-        rawJson: row.raw_json,
-      }));
+  let resolver: CardNameResolver | null = null;
+  if (!dryRun) {
+    const catalog = (await pg.unsafe("SELECT name, oracle_id FROM cards")) as Array<{ name: string; oracle_id: string | null }>;
+    resolver = new CardNameResolver(catalog.map((c) => ({ name: c.name, oracleId: c.oracle_id })));
+  }
+
+  if (reportFile) writeFileSync(reportFile, "");
+  console.log(`[reimport] mode=${dryRun ? "DRY-RUN" : "APPLY"} source=${source ?? "all"} batch=${batchSize} maxBatches=${maxBatches ?? "all"}`);
+
+  const report = await reimportEmptyDecks(
+    {
+      listEmpty: async () => {
+        const rows = (await pg.unsafe(EMPTY_DECK_SQL)) as RawRow[];
+        return rows.map((row): EmptyDeckRow => ({
+          id: Number(row.id),
+          sourceId: row.source_id,
+          source: row.source,
+          name: row.name,
+          format: row.format,
+          archetype: row.archetype,
+          author: row.author,
+          rawJson: row.raw_json,
+        }));
+      },
+      fetchText: (url) => politeFetchText(url),
+      isStillEmpty: async (row) => {
+        const rows = (await pg.unsafe(
+          "SELECT 1 FROM competitive_deck_cards WHERE deck_id = $1 LIMIT 1",
+          [row.id],
+        )) as unknown[];
+        return rows.length === 0;
+      },
+      save: (deck) =>
+        saveCompetitiveDeck(pg as unknown as object, deck, {
+          resolveName: resolver ? (n) => resolver!.canonicalName(n) : undefined,
+        }),
     },
-    fetchText,
-    save: (deck) => saveCompetitiveDeck(pg as unknown as object, deck),
-  });
-
-  console.log(
-    `[reimport] considered=${report.considered} reimported=${report.reimported} ` +
-      `skipped=${report.skipped.length} failed=${report.failed.length}`,
+    {
+      dryRun,
+      batchSize,
+      maxBatches,
+      source,
+      onBatch: (batch, entries) => {
+        for (const e of entries) {
+          console.log(
+            `[reimport] ${e.outcome.padEnd(17)} id=${e.id} ${e.sourceId}` +
+              (e.url ? ` url=${e.url}` : "") +
+              (e.mainCards !== undefined ? ` main=${e.mainCards} side=${e.sideCards}` : "") +
+              (e.detail ? ` (${e.detail})` : ""),
+          );
+          if (reportFile) appendFileSync(reportFile, JSON.stringify({ batch, ...e }) + "\n");
+        }
+        console.log(`[reimport] batch ${batch} done (${entries.length} decks)`);
+      },
+    },
   );
-  for (const line of report.skipped) console.log(`[reimport] skip ${line}`);
-  for (const line of report.failed) console.error(`[reimport] fail ${line}`);
+
+  const counts = report.log.reduce<Record<string, number>>((acc, e) => {
+    acc[e.outcome] = (acc[e.outcome] ?? 0) + 1;
+    return acc;
+  }, {});
+  console.log(
+    `[reimport] considered=${report.considered} processed=${report.log.length} batches=${report.batches} ` +
+      Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(" "),
+  );
   if (report.failed.length > 0) process.exitCode = 1;
 }
 

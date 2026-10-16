@@ -84,3 +84,55 @@ describe("reimport empty competitive decks", () => {
     expect(report.skipped).toHaveLength(1);
   });
 });
+
+describe("reimport F1: MTGTop8 bare ids, dry-run, batches", () => {
+  const top8 = (id: number, sourceId = `e=1&d=${id}`): EmptyDeckRow =>
+    row({ id, sourceId, source: "mtgtop8", author: null });
+
+  it("accepts bare e=&d= ids only for source mtgtop8", () => {
+    expect(refetchUrls(top8(1, "e=49033&d=561465"))).toEqual(["https://mtgtop8.com/mtgo?e=49033&d=561465"]);
+    expect(refetchUrls(top8(1, "top8-e=2&d=3"))).toEqual(["https://mtgtop8.com/mtgo?e=2&d=3"]);
+    expect(refetchUrls(row({ sourceId: "e=1&d=2", source: "moxfield" }))).toEqual([]);
+  });
+
+  it("dry-run neither fetches nor saves and lists every deck", async () => {
+    const fetchText = vi.fn(async () => "4 Lightning Bolt");
+    const save = vi.fn(async () => ({ imported: true, cards: 1 }));
+    const report = await reimportEmptyDecks(
+      { listEmpty: async () => [top8(1), top8(2)], fetchText, save },
+      { dryRun: true },
+    );
+    expect(fetchText).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(report.log.map((e) => e.outcome)).toEqual(["would_reimport", "would_reimport"]);
+    expect(report.log[0].url).toBe("https://mtgtop8.com/mtgo?e=1&d=1");
+  });
+
+  it("processes in batches, honours maxBatches and the source filter", async () => {
+    const rows = [1, 2, 3, 4, 5].map((i) => top8(i)).concat([row({ id: 99 })]);
+    const batches: number[] = [];
+    const report = await reimportEmptyDecks(
+      {
+        listEmpty: async () => rows,
+        fetchText: async () => "4 Lightning Bolt\n56 Mountain",
+        save: async () => ({ imported: true, cards: 2 }),
+      },
+      { batchSize: 2, maxBatches: 2, source: "mtgtop8", onBatch: (_b, e) => batches.push(e.length) },
+    );
+    expect(report.considered).toBe(5);
+    expect(batches).toEqual([2, 2]);
+    expect(report.reimported).toBe(4);
+  });
+
+  it("does not overwrite a deck that got cards meanwhile (idempotent)", async () => {
+    const save = vi.fn(async () => ({ imported: true, cards: 2 }));
+    const report = await reimportEmptyDecks({
+      listEmpty: async () => [top8(1)],
+      fetchText: async () => "4 Lightning Bolt\n56 Mountain",
+      save,
+      isStillEmpty: async () => false,
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(report.log[0].outcome).toBe("not_empty_anymore");
+  });
+});
