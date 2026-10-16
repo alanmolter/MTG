@@ -420,7 +420,29 @@ def test_reset_clears_shaping_budget_and_records_seed(monkeypatch):
     assert env.shaper._episode_shape_total == 0.0
     assert info["seed"] == 11
     assert info["agent_deck_sha256"]
+    assert info["agent_deck_id"] == ""
     assert env._episode_seed == 11
+
+
+def test_episode_log_names_the_pool_deck(monkeypatch):
+    from ml_engine.ray_cluster.deck_pool import deck_by_archetype_id
+
+    deck = deck_by_archetype_id("aggro_red")
+    env = _make_env()
+    env.agent_deck = deck.forge_list
+    env.opponent_deck = deck_by_archetype_id("control_uw").forge_list
+    env._proc = _FakeProc([
+        _minimal_state(),
+        _minimal_state(terminal=True, outcome=1, turn=4),
+    ])
+    monkeypatch.setattr(env, "_ensure_subprocess", lambda: None)
+    env.reset(seed=5)
+    _, _, terminated, _, info = env.step(0)
+    metrics = info["episode_metrics"]
+    assert terminated is True
+    assert metrics["agent_deck_id"] == "q06_mono_red_burn"
+    assert metrics["opponent_deck_id"] == "q05_azorius_control"
+    assert metrics["agent_deck_sha256"] == deck.sha256
 
 
 def test_arena_reset_updates_archetype_name(monkeypatch):
@@ -471,6 +493,8 @@ def test_terminal_win_logs_decisive_metrics():
     assert metrics["passes"] == 1.0
     assert metrics["seed"] == 9
     assert metrics["steps"] == 1.0
+    assert metrics["agent_deck_id"] == ""
+    assert "agent_deck_sha256" in metrics
 
 
 def test_edge_padding_uses_sentinel_and_keeps_card_zero():

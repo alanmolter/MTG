@@ -1,0 +1,32 @@
+About
+Name Rakdos Vampires
+
+Deck
+4 Voldaren Bloodcaster (VOW) 137
+1 Henrika Domnathi (VOW) 119
+4 Voldaren Epicure (VOW) 182
+4 Bloodtithe Harvester (VOW) 310
+2 Sokenzan Smelter (NEO) 164
+2 Vampire Socialite (MID) 249
+2 Florian, Voldaren Scion (MID) 223
+2 Dominating Vampire (VOW) 154
+4 Immersturm Predator (KHM) 214
+2 Infernal Grasp (MID) 107
+4 Voltage Surge (NEO) 171
+1 Village Rites (KHM) 117
+2 Mukotai Soulripper (NEO) 113
+2 Oni-Cult Anvil (NEO) 230
+2 Blightstep Pathway (KHM) 252
+3 Voldaren Estate (VOW) 267
+2 Den of the Bugbear (AFR) 254
+4 Bloodfell Caves (NEO) 264
+7 Swamp (VOW) 272
+6 Mountain (VOW) 274
+
+Sideboard
+1 Infernal Grasp (MID) 107
+3 Duress (MID) 98
+3 Falkenrath Forebear (VOW) 111
+4 Abrade (VOW) 139
+2 Callous Bloodmage (STX) 66
+2 Anje, Maid of Dishonor (VOW) 231

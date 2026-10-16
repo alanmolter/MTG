@@ -1,0 +1,30 @@
+About
+Name Azorius Spirits
+
+Deck
+1 Brazen Borrower (ELD) 39
+2 Mausoleum Wanderer (EMN) 69
+2 Remorseful Cleric (M19) 33
+1 Selfless Spirit (EMN) 40
+4 Rattlechains (SOI) 81
+3 Shacklegeist (M21) 70
+4 Supreme Phantom (M19) 76
+2 Spell Queller (Q06) 10
+4 Spectral Sailor (M20) 76
+4 Watcher of the Spheres (M21) 227
+4 Empyrean Eagle (M20) 208
+4 Lofty Denial (M21) 56
+2 Spell Pierce (XLN) 81
+2 Glacial Fortress (XLN) 255
+4 Temple of Enlightenment (THB) 246
+7 Plains (MID) 380
+10 Island (MID) 381
+
+Sideboard
+2 Spell Pierce (XLN) 81
+3 Isolate (Q06) 3
+3 Aether Gust (M20) 42
+2 Seal Away (DOM) 31
+1 Devout Decree (M20) 13
+2 Silkwrap (Q06) 4
+2 Light of Hope (IKO) 20

@@ -331,6 +331,8 @@ class MtgForgeEnv(gym.Env):
         self._episode_started = time.monotonic()
         self._agent_deck_sha256 = ""
         self._opponent_deck_sha256 = ""
+        self._agent_deck_id = ""
+        self._opponent_deck_id = ""
 
         # Spaces
         self.action_space = spaces.Discrete(self.num_actions)
@@ -386,8 +388,8 @@ class MtgForgeEnv(gym.Env):
         self._ensure_subprocess()
 
         # Per-episode deck rotation when Arena mode is on. Each reset() draws
-        # a fresh archetype pair from arena_pool's catalog (15 archetypes), so
-        # the agent sees varied matchups instead of one fixed Aggro vs Control.
+        # two lists from the train split of the versioned deck pool, so the
+        # agent sees varied matchups instead of one fixed Aggro vs Control.
         # Deck seed combines the caller's gym seed with an internal counter so
         # back-to-back resets always rotate, even if Ray reuses the same seed.
         # The archetype name has to follow the deck: the shaper's control term
@@ -441,6 +443,8 @@ class MtgForgeEnv(gym.Env):
         info = {
             "state": first_state,
             "seed": self._episode_seed,
+            "agent_deck_id": self._agent_deck_id,
+            "opponent_deck_id": self._opponent_deck_id,
             "agent_deck_sha256": self._agent_deck_sha256,
             "opponent_deck_sha256": self._opponent_deck_sha256,
         }
@@ -550,6 +554,9 @@ class MtgForgeEnv(gym.Env):
         self._episode_started = time.monotonic()
         self._agent_deck_sha256 = _sha256_text(self.agent_deck)
         self._opponent_deck_sha256 = _sha256_text(self.opponent_deck)
+        from ml_engine.ray_cluster.deck_pool import identify_deck
+        self._agent_deck_id = identify_deck(self.agent_deck)
+        self._opponent_deck_id = identify_deck(self.opponent_deck)
 
     def _note_lands(self, state: Dict[str, Any]) -> None:
         lands = _lands_you(state)
@@ -579,6 +586,8 @@ class MtgForgeEnv(gym.Env):
             "lands_played_per_turn": float(self._lands_played) / float(turn_number),
             "steps_per_sec": float(steps) / elapsed,
             "seed": self._episode_seed,
+            "agent_deck_id": self._agent_deck_id,
+            "opponent_deck_id": self._opponent_deck_id,
             "agent_deck_sha256": self._agent_deck_sha256,
             "opponent_deck_sha256": self._opponent_deck_sha256,
         }
@@ -587,6 +596,7 @@ class MtgForgeEnv(gym.Env):
         logger.info(
             "episode_end win=%s truncated=%s steps=%s passes=%s "
             "lands_played_per_turn=%.4f steps_per_sec=%.3f seed=%s "
+            "agent_deck_id=%s opponent_deck_id=%s "
             "agent_deck_sha256=%s opponent_deck_sha256=%s infra_error=%s",
             metrics["win"],
             int(truncated),
@@ -595,6 +605,8 @@ class MtgForgeEnv(gym.Env):
             metrics["lands_played_per_turn"],
             metrics["steps_per_sec"],
             metrics["seed"],
+            metrics["agent_deck_id"],
+            metrics["opponent_deck_id"],
             metrics["agent_deck_sha256"],
             metrics["opponent_deck_sha256"],
             infra_error or "",

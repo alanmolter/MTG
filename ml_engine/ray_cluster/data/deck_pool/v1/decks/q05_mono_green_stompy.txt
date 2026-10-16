@@ -1,0 +1,30 @@
+About
+Name Mono-Green Stompy
+
+Deck
+1 Garruk, Unleashed (M21) 183
+3 Kazandu Mammoth (ZNR) 189
+2 Stonecoil Serpent (ELD) 235
+3 Swarm Shambler (ZNR) 207
+2 Scavenging Ooze (M21) 204
+2 Wildborn Preserver (ELD) 182
+2 Yorvo, Lord of Garenbrig (ELD) 185
+4 Lovestruck Beast (ELD) 165
+2 Gemrazer (IKO) 155
+4 Wildwood Tracker (ELD) 183
+2 Syr Faren, the Hengehammer (ELD) 177
+3 Thrashing Brontodon (M21) 209
+2 Turntimber Symbiosis (ZNR) 215
+3 Primal Might (M21) 197
+4 Ram Through (IKO) 170
+2 Snakeskin Veil (KHM) 194
+19 Forest (KHM) 398
+
+Sideboard
+1 Thrashing Brontodon (M21) 209
+2 Snakeskin Veil (KHM) 194
+2 Khalni Ambush (ZNR) 192
+3 Chainweb Aracnir (THB) 167
+2 Return to Nature (M21) 200
+3 Oakhame Adversary (ELD) 167
+2 Run Afoul (M21) 201

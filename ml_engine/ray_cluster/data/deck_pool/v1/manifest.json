@@ -1,0 +1,228 @@
+{
+  "version": "1",
+  "description": "Fixed constructed deck pool for Forge training. Train lists are the opponents sampled during arena_only episodes. Holdout lists are never sampled for training; policy evaluation uses them so the measured matchups are disjoint decklists. Every list is an official Wizards Challenger Deck product (60-card mainboard plus 15-card sideboard). Sideboards are kept in the Arena export and are not sent to Forge. Pioneer Challenger Decks are Pioneer-legal and therefore Arena Explorer-legal. The 2021 and 2022 Standard Challenger Decks were Arena Standard products and remain Arena Historic-legal. MTGJSON legalities.historic was Legal for every card on 2026-10-16; Pioneer products were also legalities.pioneer Legal.",
+  "sources": [
+    {
+      "product": "Pioneer Challenger Decks 2021",
+      "url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2021-08-24",
+      "mtgjson_set": "Q06"
+    },
+    {
+      "product": "Challenger Decks 2021",
+      "url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-2021-02-12",
+      "mtgjson_set": "Q05"
+    },
+    {
+      "product": "Pioneer Challenger Decks 2022",
+      "url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2022-decklists-2022-09-29",
+      "mtgjson_set": "Q08"
+    },
+    {
+      "product": "Challenger Decks 2022",
+      "url": "https://magic.wizards.com/en/challenger-decks-2022",
+      "mtgjson_set": "Q07"
+    }
+  ],
+  "split": {
+    "train": "Sampled as agent and opponent decks during training.",
+    "holdout": "Reserved for evaluation. training_deck_hashes() is the train mainboard sha256 set; a holdout deck hash must not appear in it."
+  },
+  "decks": [
+    {
+      "id": "q06_mono_red_burn",
+      "name": "Mono-Red Burn",
+      "archetype": "aggro",
+      "archetype_id": "aggro_red",
+      "colors": "R",
+      "split": "train",
+      "file": "decks/q06_mono_red_burn.txt",
+      "product": "Pioneer Challenger Decks 2021",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2021-08-24",
+      "mtgjson_file": "MonoRedBurn_Q06",
+      "arena_format": "pioneer",
+      "release_date": "2021-10-15"
+    },
+    {
+      "id": "q06_azorius_spirits",
+      "name": "Azorius Spirits",
+      "archetype": "aggro",
+      "archetype_id": "tempo_uw",
+      "colors": "WU",
+      "split": "train",
+      "file": "decks/q06_azorius_spirits.txt",
+      "product": "Pioneer Challenger Decks 2021",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2021-08-24",
+      "mtgjson_file": "AzoriusSpirits_Q06",
+      "arena_format": "pioneer",
+      "release_date": "2021-10-15"
+    },
+    {
+      "id": "q06_orzhov_auras",
+      "name": "Orzhov Auras",
+      "archetype": "aggro",
+      "archetype_id": "aggro_wb",
+      "colors": "WB",
+      "split": "train",
+      "file": "decks/q06_orzhov_auras.txt",
+      "product": "Pioneer Challenger Decks 2021",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2021-08-24",
+      "mtgjson_file": "OrzhovAuras_Q06",
+      "arena_format": "pioneer",
+      "release_date": "2021-10-15"
+    },
+    {
+      "id": "q08_gruul_stompy",
+      "name": "Gruul Stompy",
+      "archetype": "midrange",
+      "archetype_id": "midrange_rg",
+      "colors": "RG",
+      "split": "train",
+      "file": "decks/q08_gruul_stompy.txt",
+      "product": "Pioneer Challenger Decks 2022",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2022-decklists-2022-09-29",
+      "mtgjson_file": "GruulStompy_Q08",
+      "arena_format": "pioneer",
+      "release_date": "2022-11-04"
+    },
+    {
+      "id": "q08_izzet_phoenix",
+      "name": "Izzet Phoenix",
+      "archetype": "combo",
+      "archetype_id": "combo_ur",
+      "colors": "UR",
+      "split": "train",
+      "file": "decks/q08_izzet_phoenix.txt",
+      "product": "Pioneer Challenger Decks 2022",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2022-decklists-2022-09-29",
+      "mtgjson_file": "IzzetPhoenix_Q08",
+      "arena_format": "pioneer",
+      "release_date": "2022-11-04"
+    },
+    {
+      "id": "q05_azorius_control",
+      "name": "Azorius Control",
+      "archetype": "control",
+      "archetype_id": "control_uw",
+      "colors": "WU",
+      "split": "train",
+      "file": "decks/q05_azorius_control.txt",
+      "product": "Challenger Decks 2021",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-2021-02-12",
+      "mtgjson_file": "AzoriusControl_Q05",
+      "arena_format": "historic",
+      "release_date": "2021-04-02"
+    },
+    {
+      "id": "q05_mono_green_stompy",
+      "name": "Mono-Green Stompy",
+      "archetype": "midrange",
+      "archetype_id": "ramp_green",
+      "colors": "G",
+      "split": "train",
+      "file": "decks/q05_mono_green_stompy.txt",
+      "product": "Challenger Decks 2021",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-2021-02-12",
+      "mtgjson_file": "MonoGreenStompy_Q05",
+      "arena_format": "historic",
+      "release_date": "2021-04-02"
+    },
+    {
+      "id": "q07_mono_white_aggro",
+      "name": "Mono White Aggro",
+      "archetype": "aggro",
+      "archetype_id": "aggro_white",
+      "colors": "W",
+      "split": "train",
+      "file": "decks/q07_mono_white_aggro.txt",
+      "product": "Challenger Decks 2022",
+      "source_url": "https://magic.wizards.com/en/challenger-decks-2022",
+      "mtgjson_file": "MonoWhiteAggro_Q07",
+      "arena_format": "historic",
+      "release_date": "2022-04-01"
+    },
+    {
+      "id": "q08_orzhov_humans",
+      "name": "Orzhov Humans",
+      "archetype": "aggro",
+      "archetype_id": "aggro_wb_humans",
+      "colors": "WB",
+      "split": "holdout",
+      "file": "decks/q08_orzhov_humans.txt",
+      "product": "Pioneer Challenger Decks 2022",
+      "source_url": "https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2022-decklists-2022-09-29",
+      "mtgjson_file": "OrzhovHumans_Q08",
+      "arena_format": "pioneer",
+      "release_date": "2022-11-04"
+    },
+    {
+      "id": "q05_dimir_rogue",
+      "name": "Dimir Rogue",
+      "archetype": "midrange",
+      "archetype_id": "midrange_ub",
+      "colors": "UB",
+      "split": "holdout",
+      "file": "decks/q05_dimir_rogue.txt",
+      "product": "Challenger Decks 2021",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-2021-02-12",
+      "mtgjson_file": "DimirRogue_Q05",
+      "arena_format": "historic",
+      "release_date": "2021-04-02"
+    },
+    {
+      "id": "q05_mono_red_aggro",
+      "name": "Mono-Red Aggro",
+      "archetype": "aggro",
+      "archetype_id": "aggro_red_alt",
+      "colors": "R",
+      "split": "holdout",
+      "file": "decks/q05_mono_red_aggro.txt",
+      "product": "Challenger Decks 2021",
+      "source_url": "https://magic.wizards.com/en/articles/archive/feature/challenger-decks-2021-02-12",
+      "mtgjson_file": "MonoRedAggro_Q05",
+      "arena_format": "historic",
+      "release_date": "2021-04-02"
+    },
+    {
+      "id": "q07_rakdos_vampires",
+      "name": "Rakdos Vampires",
+      "archetype": "midrange",
+      "archetype_id": "midrange_br",
+      "colors": "BR",
+      "split": "holdout",
+      "file": "decks/q07_rakdos_vampires.txt",
+      "product": "Challenger Decks 2022",
+      "source_url": "https://magic.wizards.com/en/challenger-decks-2022",
+      "mtgjson_file": "RakdosVampires_Q07",
+      "arena_format": "historic",
+      "release_date": "2022-04-01"
+    },
+    {
+      "id": "q07_gruul_stompy",
+      "name": "Gruul Stompy",
+      "archetype": "midrange",
+      "archetype_id": "midrange_rg_alt",
+      "colors": "RG",
+      "split": "holdout",
+      "file": "decks/q07_gruul_stompy.txt",
+      "product": "Challenger Decks 2022",
+      "source_url": "https://magic.wizards.com/en/challenger-decks-2022",
+      "mtgjson_file": "GruulStompy_Q07",
+      "arena_format": "historic",
+      "release_date": "2022-04-01"
+    },
+    {
+      "id": "q07_dimir_control",
+      "name": "Dimir Control",
+      "archetype": "control",
+      "archetype_id": "control_ub",
+      "colors": "UB",
+      "split": "holdout",
+      "file": "decks/q07_dimir_control.txt",
+      "product": "Challenger Decks 2022",
+      "source_url": "https://magic.wizards.com/en/challenger-decks-2022",
+      "mtgjson_file": "DimirControl_Q07",
+      "arena_format": "historic",
+      "release_date": "2022-04-01"
+    }
+  ]
+}

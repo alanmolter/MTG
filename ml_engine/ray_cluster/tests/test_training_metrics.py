@@ -36,6 +36,7 @@ def test_custom_metrics_skip_missing_win_on_truncation():
             "lands_played_per_turn": 0.5,
             "steps_per_sec": 3.0,
             "seed": 7,
+            "agent_deck_id": "q06_mono_red_burn",
             "agent_deck_sha256": "abc",
         }
     })
@@ -43,6 +44,7 @@ def test_custom_metrics_skip_missing_win_on_truncation():
     assert copied["truncated"] == 1.0
     assert copied["steps"] == 12.0
     assert "seed" not in copied
+    assert "agent_deck_id" not in copied
     assert "agent_deck_sha256" not in copied
 
 

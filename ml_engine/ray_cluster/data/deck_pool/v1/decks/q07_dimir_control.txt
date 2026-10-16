@@ -1,0 +1,36 @@
+About
+Name Dimir Control
+
+Deck
+3 Graveyard Trespasser (MID) 104
+2 Iymrith, Desert Doom (AFR) 62
+1 Hullbreaker Horror (VOW) 63
+3 Crippling Fear (KHM) 82
+3 Blood on the Snow (KHM) 79
+2 Jwari Disruption (ZNR) 64
+1 March of Wretched Sorrow (NEO) 111
+3 Power Word Kill (AFR) 114
+2 Baleful Mastery (STX) 64
+3 Saw It Coming (KHM) 76
+2 Thirst for Discovery (VOW) 85
+2 Parasitic Grasp (VOW) 123
+2 Hero's Downfall (VOW) 120
+4 Memory Deluge (MID) 62
+1 Infernal Grasp (MID) 107
+2 Field of Ruin (MID) 262
+4 Ice Tunnel (KHM) 262
+2 Hall of Storm Giants (AFR) 257
+2 Evolving Wilds (AFR) 353
+4 Shipwreck Marsh (MID) 267
+7 Snow-Covered Swamp (KHM) 280
+5 Snow-Covered Island (KHM) 278
+
+Sideboard
+1 Saw It Coming (KHM) 76
+2 Mischievous Catgeist (VOW) 69
+2 Duress (MID) 98
+2 Siphon Insight (MID) 241
+2 Negate (ZNR) 71
+2 Ray of Enfeeblement (AFR) 116
+2 Bloodvial Purveyor (VOW) 98
+2 Bloodchief's Thirst (ZNR) 94

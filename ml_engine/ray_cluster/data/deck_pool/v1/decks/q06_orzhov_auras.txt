@@ -1,0 +1,27 @@
+About
+Name Orzhov Auras
+
+Deck
+2 Stonecoil Serpent (ELD) 235
+4 Sram, Senior Edificer (AER) 23
+4 Alseid of Life's Bounty (THB) 1
+4 Hateful Eidolon (THB) 101
+4 Selfless Savior (M21) 36
+3 Karametra's Blessing (THB) 26
+4 Cartouche of Solidarity (AKH) 7
+4 Ethereal Armor (Q06) 2
+4 Gryff's Boon (SOI) 20
+4 Sentinel's Eyes (THB) 36
+4 All That Glitters (ELD) 2
+4 Caves of Koilos (ORI) 245
+4 Concealed Courtyard (KLD) 245
+7 Plains (MID) 380
+4 Swamp (MID) 382
+
+Sideboard
+1 Lurrus of the Dream-Den (Q06) 9
+1 Thoughtseize (THS) 107
+3 Hushbringer (ELD) 18
+4 Apostle of Purifying Light (M20) 6
+3 Dead Weight (IKO) 83
+3 Duress (MID) 98

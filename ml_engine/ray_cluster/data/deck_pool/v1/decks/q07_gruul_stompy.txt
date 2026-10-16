@@ -1,0 +1,30 @@
+About
+Name Gruul Stompy
+
+Deck
+3 Ulvenwald Oddity (VOW) 225
+2 Tovolar's Huntmaster (MID) 204
+2 Twinshot Sniper (NEO) 168
+2 Halana and Alena, Partners (VOW) 239
+1 Goldspan Dragon (KHM) 139
+4 Jaspera Sentinel (KHM) 178
+4 Magda, Brazen Outlaw (KHM) 142
+4 Briarbridge Tracker (MID) 172
+1 Light Up the Night (MID) 146
+1 Thundering Rebuke (ZNR) 170
+4 Abrade (VOW) 139
+4 Snakeskin Veil (KHM) 194
+4 Ranger Class (AFR) 202
+4 Rockfall Vale (MID) 266
+10 Forest (MID) 276
+2 Lair of the Hydra (AFR) 259
+8 Mountain (MID) 274
+
+Sideboard
+2 Twinshot Sniper (NEO) 168
+3 Thundering Rebuke (ZNR) 170
+2 Tovolar, Dire Overlord (MID) 246
+3 Burning Hands (AFR) 135
+2 Kappa Tech-Wrecker (NEO) 348
+2 Lantern of the Lost (VOW) 259
+1 Froghemoth (AFR) 184

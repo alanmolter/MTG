@@ -34,6 +34,21 @@ DEFAULT_CARD_DATABASE = (
     / "res"
     / "cardsfolder"
 )
+# Name, mana cost, types, and land production for the training pool. Used when
+# the Forge cardsfolder is not on disk. Oracle prose is not stored.
+BUNDLED_CARD_INDEX = (
+    Path(__file__).resolve().parent / "data" / "deck_pool" / "v1" / "forge_cards.json"
+)
+BASIC_LAND_NAMES = frozenset(
+    {
+        name.casefold()
+        for name in (*BASIC_LAND_COLORS, "Wastes")
+    }
+    | {
+        f"snow-covered {name}".casefold()
+        for name in (*BASIC_LAND_COLORS, "Wastes")
+    }
+)
 DECK_LINE = re.compile(r"^\s*(\d{1,3})\s*x?\s+(.+?)\s*$", re.IGNORECASE)
 MANA_SYMBOL = re.compile(r"\{([WUBRG])\}")
 GENERIC_MANA = re.compile(r"^\d+$")
@@ -47,6 +62,9 @@ class CardData:
     types: str
     oracle: str
     path: Path
+    # Colors a land face of this card can add. Spell faces do not contribute:
+    # their rules text mentions costs that are not mana sources.
+    produces: frozenset[str] = frozenset()
 
     @property
     def is_land(self) -> bool:
@@ -101,32 +119,81 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", lowered).strip("_")
 
 
+def _split_faces(lines: list[str]) -> list[list[str]]:
+    faces: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        if line.startswith("Name:") and current:
+            faces.append(current)
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        faces.append(current)
+    return faces
+
+
+def _face_field(face: Sequence[str], key: str) -> str:
+    prefix = f"{key}:"
+    for line in face:
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return ""
+
+
+def _face_produces(face: Sequence[str]) -> set[str]:
+    """Mana a land face can add. Non-land faces are ignored on purpose."""
+
+    types = _face_field(face, "Types")
+    if "Land" not in types.split():
+        return set()
+    produced = {
+        color
+        for basic_type, color in BASIC_LAND_COLORS.items()
+        if basic_type in types.split()
+    }
+    body = "\n".join(face)
+    if re.search(r"Produced\$\s+Any\b", body) or re.search(
+        r"Add (?:three mana|one mana) of any (?:one )?color", body, re.IGNORECASE
+    ):
+        produced.update(COLORS)
+    for match in re.finditer(r"Produced\$\s+([^\n|]+)", body):
+        token = match.group(1).strip()
+        if token.startswith("Any"):
+            produced.update(COLORS)
+        else:
+            produced.update(part for part in token.split() if part in COLORS)
+    produced.update(MANA_SYMBOL.findall(body))
+    return produced
+
+
 def _read_card(path: Path) -> CardData | None:
     try:
         lines = path.read_text(encoding="utf-8-sig").splitlines()
     except (OSError, UnicodeError):
         return None
-    fields: dict[str, str] = {}
-    for line in lines:
-        key, separator, value = line.partition(":")
-        if separator and key in {"Name", "ManaCost", "Types", "Oracle"}:
-            fields.setdefault(key, value.strip())
-    if not fields.get("Name") or not fields.get("Types"):
+    faces = _split_faces(lines)
+    if not faces:
         return None
+    front = faces[0]
+    name = _face_field(front, "Name")
+    types = _face_field(front, "Types")
+    if not name or not types:
+        return None
+    produces: set[str] = set()
+    for face in faces:
+        produces.update(_face_produces(face))
     return CardData(
-        name=fields["Name"],
-        mana_cost=fields.get("ManaCost", ""),
-        types=fields["Types"],
-        oracle=fields.get("Oracle", "").replace("\\n", "\n"),
+        name=name,
+        mana_cost=_face_field(front, "ManaCost"),
+        types=types,
+        oracle=_face_field(front, "Oracle").replace("\\n", "\n"),
         path=path,
+        produces=frozenset(produces),
     )
 
 
-@lru_cache(maxsize=4096)
-def load_card(name: str, card_database: Path = DEFAULT_CARD_DATABASE) -> CardData | None:
-    """Resolve exact Forge card data; never approximate an unknown card."""
-
-    card_database = Path(card_database)
+def _load_card_file(name: str, card_database: Path) -> CardData | None:
     slug = _slug(name)
     if not slug or not card_database.is_dir():
         return None
@@ -134,8 +201,8 @@ def load_card(name: str, card_database: Path = DEFAULT_CARD_DATABASE) -> CardDat
     card_dir = card_database / first
     direct = card_dir / f"{slug}.txt"
     candidates = [direct]
-    # MDFC cards commonly include both face names in their filename. Only
-    # search the one initial-letter directory, then still verify exact Name.
+    # MDFC / adventure files append the back face: bonecrusher_giant_stomp.txt
+    # still has Name:Bonecrusher Giant. Match that name, not a fuzzy title.
     if card_dir.is_dir():
         candidates.extend(sorted(card_dir.glob(f"{slug}_*.txt")))
         if direct not in candidates:
@@ -149,11 +216,64 @@ def load_card(name: str, card_database: Path = DEFAULT_CARD_DATABASE) -> CardDat
     return None
 
 
+@lru_cache(maxsize=1)
+def _bundled_card_index() -> dict[str, CardData]:
+    """Casefold name -> card. Empty when the index file is absent."""
+
+    path = BUNDLED_CARD_INDEX
+    if not path.is_file():
+        return {}
+    import json
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    index: dict[str, CardData] = {}
+    for entry in payload.get("cards", []):
+        card = CardData(
+            name=str(entry["name"]),
+            mana_cost=str(entry.get("mana_cost", "")),
+            types=str(entry.get("types", "")),
+            oracle="",
+            path=path,
+            produces=frozenset(entry.get("produces") or ()),
+        )
+        keys = [card.name, *list(entry.get("aliases") or ())]
+        for key in keys:
+            index[str(key).casefold()] = card
+    return index
+
+
+@lru_cache(maxsize=4096)
+def load_card(name: str, card_database: Path = DEFAULT_CARD_DATABASE) -> CardData | None:
+    """Resolve exact Forge card data; never approximate an unknown card.
+
+    The cardsfolder wins when the file is present. Otherwise the bundled
+    index (Name / ManaCost / Types / land production, checked against Forge
+    filenames) is used so the gate still runs without a Forge checkout.
+    """
+
+    found = _load_card_file(name, Path(card_database))
+    if found is not None:
+        return found
+    return _bundled_card_index().get(name.casefold())
+
+
 def _cost_tokens(card: CardData) -> list[str]:
     cost = card.mana_cost.strip()
     if not cost or cost.casefold() == "no cost":
         return []
     return cost.replace("{", "").replace("}", "").split()
+
+
+def _hybrid_colors(token: str) -> list[str]:
+    """Colored halves of a hybrid pip. Forge writes {W}{B} hybrid as ``WB``."""
+
+    if token in COLORS:
+        return [token]
+    if "/" in token:
+        return [part for part in token.split("/") if part in COLORS]
+    if len(token) == 2 and token[0] in COLORS and token[1] in COLORS:
+        return [token[0], token[1]]
+    return []
 
 
 def _mana_value(card: CardData) -> int | None:
@@ -172,6 +292,8 @@ def _mana_value(card: CardData) -> int | None:
             continue
         elif token in COLORS or re.fullmatch(r"(?:[WUBRG2]/){1,2}[WUBRGP]", token):
             value += 2 if token.startswith("2/") else 1
+        elif _hybrid_colors(token):
+            value += 1
         else:
             return None
     return value
@@ -184,25 +306,42 @@ def _required_colored_pips(card: CardData) -> Counter[str]:
     for token in _cost_tokens(card):
         if token in COLORS:
             result[token] += 1
-        elif "/" in token:
-            alternatives = [part for part in token.split("/") if part in COLORS]
-            if len(alternatives) == 1:
-                result[alternatives[0]] += 1
-            # Multiple colored alternatives have no unique color demand;
-            # do not invent one. Other costs/format legality are external.
+            continue
+        alternatives = _hybrid_colors(token)
+        if len(alternatives) == 1:
+            result[alternatives[0]] += 1
+        # Two hybrid colors have no unique color demand; identity is checked
+        # separately so a WB pip still requires both colors in the deck.
     return result
 
 
+def _spell_colors(card: CardData) -> set[str]:
+    """Color identity of the mana cost. Hybrid contributes both colors."""
+
+    colors: set[str] = set()
+    for token in _cost_tokens(card):
+        colors.update(_hybrid_colors(token))
+    return colors
+
+
+def _is_basic_land(name: str, card: CardData | None) -> bool:
+    if name.casefold() in BASIC_LAND_NAMES:
+        return True
+    return card is not None and "Basic" in card.types.split()
+
+
 def _land_colors(card: CardData) -> set[str]:
+    # `produces` covers land backs of modal cards and "any color" lands.
+    # Front-face basics and printed {W} symbols still count when a Forge
+    # file did not precompute production.
+    colors = set(card.produces)
     if not card.is_land:
-        return set()
-    colors = {
+        return colors
+    colors.update(
         color
         for basic_type, color in BASIC_LAND_COLORS.items()
         if basic_type in card.types.split()
-    }
-    # Forge Oracle text for ordinary duals spells out the mana ability. A
-    # fetch land without explicit mana production is not counted as a source.
+    )
     colors.update(MANA_SYMBOL.findall(card.oracle))
     return colors
 
@@ -323,11 +462,12 @@ def evaluate_deck(
         }
     total = sum(quantities.values())
     metrics["card_count"] = total
-    if total != config.card_count:
+    if total < config.card_count:
         findings.append(_finding(
-            "card_count", "error", f"Expected {config.card_count} mainboard cards, found {total}"
+            "card_count", "error",
+            f"Expected at least {config.card_count} mainboard cards, found {total}",
         ))
-    if not Path(card_database).is_dir():
+    if not Path(card_database).is_dir() and not _bundled_card_index():
         findings.append(_finding("card_database_missing", "error", f"Forge card database missing: {card_database}"))
     metadata: dict[str, CardData] = {}
     for name in quantities:
@@ -336,6 +476,14 @@ def evaluate_deck(
             findings.append(_finding("unknown_card", "error", f"Card not found in Forge data: {name}"))
         else:
             metadata[name] = card
+
+    for name, quantity in quantities.items():
+        card = metadata.get(name)
+        if quantity > 4 and not _is_basic_land(name, card):
+            findings.append(_finding(
+                "copy_limit", "error",
+                f"{name} has {quantity} copies; maximum is 4 except for basic lands",
+            ))
 
     lands = sum(quantities[name] for name, card in metadata.items() if card.is_land)
     metrics["land_count"] = lands
@@ -351,6 +499,7 @@ def evaluate_deck(
         for color in _land_colors(card):
             source_counts[color] += quantities[name]
     metrics["source_counts"] = {color: source_counts[color] for color in COLORS}
+    produced = set(source_counts)
 
     curve: Counter[str] = Counter()
     spell_color_checks: list[dict[str, object]] = []
@@ -371,6 +520,15 @@ def evaluate_deck(
             early_spells += quantity
         if mana_value >= 6:
             expensive_spells += quantity
+        spell_colors = _spell_colors(card)
+        if not spell_colors <= produced:
+            missing = "".join(color for color in COLORS if color in spell_colors - produced) or "?"
+            findings.append(_finding(
+                "color_identity", "error",
+                f"{name} is {''.join(color for color in COLORS if color in spell_colors)} "
+                f"but the mana base produces {''.join(color for color in COLORS if color in produced) or 'nothing'}; "
+                f"off-color {missing}",
+            ))
         for color, pip_count in _required_colored_pips(card).items():
             # Seven opening cards plus one draw for each turn after turn 1.
             # This ignores mulligans and is an *availability* bound, not
@@ -426,6 +584,26 @@ def evaluate_deck(
         "metrics": metrics,
         "findings": findings,
     }
+
+
+def deck_rejection_reason(
+    deck_id: str,
+    decklist: str,
+    *,
+    card_database: Path = DEFAULT_CARD_DATABASE,
+    config: DeckGateConfig = DeckGateConfig(),
+) -> str | None:
+    """None when the deck passes. Otherwise one line naming every error."""
+
+    result = evaluate_deck(deck_id, decklist, card_database=card_database, config=config)
+    if result["pass"]:
+        return None
+    details = [
+        f"{finding['code']}: {finding['detail']}"
+        for finding in result["findings"]
+        if finding["severity"] == "error"
+    ]
+    return "; ".join(details) or "deck failed quality gate"
 
 
 def build_deck_quality_report(

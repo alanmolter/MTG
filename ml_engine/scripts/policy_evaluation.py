@@ -22,10 +22,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
-from ml_engine.ray_cluster.arena_pool import (
-    is_arena_only_training,
-    resolve_decks_for_training,
-)
+from ml_engine.ray_cluster.arena_pool import is_arena_only_training
+from ml_engine.ray_cluster.deck_pool import sample_pair, training_deck_hashes
 from ml_engine.ray_cluster.policy_evaluation import (
     AlwaysPassPolicy,
     EvaluationThresholds,
@@ -110,24 +108,31 @@ def load_matchup_manifest(path: Path) -> tuple[list[HeldoutMatchup], list[str]]:
 def generated_seed_holdout(seeds: Sequence[int], *, arena_only: bool) -> list[HeldoutMatchup]:
     """Create diagnostic matchups when no auditable manifest is supplied.
 
-    These runs are useful for checking a checkpoint, but are explicitly *not*
-    declared as a promotion holdout.  The default gates therefore fail closed
-    until the operator supplies a manifest that declares the test split.
+    Arena runs sample the deck pool's holdout split, which is disjoint from
+    the lists training plays. These runs are explicitly *not* declared as a
+    promotion holdout. The default gates therefore fail closed until the
+    operator supplies a manifest that declares the test split.
     """
 
     matchups: list[HeldoutMatchup] = []
     for seed in seeds:
-        agent_deck, opponent_deck = resolve_decks_for_training(
-            arena_only=arena_only, seed=seed
-        )
+        if arena_only:
+            agent, opponent = sample_pair("holdout", seed)
+            agent_deck, opponent_deck = agent.forge_list, opponent.forge_list
+            identifier = f"holdout-{seed}-{agent.deck_id}-vs-{opponent.deck_id}"
+            source = "deck_pool_holdout"
+        else:
+            agent_deck, opponent_deck = None, None
+            identifier = f"generated-seed-{seed}"
+            source = "generated_seed_holdout"
         matchups.append(
             HeldoutMatchup(
-                identifier=f"generated-seed-{seed}",
+                identifier=identifier,
                 seed=seed,
                 agent_deck=agent_deck,
                 opponent_deck=opponent_deck,
                 declared_heldout=False,
-                source="generated_seed_holdout",
+                source=source,
             )
         )
     return matchups
@@ -217,7 +222,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 is_arena_only_training() if args.arena_only is None else bool(args.arena_only)
             )
             matchups = generated_seed_holdout(_parse_seeds(args.seeds), arena_only=arena_only)
-            training_hashes = []
+            # Arena diagnostics play the holdout split. Supply the train hashes
+            # so the report can prove those lists were not training opponents.
+            training_hashes = training_deck_hashes() if arena_only else []
         thresholds = _thresholds_from_args(args)
     except Exception as exc:
         report = blocked_report(
