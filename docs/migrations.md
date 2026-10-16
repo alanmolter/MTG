@@ -19,7 +19,7 @@ Os números dos arquivos (`0003`…`0010`) não batem com o `idx` do journal (0�
 
 ```bash
 npm run db:generate   # drizzle-kit generate: cria nova migração a partir de schema.ts
-npm run db:check      # drizzle-kit check: consistência do journal/snapshots
+npm run db:check      # journal + ledger (hash/ordem/enum) e depois drizzle-kit check
 npm run db:migrate    # baseline automático (se preciso) + migrator do drizzle
 npm run db:push       # alias de db:migrate (não gera mais migração automaticamente)
 npm run db:baseline -- --through <tag>   # só carimba o ledger, não migra
@@ -27,6 +27,87 @@ npm run db:baseline -- --through <tag>   # só carimba o ledger, não migra
 
 `npm run db:migrate` é idempotente: o migrator aplica só as entradas do journal cujo
 `when` é maior que o último `created_at` do ledger, tudo numa transação.
+
+Ordem de execução do `db:migrate` (`runMigrations` em `server/scripts/migrationBaseline.ts`):
+
+1. confere o journal (`when` estritamente crescente);
+2. `pg_advisory_lock(0x4d54474d)` (nível de sessão, conexão única `max: 1`);
+3. audita o ledger (ver `db:check`) e aborta se houver inconsistência;
+4. baseline verificado (abaixo);
+5. migrator do drizzle;
+6. `pg_advisory_unlock` (também em caso de erro).
+
+### Concorrência
+
+`training:prepare`, `import:competitive` e `import:competitive:arena` chamam `db:migrate`.
+Com o advisory lock, execuções simultâneas entram em fila: a segunda só planeja depois
+que a primeira terminou e vê o ledger pronto (`tracked`), sem carimbar em dobro. Coberto
+pelo teste de integração (3 execuções paralelas).
+
+### `db:check` (o migrator não faz isto)
+
+O migrator do drizzle-orm 0.44 lê só o maior `created_at` do ledger: nunca compara hash,
+e uma entrada com `when` menor que o último aplicado é pulada em silêncio.
+`server/scripts/checkMigrations.ts` falha quando:
+
+- o `when` do journal não é estritamente crescente;
+- falta algum `.sql` do journal;
+- (com `DATABASE_URL`) o sha256 de um arquivo difere do hash gravado (arquivo editado
+  depois de aplicado);
+- (com `DATABASE_URL`) há entrada com `when` <= último aplicado que não está no ledger;
+- (com `DATABASE_URL`) há linha no ledger sem entrada no journal;
+- (com `DATABASE_URL`) `training_jobs.status` não usa o tipo `job_status`.
+
+As mesmas checagens de ledger rodam no começo do `db:migrate`.
+`drizzle-kit check` (segunda parte do script) exige `DATABASE_URL` por causa do
+`drizzle.config.ts`.
+
+### Transação única e índices HNSW (0005)
+
+O migrator aplica **todas** as migrações pendentes numa única transação. Os `CREATE
+INDEX ... USING hnsw` de `0005` seguram lock exclusivo nas tabelas até o `COMMIT`.
+
+- Banco novo: as tabelas de 0005 são criadas vazias na mesma migração, então os índices
+  saem na hora.
+- Banco existente: 0005 já foi aplicada e entra pelo baseline, sem reexecutar.
+- Risco real: rodar 0005 pela primeira vez num banco onde `card_oracle_embeddings`,
+  `semantic_cache` ou `card_contextual_weight` já foram populadas por fora (ex.:
+  `ensure_endgame_schema.py` + ingestão). Nesse caso o build do HNSW pode levar minutos
+  com a tabela bloqueada para escrita. Mitigação: rode `db:migrate` fora do treino, ou
+  crie os índices antes com `CREATE INDEX CONCURRENTLY` (fora de transação) e só depois
+  migre (`IF NOT EXISTS` vira no-op).
+- Migrações novas com índice pesado em tabela grande devem ir em migração própria e, se
+  preciso, ser aplicadas à mão com `CONCURRENTLY` e depois carimbadas.
+
+### Requisitos do servidor PostgreSQL
+
+- **pgvector >= 0.5.0** instalado no servidor (HNSW surgiu na 0.5). Confira com
+  `SELECT default_version FROM pg_available_extensions WHERE name = 'vector';`.
+  Imagem de referência: `pgvector/pgvector:pg16` (a mesma do CI).
+- `0005` roda `CREATE EXTENSION IF NOT EXISTS vector`. O pgvector **não** é extensão
+  "trusted" (`pg_available_extension_versions`: `trusted=f, superuser=t` na 0.8.0), então
+  na primeira vez o usuário do `DATABASE_URL` precisa ser superusuário. Em serviço
+  gerenciado (RDS, Supabase, Neon etc.) ou com usuário sem privilégio, rode antes
+  `CREATE EXTENSION vector;` com o usuário admin. Depois disso o `IF NOT EXISTS` vira no-op
+  e não precisa de privilégio.
+
+### Statement breakpoints
+
+`0003`–`0010` têm `--> statement-breakpoint` entre os comandos: o migrator executa um
+comando por vez, então o erro aponta o comando exato e não depende do protocolo simple
+do driver para aceitar vários comandos de uma vez. O bloco `DO $$ ... END $$;` de `0004`
+fica inteiro num pedaço só. Um teste unitário garante "um comando por pedaço".
+Os marcadores são comentários SQL, então rodar o arquivo inteiro no `psql` continua
+funcionando. Isso mudou o sha256 dos arquivos: nenhum banco tinha ledger do drizzle antes
+deste PR, então não há hash antigo a conciliar.
+
+### CI
+
+`ci/migrations.yml` (pronto para mover para `.github/workflows/`; o token usado no push não tinha escopo `workflow`) sobe `pgvector/pgvector:pg16` e roda
+`server/scripts/migrations.integration.test.ts`: banco vazio, estado af0ece20
+(arquivos aplicados + `schema_migrations`), 0010 pendente, registro falso, concorrência e
+arquivo editado. Localmente:
+`MIGRATION_IT_DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres npx vitest run server/scripts/migrations.integration.test.ts`.
 
 ## Baseline (bancos que já tinham migrações aplicadas)
 
@@ -40,7 +121,24 @@ tentaria reexecutar `0003_postgres_init` (`CREATE TYPE ...`) e falharia. O
    journal que está registrado lá. Se houver buraco (ex.: 0010 registrada sem 0009),
    aborta e pede `--through`.
 4. Existe `public.cards` mas nenhum ledger → **aborta** com instrução para rodar
-   `db:baseline -- --through <tag>`. Não adivinhamos.
+   `db:baseline -- --through <tag>` e sugere a maior tag cujos objetos existem. Não
+   adivinhamos.
+
+**Nos casos 2 e 3 cada tag é verificada no catálogo antes de carimbar** (`TAG_CHECKS`).
+O runner de af0ece20 gravava `0003`–`0009` em `schema_migrations` só porque `cards`
+existia, então esse ledger pode mentir. Se faltar um objeto, o baseline aborta sem gravar
+nada e lista o que falta. Objetos conferidos por tag:
+
+| Tag | Conferido |
+|---|---|
+| 0003 | tipos `role`, `job_status`; tabelas `users`, `cards`, `decks`, `deck_cards`, `card_synergies`, `meta_stats`, `embeddings_cache`, `competitive_decks`, `competitive_deck_cards`, `training_jobs` |
+| 0004 | `competitive_decks.is_synthetic`; `card_learning`, `rl_decisions`, `deck_shares`; `cards.oracle_id/is_arena/price_usd`; tipo `status`; índices únicos de `competitive_decks`/`competitive_deck_cards` |
+| 0005 | extensão `vector`; `card_oracle_embeddings`, `semantic_cache`, `api_budget_ledger`, `card_contextual_weight`, `toxic_actions`, `mcts_nodes`, `league_state`; os 3 índices HNSW |
+| 0006 | `card_learning.weight_{aggro,control,midrange,combo,ramp}`; índices `learning_weight_aggro_idx`, `learning_weight_ramp_idx` |
+| 0007 | `competitive_deck_cards` + seus 2 índices |
+| 0008 | colunas de qualidade em `competitive_decks` + índice; `training_runs` + índice; `forge_matches` |
+| 0009 | default `'moxfield'` em `competitive_decks.source` + índices de `competitive_deck_cards` (0009 só reafirma objetos de 0003/0007; tudo idempotente) |
+| 0010 | 6 colunas de proveniência em `forge_matches` + 2 índices |
 5. Banco vazio → nada a carimbar; o migrator aplica tudo.
 
 "Carimbar" = inserir `(hash, created_at)` em `drizzle.__drizzle_migrations` com o mesmo
@@ -82,8 +180,23 @@ drift que **não** foi corrigido neste PR:
 - Tipos: `api_budget_ledger.input_tokens/output_tokens` e `mcts_nodes.parent_id` são
   `bigint` no banco e `integer` no schema; `card_contextual_weight.commander_id` é
   `NOT NULL` no banco; PK de `card_contextual_weight` difere.
-- Enum de `training_jobs.status`: o banco usa `job_status`. Corrigido em `schema.ts`
-  neste PR (era `status`), sem impacto em runtime.
+- Enum de `training_jobs.status`: veja a seção abaixo.
+
+## Enum `training_jobs.status`: `status` → `job_status` em `schema.ts`
+
+- `0003` cria `job_status` e `training_jobs.status job_status`. `0004` cria **também** um
+  tipo `status` com os mesmos valores, que nenhuma coluna usa.
+- `schema.ts` declarava `pgEnum("status")`. Foi renomeado para `pgEnum("job_status")` para
+  bater com a coluna real. Em runtime nada muda: o drizzle não faz cast pelo nome do tipo
+  em insert/update.
+- **Não há migração SQL**: o banco não muda. O tipo órfão `status` fica até alguém decidir
+  removê-lo (`DROP TYPE status;` só depois de confirmar que nada o usa).
+- Exceção: um banco criado no passado por `drizzle-kit push` direto do `schema.ts` teria
+  `training_jobs.status` do tipo `status`. Para conferir:
+  `SELECT udt_name FROM information_schema.columns WHERE table_name='training_jobs' AND column_name='status';`
+  O `db:check` faz essa consulta e falha se não for `job_status`. Nesse caso, converta com
+  `ALTER TABLE training_jobs ALTER COLUMN status TYPE job_status USING status::text::job_status;`
+  (com default ajustado) antes de gerar novas migrações.
 
 Antes de rodar o primeiro `db:generate` de verdade, vale alinhar `schema.ts` a esses
 pontos (ou gerar uma migração de reconciliação revisada à mão), senão a migração
