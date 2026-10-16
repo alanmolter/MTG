@@ -1,7 +1,8 @@
 """Keep early RL from collapsing off the behavior-cloning policy.
 
 The extra term is KL(current || BC anchor) on the legal action mask, minus
-an entropy bonus. It is applied for the first ``bc_kl_iters`` updates.
+an entropy bonus. It is applied for the first ``bc_kl_iters`` training
+iterations. Gradient updates inside one iteration share that coefficient.
 """
 
 from __future__ import annotations

@@ -593,6 +593,11 @@ class MtgForgeEnv(gym.Env):
 
     def close(self):
         self._kill_subprocess()
+        try:
+            from ml_engine.ray_cluster.match_record import flush_match_writer
+            flush_match_writer()
+        except Exception:
+            logger.exception("forge_matches flush failed")
 
     def _begin_episode_tracking(self, seed: int) -> None:
         self._episode_seed = int(seed)
