@@ -14,6 +14,7 @@ ALTER TABLE "card_learning"
   ADD COLUMN IF NOT EXISTS "weight_midrange" REAL NOT NULL DEFAULT 1.0,
   ADD COLUMN IF NOT EXISTS "weight_combo"    REAL NOT NULL DEFAULT 1.0,
   ADD COLUMN IF NOT EXISTS "weight_ramp"     REAL NOT NULL DEFAULT 1.0;
+--> statement-breakpoint
 
 -- Backfill: give existing cards the same archetype weights as their global
 -- weight so the first reads after migration aren't all 1.0 (cold start).
@@ -29,10 +30,15 @@ UPDATE "card_learning" SET
     AND "weight_combo"    = 1.0
     AND "weight_ramp"     = 1.0
     AND "weight" <> 1.0;
+--> statement-breakpoint
 
 -- Indexes used by the generator when it filters by archetype ranking.
 CREATE INDEX IF NOT EXISTS "learning_weight_aggro_idx"    ON "card_learning" ("weight_aggro");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "learning_weight_control_idx"  ON "card_learning" ("weight_control");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "learning_weight_midrange_idx" ON "card_learning" ("weight_midrange");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "learning_weight_combo_idx"    ON "card_learning" ("weight_combo");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "learning_weight_ramp_idx"     ON "card_learning" ("weight_ramp");

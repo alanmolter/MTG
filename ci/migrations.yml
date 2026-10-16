@@ -1,0 +1,57 @@
+# Para ativar: mover para .github/workflows/migrations.yml (o push exige token com escopo `workflow`).
+name: Migrações (PostgreSQL + pgvector)
+
+on:
+  pull_request:
+    paths:
+      - "drizzle/**"
+      - "drizzle.config.ts"
+      - "server/scripts/applyMigration.ts"
+      - "server/scripts/checkMigrations.ts"
+      - "server/scripts/migrationBaseline*.ts"
+      - "server/scripts/migrations.integration.test.ts"
+      - "ci/migrations.yml"
+  push:
+    branches: [main, develop, wip/local-sync-2026-10-16]
+    paths:
+      - "drizzle/**"
+      - "server/scripts/applyMigration.ts"
+      - "server/scripts/migrationBaseline*.ts"
+
+env:
+  NODE_VERSION: "22.13.0"
+
+jobs:
+  migrations-integration:
+    name: Banco vazio e estado af0ece20 -> baseline -> migrate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # pgvector >= 0.5 é necessário para os índices HNSW de 0005.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm install --legacy-peer-deps
+      - name: Testes unitários de migração
+        run: npx vitest run server/scripts/migrationBaseline.test.ts
+      - name: Integração (vazio, af0ece20, registro falso, concorrência, arquivo editado)
+        env:
+          MIGRATION_IT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: npx vitest run server/scripts/migrations.integration.test.ts
+      - name: db:check offline (journal)
+        run: npx tsx server/scripts/checkMigrations.ts
