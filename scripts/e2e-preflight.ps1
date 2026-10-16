@@ -10,6 +10,7 @@
       rlbridge  - copy rlbridge_src into forge/rlbridge and rebuild the jar
       decks     - load deck pool v1 and v2
       db        - count Arena-format competitive_decks that have card rows
+      matches   - forge_matches written equals the episode count and dropped is 0
       bc        - one Forge-AI vs Forge-AI record, a short supervised train,
                   and one KL-regularized step
       rllib     - IMPALA config with --bc-checkpoint / --bc-kl-coeff
@@ -144,6 +145,10 @@ ORDER BY format;
     $dbOk = $LASTEXITCODE -eq 0
 }
 Report "db" $dbOk $dbDetail.Trim()
+
+# --- forge_matches accounting ----------------------------------------------
+& $python -m ml_engine.scripts.e2e_preflight --stage matches --episodes 2
+Report "matches" ($LASTEXITCODE -eq 0) "written == episodes and dropped == 0"
 
 # --- record, train, one regularized step, eval, rllib config --------------
 $work = Join-Path (Get-Location) "bc_smoke"

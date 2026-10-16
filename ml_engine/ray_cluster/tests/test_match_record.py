@@ -219,3 +219,44 @@ def test_stalled_handshake_is_bounded_by_connect_timeout(monkeypatch):
     # libpq treats a timeout below 2s as 2s, so the constant under test is 2.
     # Enqueue is separate and does not wait; this bounds the flush itself.
     assert elapsed < 5
+
+
+def test_flush_repeats_until_the_queue_is_empty(monkeypatch):
+    calls = []
+
+    def write(rows):
+        calls.append(list(rows))
+
+    monkeypatch.setattr(match_record, "_write_rows", write)
+    writer = match_record._MatchWriter()
+    for seed in range(130):
+        writer._queue.put_nowait(_params(seed=seed))
+    writer.flush()
+    assert [len(batch) for batch in calls] == [128, 2]
+    assert writer.counters() == {
+        "forge_matches_enqueued": 0,
+        "forge_matches_written": 130,
+        "forge_matches_dropped": 0,
+    }
+    assert writer._queue.empty()
+
+
+def test_close_drains_the_queue_until_the_deadline(monkeypatch):
+    monkeypatch.setattr(match_record, "MAX_BATCH", 1)
+
+    def slow(_rows):
+        time.sleep(0.15)
+
+    monkeypatch.setattr(match_record, "_write_rows", slow)
+    writer = match_record._MatchWriter()
+    for seed in range(8):
+        writer._queue.put_nowait(_params(seed=seed))
+    started = time.perf_counter()
+    writer.close(timeout=0.35)
+    elapsed = time.perf_counter() - started
+    counts = writer.counters()
+    assert elapsed < 1.0
+    assert 0 < counts["forge_matches_written"] < 8
+    assert counts["forge_matches_dropped"] > 0
+    assert counts["forge_matches_written"] + counts["forge_matches_dropped"] == 8
+    assert writer._queue.empty()

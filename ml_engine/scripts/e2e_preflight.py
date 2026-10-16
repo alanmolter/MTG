@@ -173,6 +173,46 @@ def stage_rllib(checkpoint: str | None) -> dict:
         return _line("rllib", False, error=str(exc))
 
 
+def stage_matches(episodes: int = 2) -> dict:
+    """Fail unless every episode was written and none was dropped.
+
+    The worker copies ``forge_matches_enqueued``, ``forge_matches_written``
+    and ``forge_matches_dropped`` onto episode metrics. This stage enqueues
+    ``episodes`` rows, flushes the queue, and treats a drop or a short write
+    as a failed preflight. It does not spool to JSONL and it does not flush
+    once per episode.
+    """
+
+    from ml_engine.ray_cluster.match_record import (
+        flush_match_writer,
+        match_record_counters,
+        maybe_record_forge_match,
+        reset_match_writer_for_tests,
+    )
+
+    reset_match_writer_for_tests()
+    try:
+        for seed in range(int(episodes)):
+            maybe_record_forge_match(
+                agent_deck_id="preflight-agent",
+                opponent_deck_id="preflight-opponent",
+                seed=seed,
+                policy_version="preflight",
+                pool_version="2",
+                bridge_version="preflight",
+                winner=1,
+                turns=1,
+            )
+        flush_match_writer()
+        counters = match_record_counters()
+        dropped = int(counters["forge_matches_dropped"])
+        written = int(counters["forge_matches_written"])
+        ok = dropped == 0 and written == int(episodes)
+        return _line("matches", ok, episodes=int(episodes), **counters)
+    except Exception as exc:
+        return _line("matches", False, error=str(exc), episodes=int(episodes))
+
+
 def stage_eval(work: Path) -> dict:
     from ml_engine.bc.eval import evaluate_checkpoint
 
@@ -188,7 +228,12 @@ def stage_eval(work: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stage", choices=("decks", "bc", "rllib", "eval", "all"), default="all")
+    parser.add_argument(
+        "--stage",
+        choices=("decks", "bc", "rllib", "eval", "matches", "all"),
+        default="all",
+    )
+    parser.add_argument("--episodes", type=int, default=2)
     parser.add_argument("--work", type=Path, default=Path(os.environ.get("BC_WORK", "bc_smoke")))
     parser.add_argument("--bc-checkpoint", default=None)
     args = parser.parse_args(argv)
@@ -200,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.stage in ("rllib", "all"):
         checkpoint = args.bc_checkpoint or str(args.work / "bc.pt")
         results.append(stage_rllib(checkpoint if Path(checkpoint).is_file() else None))
+    if args.stage in ("matches", "all"):
+        results.append(stage_matches(args.episodes))
     if args.stage in ("eval", "all"):
         results.append(stage_eval(args.work))
     return 0 if all(item["status"] == "PASS" for item in results) else 1

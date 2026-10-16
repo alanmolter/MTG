@@ -48,6 +48,20 @@ def test_custom_metrics_skip_missing_win_on_truncation():
     assert "agent_deck_sha256" not in copied
 
 
+def test_custom_metrics_copy_forge_match_counters():
+    copied = numeric_custom_metrics({
+        "episode_metrics": {
+            "win": 1,
+            "forge_matches_enqueued": 4,
+            "forge_matches_written": 3,
+            "forge_matches_dropped": 1,
+        }
+    })
+    assert copied["forge_matches_enqueued"] == 4.0
+    assert copied["forge_matches_written"] == 3.0
+    assert copied["forge_matches_dropped"] == 1.0
+
+
 def test_custom_metrics_keep_a_decisive_loss():
     copied = numeric_custom_metrics({"episode_metrics": {"win": 0, "truncated": 0, "steps": 1}})
     assert copied["win"] == 0.0

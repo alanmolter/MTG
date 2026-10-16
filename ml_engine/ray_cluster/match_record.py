@@ -17,6 +17,7 @@ import logging
 import os
 import queue
 import threading
+import time
 from typing import Any, Optional, Sequence
 
 
@@ -84,45 +85,68 @@ class _MatchWriter:
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
         self._write_lock = threading.Lock()
+        self._count_lock = threading.Lock()
+        self._enqueued = 0
+        self._written = 0
+        self._dropped = 0
+
+    def counters(self) -> dict[str, int]:
+        with self._count_lock:
+            return {
+                "forge_matches_enqueued": self._enqueued,
+                "forge_matches_written": self._written,
+                "forge_matches_dropped": self._dropped,
+            }
 
     def enqueue(self, params: tuple) -> bool:
         self._ensure_started()
         try:
             self._queue.put_nowait(params)
         except queue.Full:
+            self._note_dropped(1)
             logger.warning("forge_matches queue full; dropping row")
             return False
+        with self._count_lock:
+            self._enqueued += 1
         return True
 
-    def flush(self) -> None:
-        """Write queued rows. Database errors are logged and the rows dropped."""
-        rows = self._drain()
-        if not rows:
-            return
-        with self._write_lock:
-            try:
-                _write_rows(rows)
-            except Exception as exc:
-                logger.warning(
-                    "forge_matches flush dropped %s row(s): %s",
-                    len(rows),
-                    exc,
-                )
+    def flush(self, *, deadline: Optional[float] = None) -> None:
+        """Write every queued batch, not just the first ``MAX_BATCH`` rows.
+
+        A failed write drops that batch and anything still queued, so one
+        outage costs a single connect timeout. ``close`` passes ``deadline``
+        and stops there, counting the remainder as dropped.
+        """
+
+        while True:
+            if deadline is not None and time.monotonic() >= deadline:
+                self._abandon_queued("close deadline")
+                return
+            rows = self._drain()
+            if not rows:
+                return
+            if not self._write_batch(rows):
+                self._abandon_queued("write failed")
+                return
 
     def close(self, timeout: float = CONNECT_TIMEOUT_SECONDS + 1) -> None:
-        """Stop the thread, flush what is left, and return even if Postgres stalls."""
+        """Stop the thread and flush until the queue is empty or ``timeout`` elapses."""
+
+        deadline = time.monotonic() + max(0.0, float(timeout))
         self._flush_on_stop = True
         self._stop.set()
         thread = self._thread
         if thread is not None and thread.is_alive() and thread is not threading.current_thread():
-            thread.join(timeout=timeout)
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                thread.join(timeout=remaining)
             if thread.is_alive():
                 logger.warning(
-                    "forge_matches writer still running after %.1fs; skip the extra flush",
-                    timeout,
+                    "forge_matches writer still running at the close deadline; "
+                    "leaving its in-flight batch alone",
                 )
                 return
-        self.flush()
+        self.flush(deadline=deadline)
 
     def shutdown_for_tests(self, timeout: float = 0.5) -> None:
         """Stop the thread without writing. Used so tests do not touch a real database."""
@@ -131,7 +155,8 @@ class _MatchWriter:
         thread = self._thread
         if thread is not None and thread.is_alive() and thread is not threading.current_thread():
             thread.join(timeout=timeout)
-        self._drain()
+        while self._drain():
+            pass
 
     def _ensure_started(self) -> None:
         with self._lock:
@@ -160,6 +185,42 @@ class _MatchWriter:
                 break
         return rows
 
+    def _write_batch(self, rows: list) -> bool:
+        with self._write_lock:
+            try:
+                _write_rows(rows)
+            except Exception as exc:
+                self._note_dropped(len(rows))
+                logger.warning(
+                    "forge_matches flush dropped %s row(s): %s",
+                    len(rows),
+                    exc,
+                )
+                return False
+            with self._count_lock:
+                self._written += len(rows)
+            return True
+
+    def _note_dropped(self, count: int) -> None:
+        with self._count_lock:
+            self._dropped += int(count)
+
+    def _abandon_queued(self, reason: str) -> None:
+        rows = []
+        while True:
+            try:
+                rows.append(self._queue.get_nowait())
+            except queue.Empty:
+                break
+        if not rows:
+            return
+        self._note_dropped(len(rows))
+        logger.warning(
+            "forge_matches dropped %s queued row(s): %s",
+            len(rows),
+            reason,
+        )
+
 
 _writer: Optional[_MatchWriter] = None
 _writer_lock = threading.Lock()
@@ -185,6 +246,20 @@ def reset_match_writer_for_tests() -> None:
         _writer = None
     if writer is not None:
         writer.shutdown_for_tests()
+
+
+def match_record_counters() -> dict[str, int]:
+    """Process-wide counters the env worker copies onto episode metrics."""
+
+    with _writer_lock:
+        writer = _writer
+    if writer is None:
+        return {
+            "forge_matches_enqueued": 0,
+            "forge_matches_written": 0,
+            "forge_matches_dropped": 0,
+        }
+    return writer.counters()
 
 
 def flush_match_writer() -> None:
