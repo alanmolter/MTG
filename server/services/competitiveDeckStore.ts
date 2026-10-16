@@ -110,13 +110,23 @@ export function aggregateCardLines(
   return Array.from(totals.values());
 }
 
+export interface SaveDeckOptions {
+  /** Map an imported name to the catalogue name (e.g. CardNameResolver.canonicalName). */
+  resolveName?: (name: string) => string;
+}
+
 export async function saveCompetitiveDeck(
   pgClient: DeckWriter | object,
-  deck: CompetitiveDeckWrite
+  deck: CompetitiveDeckWrite,
+  options: SaveDeckOptions = {},
 ): Promise<{ imported: boolean; cards: number }> {
   const client = pgClient as DeckWriter;
-  const mainboard = aggregateCardLines(deck.mainboard);
-  const sideboard = aggregateCardLines(deck.sideboard);
+  const canon = (lines: Array<{ cardName: string; quantity: number }>) =>
+    options.resolveName
+      ? lines.map((line) => ({ ...line, cardName: options.resolveName!(line.cardName) }))
+      : lines;
+  const mainboard = aggregateCardLines(canon(deck.mainboard));
+  const sideboard = aggregateCardLines(canon(deck.sideboard));
   const cards: DeckCardEntry[] = [
     ...mainboard.map((card) => ({ ...card, section: "mainboard" as const })),
     ...sideboard.map((card) => ({ ...card, section: "sideboard" as const })),
