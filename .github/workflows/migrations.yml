@@ -32,6 +32,8 @@ jobs:
   migrations-integration:
     name: Banco vazio e estado af0ece20 -> baseline -> migrate
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     services:
       postgres:
         # pgvector >= 0.5 é necessário para os índices HNSW de 0005.
@@ -41,7 +43,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -61,12 +63,11 @@ jobs:
           MIGRATION_IT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: npx vitest run server/scripts/migrations.integration.test.ts
       - name: db:check offline (journal)
+        env:
+          # O job define DATABASE_URL. Este passo confere só o journal.
+          DATABASE_URL: ""
         run: npx tsx server/scripts/checkMigrations.ts
       - name: Migrar o banco do serviço
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: npm run db:migrate
       - name: db:check contra o banco migrado
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: npm run db:check
