@@ -1,7 +1,7 @@
 /**
  * Integração real (PostgreSQL + pgvector). Só roda com MIGRATION_IT_DATABASE_URL
  * apontando para um superusuário (cria/derruba bancos it_*). No CI usa a imagem
- * pgvector/pgvector (ver ci/migrations.yml; mover para .github/workflows/ para ativar). Local:
+ * pgvector/pgvector (ver .github/workflows/migrations.yml). Local:
  *   MIGRATION_IT_DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres npx vitest run server/scripts/migrations.integration.test.ts
  */
 import * as fs from "fs";
