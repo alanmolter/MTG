@@ -1,5 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 
@@ -25,7 +31,11 @@ export default function CardCard({ card, quantity, onRemove }: CardCardProps) {
     <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500/60 transition-colors overflow-hidden">
       <div className="h-32 bg-gradient-to-br from-purple-600/20 to-pink-600/20 flex items-center justify-center">
         {card.imageUrl ? (
-          <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+          <img
+            src={card.imageUrl}
+            alt={card.name}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="text-center">
             <p className="text-gray-400 text-xs">No image</p>
@@ -35,8 +45,12 @@ export default function CardCard({ card, quantity, onRemove }: CardCardProps) {
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-white text-sm truncate">{card.name}</CardTitle>
-            <CardDescription className="text-gray-400 text-xs truncate">{card.type}</CardDescription>
+            <CardTitle className="text-white text-sm truncate">
+              {card.name}
+            </CardTitle>
+            <CardDescription className="text-gray-400 text-xs truncate">
+              {card.type}
+            </CardDescription>
           </div>
           {quantity && (
             <Badge variant="secondary" className="ml-2 text-xs">

@@ -90,7 +90,7 @@ function buildDeckPrompt(params: {
 
   const cardList = sortedCandidates
     .slice(0, 150)
-    .map((c) => {
+    .map(c => {
       const wr = c.win_rate != null ? `WR:${c.win_rate}%` : "WR:?";
       const pr = c.play_rate != null ? `PR:${c.play_rate}%` : "PR:?";
       const lw = params.learnedWeights?.[c.name];
@@ -113,10 +113,11 @@ function buildDeckPrompt(params: {
 - Inclua entre 20-24 terrenos`;
 
   // Bloco de sinergias conhecidas (do self-play + dados de torneio)
-  const synergyBlock = params.topSynergyPairs && params.topSynergyPairs.length > 0
-    ? `\nSINERGIAS APRENDIDAS (pares com alto co-ocorrência em decks vencedores — priorize-os):
-${params.topSynergyPairs.map((p) => `- ${p.card1} + ${p.card2} (score: ${p.score})`).join("\n")}\n`
-    : "";
+  const synergyBlock =
+    params.topSynergyPairs && params.topSynergyPairs.length > 0
+      ? `\nSINERGIAS APRENDIDAS (pares com alto co-ocorrência em decks vencedores — priorize-os):
+${params.topSynergyPairs.map(p => `- ${p.card1} + ${p.card2} (score: ${p.score})`).join("\n")}\n`
+      : "";
 
   return `Você é um especialista em Magic: The Gathering competitivo.
 
@@ -176,20 +177,20 @@ async function callAnthropicAPI(prompt: string): Promise<LLMDeckResult> {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(
-      `Anthropic API error ${response.status}: ${errorText}`
-    );
+    throw new Error(`Anthropic API error ${response.status}: ${errorText}`);
   }
 
   const data = (await response.json()) as {
     content: Array<{ type: string; text: string }>;
   };
 
-  const raw =
-    data.content[0]?.type === "text" ? data.content[0].text : "";
+  const raw = data.content[0]?.type === "text" ? data.content[0].text : "";
 
   // Limpar possíveis blocos de código markdown no output
-  const clean = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const clean = raw
+    .replace(/```json\s*/g, "")
+    .replace(/```\s*/g, "")
+    .trim();
 
   try {
     return JSON.parse(clean) as LLMDeckResult;
@@ -210,7 +211,9 @@ async function fetchCandidateCards(
 ): Promise<CardWithStats[]> {
   const db = await getDb();
   if (!db) {
-    console.warn("[LLMGenerator] Banco de dados não disponível — usando pool vazio");
+    console.warn(
+      "[LLMGenerator] Banco de dados não disponível — usando pool vazio"
+    );
     return [];
   }
 
@@ -223,25 +226,27 @@ async function fetchCandidateCards(
         name: cards.name,
         cmc: cards.cmc,
         type: cards.type,
-        oracle_text: cards.text,       // coluna "text" no schema = oracle_text
+        oracle_text: cards.text, // coluna "text" no schema = oracle_text
         win_rate: metaStats.winRate,
         play_rate: metaStats.playRate,
       })
       .from(cards)
-      .leftJoin(metaStats, and(
-        eq(metaStats.cardId, cards.id),
-        eq(metaStats.format, dbFormat)
-      ))
+      .leftJoin(
+        metaStats,
+        and(eq(metaStats.cardId, cards.id), eq(metaStats.format, dbFormat))
+      )
       .orderBy(desc(metaStats.playRate))
       .limit(200);
 
     // Se commander especificado, incluir a carta commander no topo
     if (commander) {
       const commanderRow = rows.find(
-        (r) => r.name.toLowerCase() === commander.toLowerCase()
+        r => r.name.toLowerCase() === commander.toLowerCase()
       );
       if (!commanderRow) {
-        console.warn(`[LLMGenerator] Commander "${commander}" não encontrado no pool`);
+        console.warn(
+          `[LLMGenerator] Commander "${commander}" não encontrado no pool`
+        );
       }
     }
 
@@ -263,19 +268,33 @@ async function fetchMetaContext(format: string): Promise<string> {
   try {
     const dbFormat = format.toLowerCase();
     const topDecks = await db
-      .select({ archetype: competitiveDecks.archetype, name: competitiveDecks.name })
+      .select({
+        archetype: competitiveDecks.archetype,
+        name: competitiveDecks.name,
+      })
       .from(competitiveDecks)
-      .where(and(
-        eq(competitiveDecks.format, dbFormat),
-        eq(competitiveDecks.isSynthetic, false)
-      ))
+      .where(
+        and(
+          eq(competitiveDecks.format, dbFormat),
+          eq(competitiveDecks.isSynthetic, false)
+        )
+      )
       .limit(8);
 
-    if (topDecks.length === 0) return "Sem dados de metagame disponíveis no banco";
+    if (topDecks.length === 0)
+      return "Sem dados de metagame disponíveis no banco";
 
-    const archetypeSet = new Set(topDecks.map((d) => d.archetype).filter(Boolean));
+    const archetypeSet = new Set(
+      topDecks.map(d => d.archetype).filter(Boolean)
+    );
     const archetypes = Array.from(archetypeSet);
-    return archetypes.join(", ") || topDecks.map((d) => d.name).slice(0, 5).join(", ");
+    return (
+      archetypes.join(", ") ||
+      topDecks
+        .map(d => d.name)
+        .slice(0, 5)
+        .join(", ")
+    );
   } catch {
     return "";
   }
@@ -290,7 +309,7 @@ async function enrichWithLearnedWeights(
 ): Promise<EnrichedDeckCard[]> {
   const weights = await modelLearningService.getCardWeights();
 
-  return llmCards.map((card) => ({
+  return llmCards.map(card => ({
     ...card,
     learnedWeight: weights[card.name] ?? 1.0,
     isValid: true, // validação de regras feita separadamente
@@ -306,7 +325,9 @@ export async function generateDeckWithLLM(
 ): Promise<LLMGeneratorOutput> {
   const { format, archetype, commander } = params;
 
-  console.log(`[LLMGenerator] Iniciando geração — Formato: ${format}, Arquétipo: ${archetype}`);
+  console.log(
+    `[LLMGenerator] Iniciando geração — Formato: ${format}, Arquétipo: ${archetype}`
+  );
 
   // 1. Buscar candidatas do banco (não do LLM)
   const candidates = await fetchCandidateCards(format, commander);
@@ -325,7 +346,12 @@ export async function generateDeckWithLLM(
     const db = await getDb();
     if (db) {
       const { cardSynergies } = await import("../../drizzle/schema");
-      const { or, and: drizzleAnd, eq: drizzleEq, desc: drizzleDesc } = await import("drizzle-orm");
+      const {
+        or,
+        and: drizzleAnd,
+        eq: drizzleEq,
+        desc: drizzleDesc,
+      } = await import("drizzle-orm");
       // Buscar as top sinergias do banco (sem filtrar por candidatas para ter dados reais)
       const topPairs = await db
         .select()
@@ -334,25 +360,38 @@ export async function generateDeckWithLLM(
         .limit(20);
 
       // Buscar nomes das cartas pelos IDs
-      const pairIds = Array.from(new Set(topPairs.flatMap((p) => [p.card1Id, p.card2Id])));
+      const pairIds = Array.from(
+        new Set(topPairs.flatMap(p => [p.card1Id, p.card2Id]))
+      );
       const { inArray: drizzleInArray } = await import("drizzle-orm");
-      const pairCards = await db.select({ id: cards.id, name: cards.name })
+      const pairCards = await db
+        .select({ id: cards.id, name: cards.name })
         .from(cards)
         .where(drizzleInArray(cards.id, pairIds));
-      const idToName = new Map(pairCards.map((c) => [c.id, c.name]));
+      const idToName = new Map(pairCards.map(c => [c.id, c.name]));
 
       // Filtrar pares onde ambas as cartas estão no pool de candidatas
-      const candidateNames = new Set(candidates.map((c) => c.name));
+      const candidateNames = new Set(candidates.map(c => c.name));
       topSynergyPairs = topPairs
-        .map((p) => ({
+        .map(p => ({
           card1: idToName.get(p.card1Id) ?? "",
           card2: idToName.get(p.card2Id) ?? "",
-          score: Math.round((p.coOccurrenceRate ?? 0) * 0.7 + (p.weight ?? 0) * 0.3),
+          score: Math.round(
+            (p.coOccurrenceRate ?? 0) * 0.7 + (p.weight ?? 0) * 0.3
+          ),
         }))
-        .filter((p) => p.card1 && p.card2 && candidateNames.has(p.card1) && candidateNames.has(p.card2))
+        .filter(
+          p =>
+            p.card1 &&
+            p.card2 &&
+            candidateNames.has(p.card1) &&
+            candidateNames.has(p.card2)
+        )
         .slice(0, 8);
     }
-  } catch { /* não-crítico */ }
+  } catch {
+    /* não-crítico */
+  }
 
   // 4. Construir prompt e chamar o LLM
   const prompt = buildDeckPrompt({
@@ -370,13 +409,19 @@ export async function generateDeckWithLLM(
 
   // 4. Enriquecer cartas do LLM com dados reais do banco antes de validar
   const db = await getDb();
-  const llmNames = llmResult.mainboard.map((c) => c.name);
+  const llmNames = llmResult.mainboard.map(c => c.name);
   const realCardsData = db
-    ? await db.select().from(cards).where(inArray(cards.name, llmNames)).catch(() => [])
+    ? await db
+        .select()
+        .from(cards)
+        .where(inArray(cards.name, llmNames))
+        .catch(() => [])
     : [];
-  const realCardMap = new Map(realCardsData.map((c) => [c.name.toLowerCase(), c]));
+  const realCardMap = new Map(
+    realCardsData.map(c => [c.name.toLowerCase(), c])
+  );
 
-  const cardsForValidation = llmResult.mainboard.map((c) => {
+  const cardsForValidation = llmResult.mainboard.map(c => {
     const real = realCardMap.get(c.name.toLowerCase());
     return {
       id: real?.id ?? 0,
@@ -407,7 +452,9 @@ export async function generateDeckWithLLM(
   const validation = validateDeck(cardsForValidation, dbFormat);
 
   if (!validation.isValid) {
-    throw new Error(`[LLMGenerator] candidate rejected by deck gate: ${validation.errors.join("; ")}`);
+    throw new Error(
+      `[LLMGenerator] candidate rejected by deck gate: ${validation.errors.join("; ")}`
+    );
   }
 
   // 5. Enriquecer com pesos aprendidos (Meta Scorer)

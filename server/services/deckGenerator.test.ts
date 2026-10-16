@@ -6,7 +6,7 @@ const mockCard = (
   id: number,
   name: string,
   type: string,
-  cmc: number = 2,
+  cmc: number = 2
 ): Card & { quantity: number } => ({
   id,
   scryfallId: `mock-${id}`,
@@ -61,7 +61,7 @@ describe("validateDeck", () => {
     const result = validateDeck(cards, "standard");
 
     expect(result.isValid).toBe(false);
-    expect(result.errors.some((e) => e.includes("máximo 4"))).toBe(true);
+    expect(result.errors.some(e => e.includes("máximo 4"))).toBe(true);
   });
 
   it("should validate a valid Commander deck with 100 cards", () => {
@@ -99,7 +99,7 @@ describe("validateDeck", () => {
     const result = validateDeck(cards, "commander");
 
     expect(result.isValid).toBe(false);
-    expect(result.errors.some((e) => e.includes("máximo 1"))).toBe(true);
+    expect(result.errors.some(e => e.includes("máximo 1"))).toBe(true);
   });
 
   it("should warn about unbalanced color distribution", () => {
@@ -111,7 +111,7 @@ describe("validateDeck", () => {
 
     const result = validateDeck(cards, "standard");
 
-    expect(result.warnings.some((w) => w.includes("desbalanceada"))).toBe(true);
+    expect(result.warnings.some(w => w.includes("desbalanceada"))).toBe(true);
   });
 
   it("should allow basic lands with more than 4 copies", () => {
@@ -125,7 +125,7 @@ describe("validateDeck", () => {
     const result = validateDeck(cards, "standard");
 
     // Should not error on basic lands
-    expect(result.errors.some((e) => e.includes("Island"))).toBe(false);
+    expect(result.errors.some(e => e.includes("Island"))).toBe(false);
   });
 });
 

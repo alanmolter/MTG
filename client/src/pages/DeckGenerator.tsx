@@ -1,32 +1,78 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Wand2, Download, Brain, BarChart3, Zap, Shield, Swords, TrendingUp, BookOpen, Sparkles, Trophy, ChevronRight, Link2 } from "lucide-react";
+import {
+  Loader2,
+  Wand2,
+  Download,
+  Brain,
+  BarChart3,
+  Zap,
+  Shield,
+  Swords,
+  TrendingUp,
+  BookOpen,
+  Sparkles,
+  Trophy,
+  ChevronRight,
+  Link2,
+} from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import type { RouterOutputs } from "@/lib/apiTypes";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function ScoreBar({ label, value, color, isNormalized = true }: { label: string; value: number; color: string; isNormalized?: boolean }) {
-  const pct = isNormalized 
+function ScoreBar({
+  label,
+  value,
+  color,
+  isNormalized = true,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  isNormalized?: boolean;
+}) {
+  const pct = isNormalized
     ? Math.max(0, Math.min(100, value))
     : Math.max(0, Math.min(100, ((value + 30) / 80) * 100));
-    
+
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-gray-400">
         <span>{label}</span>
-        <span className={value >= (isNormalized ? 50 : 0) ? "text-green-400" : "text-red-400"}>
-          {value.toFixed(1)}{isNormalized ? "%" : ""}
+        <span
+          className={
+            value >= (isNormalized ? 50 : 0) ? "text-green-400" : "text-red-400"
+          }
+        >
+          {value.toFixed(1)}
+          {isNormalized ? "%" : ""}
         </span>
       </div>
       <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );
@@ -38,19 +84,25 @@ function ManaCurveChart({ curve }: { curve: Record<number, number> }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Mana Curve</p>
+      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+        Mana Curve
+      </p>
       <div className="flex items-end gap-1 h-20">
-        {cmcs.map((cmc) => {
+        {cmcs.map(cmc => {
           const count = curve[cmc] || 0;
           const height = count > 0 ? Math.max(8, (count / maxVal) * 72) : 4;
           return (
             <div key={cmc} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-xs text-gray-500">{count > 0 ? count : ""}</span>
+              <span className="text-xs text-gray-500">
+                {count > 0 ? count : ""}
+              </span>
               <div
                 className="w-full rounded-t transition-all bg-gradient-to-t from-purple-600 to-purple-400"
                 style={{ height: `${height}px`, opacity: count > 0 ? 1 : 0.2 }}
               />
-              <span className="text-xs text-gray-500">{cmc === 7 ? "7+" : cmc}</span>
+              <span className="text-xs text-gray-500">
+                {cmc === 7 ? "7+" : cmc}
+              </span>
             </div>
           );
         })}
@@ -74,7 +126,9 @@ function TagBadge({ tag, count }: { tag: string; count: number }) {
   };
   const cls = colors[tag] || "bg-slate-800 text-gray-300 border-slate-600";
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${cls}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${cls}`}
+    >
       {tag} <span className="opacity-70">×{count}</span>
     </span>
   );
@@ -83,24 +137,52 @@ function TagBadge({ tag, count }: { tag: string; count: number }) {
 // ─── Deck Explanation Component ───────────────────────────────────────────────
 
 const SYNERGY_TYPE_COLORS: Record<string, string> = {
-  combo:      "bg-red-900/30 border-red-500/30 text-red-300",
-  engine:     "bg-orange-900/30 border-orange-500/30 text-orange-300",
-  value:      "bg-blue-900/30 border-blue-500/30 text-blue-300",
+  combo: "bg-red-900/30 border-red-500/30 text-red-300",
+  engine: "bg-orange-900/30 border-orange-500/30 text-orange-300",
+  value: "bg-blue-900/30 border-blue-500/30 text-blue-300",
   protection: "bg-purple-900/30 border-purple-500/30 text-purple-300",
-  theme:      "bg-teal-900/30 border-teal-500/30 text-teal-300",
+  theme: "bg-teal-900/30 border-teal-500/30 text-teal-300",
 };
 
 const SYNERGY_TYPE_LABELS: Record<string, string> = {
-  combo: "Combo", engine: "Motor", value: "Valor", protection: "Proteção", theme: "Tema",
+  combo: "Combo",
+  engine: "Motor",
+  value: "Valor",
+  protection: "Proteção",
+  theme: "Tema",
 };
 
-function DeckExplanationPanel({ explanation, loading }: { explanation: any; loading: boolean }) {
+type GeneratedDeck = RouterOutputs["generator"]["generate"];
+type DeckCard = NonNullable<GeneratedDeck["deck"]>[number];
+type DeckExplanation = RouterOutputs["generator"]["explainDeck"];
+
+// The RL branch returns DeckMetrics; the brain branch adds score, tier, and
+// analysis. The UI already reads those fields when they are present.
+type BrainView = {
+  normalizedScore?: number;
+  tier?: string;
+  recommendations?: string[];
+  analysis?: {
+    strengths?: string[];
+    weaknesses?: string[];
+  };
+};
+
+function DeckExplanationPanel({
+  explanation,
+  loading,
+}: {
+  explanation: DeckExplanation | null;
+  loading: boolean;
+}) {
   if (loading) {
     return (
       <Card className="bg-slate-900/50 border-purple-500/30">
         <CardContent className="py-10 flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-          <p className="text-gray-400 text-sm">Analisando sinergias e mecânicas do deck...</p>
+          <p className="text-gray-400 text-sm">
+            Analisando sinergias e mecânicas do deck...
+          </p>
         </CardContent>
       </Card>
     );
@@ -120,16 +202,19 @@ function DeckExplanationPanel({ explanation, loading }: { explanation: any; load
             </Badge>
           )}
         </CardTitle>
-        <p className="text-purple-300 text-sm font-semibold">{explanation.deckStyle}</p>
+        <p className="text-purple-300 text-sm font-semibold">
+          {explanation.deckStyle}
+        </p>
       </CardHeader>
       <CardContent className="space-y-5">
-
         {/* Visão Geral */}
         <div>
           <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
             <Brain className="w-3 h-3" /> Estratégia
           </p>
-          <p className="text-gray-200 text-sm leading-relaxed">{explanation.strategyOverview}</p>
+          <p className="text-gray-200 text-sm leading-relaxed">
+            {explanation.strategyOverview}
+          </p>
         </div>
 
         {/* Win Conditions */}
@@ -140,7 +225,10 @@ function DeckExplanationPanel({ explanation, loading }: { explanation: any; load
             </p>
             <div className="space-y-1.5">
               {explanation.winConditions.map((wc: string, i: number) => (
-                <div key={i} className="flex items-start gap-2 px-3 py-2 bg-yellow-900/10 border border-yellow-500/20 rounded-lg">
+                <div
+                  key={i}
+                  className="flex items-start gap-2 px-3 py-2 bg-yellow-900/10 border border-yellow-500/20 rounded-lg"
+                >
                   <Trophy className="w-3 h-3 text-yellow-400 mt-0.5 shrink-0" />
                   <p className="text-yellow-100 text-xs">{wc}</p>
                 </div>
@@ -156,22 +244,32 @@ function DeckExplanationPanel({ explanation, loading }: { explanation: any; load
               <Link2 className="w-3 h-3 text-green-400" /> Sinergias Chave
             </p>
             <div className="space-y-2">
-              {explanation.keySynergies.map((syn: any, i: number) => {
-                const cls = SYNERGY_TYPE_COLORS[syn.type] ?? SYNERGY_TYPE_COLORS.theme;
+              {explanation.keySynergies.map((syn, i: number) => {
+                const cls =
+                  SYNERGY_TYPE_COLORS[syn.type] ?? SYNERGY_TYPE_COLORS.theme;
                 return (
-                  <div key={i} className={`px-3 py-2.5 rounded-lg border ${cls}`}>
+                  <div
+                    key={i}
+                    className={`px-3 py-2.5 rounded-lg border ${cls}`}
+                  >
                     <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                       <Badge className={`text-[9px] px-1.5 py-0 border ${cls}`}>
                         {SYNERGY_TYPE_LABELS[syn.type] ?? syn.type}
                       </Badge>
                       {syn.cards?.map((name: string, j: number) => (
                         <span key={j} className="flex items-center gap-0.5">
-                          {j > 0 && <ChevronRight className="w-2.5 h-2.5 opacity-50" />}
-                          <span className="text-[11px] font-semibold text-white">{name}</span>
+                          {j > 0 && (
+                            <ChevronRight className="w-2.5 h-2.5 opacity-50" />
+                          )}
+                          <span className="text-[11px] font-semibold text-white">
+                            {name}
+                          </span>
                         </span>
                       ))}
                     </div>
-                    <p className="text-xs opacity-80 leading-snug">{syn.description}</p>
+                    <p className="text-xs opacity-80 leading-snug">
+                      {syn.description}
+                    </p>
                   </div>
                 );
               })}
@@ -187,12 +285,30 @@ function DeckExplanationPanel({ explanation, loading }: { explanation: any; load
             </p>
             <div className="space-y-2">
               {[
-                { phase: "Início (T1-3)", text: explanation.playSequence.early, color: "border-green-500/30 bg-green-900/10 text-green-200" },
-                { phase: "Meio (T4-6)",   text: explanation.playSequence.mid,   color: "border-blue-500/30 bg-blue-900/10 text-blue-200" },
-                { phase: "Final (T7+)",   text: explanation.playSequence.late,  color: "border-purple-500/30 bg-purple-900/10 text-purple-200" },
+                {
+                  phase: "Início (T1-3)",
+                  text: explanation.playSequence.early,
+                  color: "border-green-500/30 bg-green-900/10 text-green-200",
+                },
+                {
+                  phase: "Meio (T4-6)",
+                  text: explanation.playSequence.mid,
+                  color: "border-blue-500/30 bg-blue-900/10 text-blue-200",
+                },
+                {
+                  phase: "Final (T7+)",
+                  text: explanation.playSequence.late,
+                  color:
+                    "border-purple-500/30 bg-purple-900/10 text-purple-200",
+                },
               ].map(({ phase, text, color }) => (
-                <div key={phase} className={`px-3 py-2 rounded-lg border ${color}`}>
-                  <p className="text-[10px] font-bold uppercase opacity-70 mb-0.5">{phase}</p>
+                <div
+                  key={phase}
+                  className={`px-3 py-2 rounded-lg border ${color}`}
+                >
+                  <p className="text-[10px] font-bold uppercase opacity-70 mb-0.5">
+                    {phase}
+                  </p>
                   <p className="text-xs leading-snug">{text}</p>
                 </div>
               ))}
@@ -207,19 +323,27 @@ function DeckExplanationPanel({ explanation, loading }: { explanation: any; load
               <Swords className="w-3 h-3 text-red-400" /> Cartas Essenciais
             </p>
             <div className="space-y-1.5">
-              {explanation.keyCards.map((kc: any, i: number) => (
-                <div key={i} className="flex items-start gap-2 px-3 py-2 bg-slate-800/50 rounded border border-slate-600/30">
-                  <span className="text-purple-300 font-bold text-xs w-4 shrink-0">{i + 1}.</span>
+              {explanation.keyCards.map((kc, i: number) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 px-3 py-2 bg-slate-800/50 rounded border border-slate-600/30"
+                >
+                  <span className="text-purple-300 font-bold text-xs w-4 shrink-0">
+                    {i + 1}.
+                  </span>
                   <div className="min-w-0">
-                    <p className="text-white text-xs font-semibold truncate">{kc.name}</p>
-                    <p className="text-gray-400 text-[11px] leading-snug">{kc.role}</p>
+                    <p className="text-white text-xs font-semibold truncate">
+                      {kc.name}
+                    </p>
+                    <p className="text-gray-400 text-[11px] leading-snug">
+                      {kc.role}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         )}
-
       </CardContent>
     </Card>
   );
@@ -229,18 +353,23 @@ function DeckExplanationPanel({ explanation, loading }: { explanation: any; load
 
 export default function DeckGenerator() {
   const [, setLocation] = useLocation();
-  const [format, setFormat] = useState<"standard" | "modern" | "commander" | "legacy">("standard");
+  const [format, setFormat] = useState<
+    "standard" | "modern" | "commander" | "legacy"
+  >("standard");
   const [archetype, setArchetype] = useState("aggro");
   const [useRL, setUseRL] = useState(false);
-  const [generatedDeck, setGeneratedDeck] = useState<any>(null);
-  const [deckExplanation, setDeckExplanation] = useState<any>(null);
+  const [generatedDeck, setGeneratedDeck] = useState<GeneratedDeck | null>(
+    null
+  );
+  const [deckExplanation, setDeckExplanation] =
+    useState<DeckExplanation | null>(null);
 
   const explainMutation = trpc.generator.explainDeck.useMutation({
-    onSuccess: (data) => setDeckExplanation(data),
+    onSuccess: data => setDeckExplanation(data),
   });
 
   const generateMutation = trpc.generator.generate.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setGeneratedDeck(data);
       setDeckExplanation(null);
       const improvements = data.improvements ?? 0;
@@ -252,7 +381,7 @@ export default function DeckGenerator() {
       // Dispara análise do deck automaticamente
       if (data.deck?.length) {
         explainMutation.mutate({
-          cards: data.deck.map((c: any) => ({
+          cards: data.deck.map(c => ({
             name: c.name,
             type: c.type ?? null,
             text: c.text ?? null,
@@ -270,18 +399,28 @@ export default function DeckGenerator() {
   });
 
   const handleGenerate = () => {
-    generateMutation.mutate({ format, archetype: archetype || undefined, useRL });
+    generateMutation.mutate({
+      format,
+      archetype: archetype || undefined,
+      useRL,
+    });
   };
 
   const exportDeckAsText = () => {
     if (!generatedDeck?.deck) return;
     const deckList = generatedDeck.deck
-      .map((card: any) => `${card.quantity} ${card.name}`)
+      .map(card => `${card.quantity} ${card.name}`)
       .join("\n");
     const text = `// MTG Deck — ${format.toUpperCase()} ${archetype ? `(${archetype})` : ""}\n// Generated by MTG Deck Engine\n\n${deckList}`;
     const el = document.createElement("a");
-    el.setAttribute("href", `data:text/plain;charset=utf-8,${encodeURIComponent(text)}`);
-    el.setAttribute("download", `deck-${archetype || format}-${Date.now()}.txt`);
+    el.setAttribute(
+      "href",
+      `data:text/plain;charset=utf-8,${encodeURIComponent(text)}`
+    );
+    el.setAttribute(
+      "download",
+      `deck-${archetype || format}-${Date.now()}.txt`
+    );
     el.style.display = "none";
     document.body.appendChild(el);
     el.click();
@@ -292,10 +431,13 @@ export default function DeckGenerator() {
   const exportArena = () => {
     if (!generatedDeck?.deck) return;
     const deckList = generatedDeck.deck
-      .map((card: any) => `${card.quantity} ${card.name}`)
+      .map(card => `${card.quantity} ${card.name}`)
       .join("\n");
     const el = document.createElement("a");
-    el.setAttribute("href", `data:text/plain;charset=utf-8,${encodeURIComponent(deckList)}`);
+    el.setAttribute(
+      "href",
+      `data:text/plain;charset=utf-8,${encodeURIComponent(deckList)}`
+    );
     el.setAttribute("download", `deck-arena-${Date.now()}.txt`);
     el.style.display = "none";
     document.body.appendChild(el);
@@ -304,9 +446,19 @@ export default function DeckGenerator() {
     toast.success("Arena format exported");
   };
 
-  const archetypes = ["aggro", "burn", "tempo", "midrange", "control", "ramp", "combo"];
+  const archetypes = [
+    "aggro",
+    "burn",
+    "tempo",
+    "midrange",
+    "control",
+    "ramp",
+    "combo",
+  ];
 
-  const metrics = generatedDeck?.metrics;
+  const metrics = generatedDeck?.metrics as
+    | (GeneratedDeck["metrics"] & BrainView)
+    | undefined;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900">
@@ -314,10 +466,18 @@ export default function DeckGenerator() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Deck Generator</h1>
-            <p className="text-gray-400">AI-powered deck generation with Game Feature Engine</p>
+            <h1 className="text-4xl font-bold text-white mb-2">
+              Deck Generator
+            </h1>
+            <p className="text-gray-400">
+              AI-powered deck generation with Game Feature Engine
+            </p>
           </div>
-          <Button variant="outline" onClick={() => setLocation("/")} className="border-purple-500/30 text-purple-300">
+          <Button
+            variant="outline"
+            onClick={() => setLocation("/")}
+            className="border-purple-500/30 text-purple-300"
+          >
             ← Home
           </Button>
         </div>
@@ -331,18 +491,29 @@ export default function DeckGenerator() {
                   <Wand2 className="w-5 h-5 text-purple-400" />
                   Generate Deck
                 </CardTitle>
-                <CardDescription className="text-gray-400">Configure format and archetype</CardDescription>
+                <CardDescription className="text-gray-400">
+                  Configure format and archetype
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="space-y-2">
                   <Label className="text-gray-300">Format</Label>
-                  <Select value={format} onValueChange={(v: any) => setFormat(v)}>
+                  <Select
+                    value={format}
+                    onValueChange={value => setFormat(value as typeof format)}
+                  >
                     <SelectTrigger className="bg-slate-800 border-purple-500/30 text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-purple-500/30">
-                      {["standard", "modern", "commander", "legacy"].map((f) => (
-                        <SelectItem key={f} value={f} className="text-white capitalize">{f}</SelectItem>
+                      {["standard", "modern", "commander", "legacy"].map(f => (
+                        <SelectItem
+                          key={f}
+                          value={f}
+                          className="text-white capitalize"
+                        >
+                          {f}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -355,8 +526,14 @@ export default function DeckGenerator() {
                       <SelectValue placeholder="Select archetype" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-purple-500/30">
-                      {archetypes.map((a) => (
-                        <SelectItem key={a} value={a} className="text-white capitalize">{a}</SelectItem>
+                      {archetypes.map(a => (
+                        <SelectItem
+                          key={a}
+                          value={a}
+                          className="text-white capitalize"
+                        >
+                          {a}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -369,7 +546,9 @@ export default function DeckGenerator() {
                       <Brain className="w-4 h-4 text-green-400" />
                       RL Optimization
                     </p>
-                    <p className="text-gray-500 text-xs mt-0.5">200 iterations of hill-climbing</p>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      200 iterations of hill-climbing
+                    </p>
                   </div>
                   <Switch checked={useRL} onCheckedChange={setUseRL} />
                 </div>
@@ -402,9 +581,9 @@ export default function DeckGenerator() {
                     <BarChart3 className="w-4 h-4 text-blue-400" />
                     Deck Evaluation Brain
                   </CardTitle>
-                  {generatedDeck.improvements > 0 && (
+                  {(generatedDeck?.improvements ?? 0) > 0 && (
                     <Badge className="bg-green-900/50 text-green-300 border-green-500/30 w-fit">
-                      RL: {generatedDeck.improvements} improvements
+                      RL: {generatedDeck?.improvements} improvements
                     </Badge>
                   )}
                 </CardHeader>
@@ -412,19 +591,30 @@ export default function DeckGenerator() {
                   {/* Total Score & Tier */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="p-3 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center flex flex-col justify-center">
-                      <p className="text-[10px] text-gray-400 mb-0.5 uppercase">Score</p>
-                      <p className={`text-3xl font-black ${metrics.normalizedScore >= 50 ? "text-green-400" : "text-red-400"}`}>
+                      <p className="text-[10px] text-gray-400 mb-0.5 uppercase">
+                        Score
+                      </p>
+                      <p
+                        className={`text-3xl font-black ${(metrics.normalizedScore ?? 0) >= 50 ? "text-green-400" : "text-red-400"}`}
+                      >
                         {metrics.normalizedScore?.toFixed(0)}
                       </p>
                     </div>
                     <div className="p-3 bg-slate-800/50 rounded-lg border border-purple-500/20 text-center">
-                      <p className="text-[10px] text-gray-400 mb-0.5 uppercase">Tier</p>
-                      <p className={`text-4xl font-black italic tracking-tighter ${
-                        metrics.tier === "S" ? "text-yellow-400" : 
-                        metrics.tier === "A" ? "text-purple-400" : 
-                        metrics.tier === "B" ? "text-blue-400" : 
-                        "text-gray-500"
-                      }`}>
+                      <p className="text-[10px] text-gray-400 mb-0.5 uppercase">
+                        Tier
+                      </p>
+                      <p
+                        className={`text-4xl font-black italic tracking-tighter ${
+                          metrics.tier === "S"
+                            ? "text-yellow-400"
+                            : metrics.tier === "A"
+                              ? "text-purple-400"
+                              : metrics.tier === "B"
+                                ? "text-blue-400"
+                                : "text-gray-500"
+                        }`}
+                      >
                         {metrics.tier}
                       </p>
                     </div>
@@ -433,54 +623,90 @@ export default function DeckGenerator() {
                   {/* Brain Analysis */}
                   {metrics.analysis && (
                     <div className="space-y-2">
-                       {metrics.analysis.strengths?.slice(0, 2).map((s: string, i: number) => (
-                         <div key={i} className="px-2 py-1 bg-green-900/10 border border-green-500/20 rounded text-[10px] text-green-300">
-                           ✓ {s}
-                         </div>
-                       ))}
-                       {metrics.analysis.weaknesses?.slice(0, 2).map((w: string, i: number) => (
-                         <div key={i} className="px-2 py-1 bg-red-900/10 border border-red-500/20 rounded text-[10px] text-red-300">
-                           ⚠ {w}
-                         </div>
-                       ))}
+                      {metrics.analysis.strengths
+                        ?.slice(0, 2)
+                        .map((s: string, i: number) => (
+                          <div
+                            key={i}
+                            className="px-2 py-1 bg-green-900/10 border border-green-500/20 rounded text-[10px] text-green-300"
+                          >
+                            ✓ {s}
+                          </div>
+                        ))}
+                      {metrics.analysis.weaknesses
+                        ?.slice(0, 2)
+                        .map((w: string, i: number) => (
+                          <div
+                            key={i}
+                            className="px-2 py-1 bg-red-900/10 border border-red-500/20 rounded text-[10px] text-red-300"
+                          >
+                            ⚠ {w}
+                          </div>
+                        ))}
                     </div>
                   )}
 
                   {/* Recommendations */}
-                  {metrics.recommendations?.length > 0 && (
+                  {(metrics.recommendations?.length ?? 0) > 0 && (
                     <div className="p-2 bg-purple-900/10 border border-purple-500/20 rounded-lg text-[10px] text-purple-200 space-y-1">
                       <p className="font-bold text-purple-400 flex items-center gap-1">
                         <TrendingUp className="w-3 h-3" /> Recommendations:
                       </p>
-                      {metrics.recommendations.slice(0, 3).map((rec: string, i: number) => (
-                        <p key={i} className="truncate">• {rec}</p>
-                      ))}
+                      {metrics.recommendations
+                        ?.slice(0, 3)
+                        .map((rec: string, i: number) => (
+                          <p key={i} className="truncate">
+                            • {rec}
+                          </p>
+                        ))}
                     </div>
                   )}
 
                   {/* Score Breakdown */}
                   <div className="space-y-3">
-                    <ScoreBar label="Mana Curve" value={metrics.breakdown?.curve ?? 0} color="bg-purple-500" />
-                    <ScoreBar label="Land Ratio" value={metrics.breakdown?.lands ?? 0} color="bg-blue-500" />
-                    <ScoreBar label="Synergy" value={metrics.breakdown?.synergy ?? 0} color="bg-green-500" />
-                    <ScoreBar label="Simulation" value={metrics.breakdown?.simulation ?? 0} color="bg-yellow-500" />
+                    <ScoreBar
+                      label="Mana Curve"
+                      value={metrics.breakdown?.curve ?? 0}
+                      color="bg-purple-500"
+                    />
+                    <ScoreBar
+                      label="Land Ratio"
+                      value={metrics.breakdown?.lands ?? 0}
+                      color="bg-blue-500"
+                    />
+                    <ScoreBar
+                      label="Synergy"
+                      value={metrics.breakdown?.synergy ?? 0}
+                      color="bg-green-500"
+                    />
+                    <ScoreBar
+                      label="Simulation"
+                      value={metrics.breakdown?.simulation ?? 0}
+                      color="bg-yellow-500"
+                    />
                   </div>
 
                   {/* Composition */}
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="p-2 bg-slate-800/50 rounded">
                       <Swords className="w-3 h-3 text-red-400 mx-auto mb-1" />
-                      <p className="text-white font-bold text-xs">{metrics.creatureCount}</p>
+                      <p className="text-white font-bold text-xs">
+                        {metrics.creatureCount}
+                      </p>
                       <p className="text-gray-500 text-[10px]">Creatures</p>
                     </div>
                     <div className="p-2 bg-slate-800/50 rounded">
                       <Zap className="w-3 h-3 text-yellow-400 mx-auto mb-1" />
-                      <p className="text-white font-bold text-xs">{metrics.spellCount}</p>
+                      <p className="text-white font-bold text-xs">
+                        {metrics.spellCount}
+                      </p>
                       <p className="text-gray-500 text-[10px]">Spells</p>
                     </div>
                     <div className="p-2 bg-slate-800/50 rounded">
                       <Shield className="w-3 h-3 text-green-400 mx-auto mb-1" />
-                      <p className="text-white font-bold text-xs">{metrics.landCount}</p>
+                      <p className="text-white font-bold text-xs">
+                        {metrics.landCount}
+                      </p>
                       <p className="text-gray-500 text-[10px]">Lands</p>
                     </div>
                   </div>
@@ -488,15 +714,21 @@ export default function DeckGenerator() {
                   {/* Functional Roles */}
                   <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
                     <div className="p-2 bg-red-900/20 rounded border border-red-500/20">
-                      <p className="text-red-300 font-bold">{metrics.removalCount}</p>
+                      <p className="text-red-300 font-bold">
+                        {metrics.removalCount}
+                      </p>
                       <p className="text-gray-500">Removal</p>
                     </div>
                     <div className="p-2 bg-blue-900/20 rounded border border-blue-500/20">
-                      <p className="text-blue-300 font-bold">{metrics.drawCount}</p>
+                      <p className="text-blue-300 font-bold">
+                        {metrics.drawCount}
+                      </p>
                       <p className="text-gray-500">Draw</p>
                     </div>
                     <div className="p-2 bg-green-900/20 rounded border border-green-500/20">
-                      <p className="text-green-300 font-bold">{metrics.rampCount}</p>
+                      <p className="text-green-300 font-bold">
+                        {metrics.rampCount}
+                      </p>
                       <p className="text-gray-500">Ramp</p>
                     </div>
                   </div>
@@ -507,13 +739,19 @@ export default function DeckGenerator() {
                   {/* Mechanic Tags */}
                   {Object.keys(metrics.mechanicTagCounts).length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Mechanic Tags</p>
+                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+                        Mechanic Tags
+                      </p>
                       <div className="flex flex-wrap gap-1">
                         {Object.entries(metrics.mechanicTagCounts)
                           .sort(([, a], [, b]) => (b as number) - (a as number))
                           .slice(0, 10)
                           .map(([tag, count]) => (
-                            <TagBadge key={tag} tag={tag} count={count as number} />
+                            <TagBadge
+                              key={tag}
+                              tag={tag}
+                              count={count as number}
+                            />
                           ))}
                       </div>
                     </div>
@@ -529,8 +767,12 @@ export default function DeckGenerator() {
               <Card className="bg-slate-900/50 border-purple-500/30 h-96 flex items-center justify-center">
                 <CardContent className="text-center">
                   <Wand2 className="w-12 h-12 text-purple-400/40 mx-auto mb-4" />
-                  <p className="text-gray-400 text-lg">Configure and generate a deck to see results</p>
-                  <p className="text-gray-600 text-sm mt-2">Enable RL Optimization for smarter deck building</p>
+                  <p className="text-gray-400 text-lg">
+                    Configure and generate a deck to see results
+                  </p>
+                  <p className="text-gray-600 text-sm mt-2">
+                    Enable RL Optimization for smarter deck building
+                  </p>
                 </CardContent>
               </Card>
             )}
@@ -539,21 +781,35 @@ export default function DeckGenerator() {
               <div className="space-y-4">
                 {/* Validation Banner */}
                 {generatedDeck.validation && (
-                  <Card className={`border-l-4 ${
-                    generatedDeck.validation.isValid
-                      ? "bg-green-900/20 border-l-green-500 border-green-500/30"
-                      : "bg-red-900/20 border-l-red-500 border-red-500/30"
-                  }`}>
+                  <Card
+                    className={`border-l-4 ${
+                      generatedDeck.validation.isValid
+                        ? "bg-green-900/20 border-l-green-500 border-green-500/30"
+                        : "bg-red-900/20 border-l-red-500 border-red-500/30"
+                    }`}
+                  >
                     <CardContent className="py-3 px-4">
-                      <p className={`font-semibold ${generatedDeck.validation.isValid ? "text-green-300" : "text-red-300"}`}>
-                        {generatedDeck.validation.isValid ? "✓ Valid Deck" : "✗ Invalid Deck"}
+                      <p
+                        className={`font-semibold ${generatedDeck.validation.isValid ? "text-green-300" : "text-red-300"}`}
+                      >
+                        {generatedDeck.validation.isValid
+                          ? "✓ Valid Deck"
+                          : "✗ Invalid Deck"}
                       </p>
-                      {generatedDeck.validation.errors.map((e: string, i: number) => (
-                        <p key={i} className="text-red-200 text-sm mt-1">• {e}</p>
-                      ))}
-                      {generatedDeck.validation.warnings.map((w: string, i: number) => (
-                        <p key={i} className="text-yellow-200 text-sm mt-1">⚠ {w}</p>
-                      ))}
+                      {generatedDeck.validation.errors.map(
+                        (e: string, i: number) => (
+                          <p key={i} className="text-red-200 text-sm mt-1">
+                            • {e}
+                          </p>
+                        )
+                      )}
+                      {generatedDeck.validation.warnings.map(
+                        (w: string, i: number) => (
+                          <p key={i} className="text-yellow-200 text-sm mt-1">
+                            ⚠ {w}
+                          </p>
+                        )
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -568,10 +824,17 @@ export default function DeckGenerator() {
                 <Card className="bg-slate-900/50 border-purple-500/30">
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div>
-                      <CardTitle className="text-white">Generated Deck</CardTitle>
+                      <CardTitle className="text-white">
+                        Generated Deck
+                      </CardTitle>
                       <CardDescription className="text-gray-400">
-                        {generatedDeck.deck?.reduce((s: number, c: any) => s + c.quantity, 0)} cards
-                        {archetype && ` · ${archetype.charAt(0).toUpperCase() + archetype.slice(1)}`}
+                        {generatedDeck.deck?.reduce(
+                          (s: number, c) => s + c.quantity,
+                          0
+                        )}{" "}
+                        cards
+                        {archetype &&
+                          ` · ${archetype.charAt(0).toUpperCase() + archetype.slice(1)}`}
                         {` · ${format.charAt(0).toUpperCase() + format.slice(1)}`}
                       </CardDescription>
                     </div>
@@ -599,28 +862,61 @@ export default function DeckGenerator() {
                     {/* Group by type */}
                     {(() => {
                       const deck = generatedDeck.deck || [];
-                      const lands = deck.filter((c: any) => c.type?.includes("Land") || c.type?.includes("land"));
-                      const creatures = deck.filter((c: any) => c.type?.includes("Creature") && !c.type?.includes("Land"));
-                      const spells = deck.filter((c: any) => !c.type?.includes("Creature") && !c.type?.includes("Land"));
+                      const lands = deck.filter(
+                        c =>
+                          c.type?.includes("Land") || c.type?.includes("land")
+                      );
+                      const creatures = deck.filter(
+                        c =>
+                          c.type?.includes("Creature") &&
+                          !c.type?.includes("Land")
+                      );
+                      const spells = deck.filter(
+                        c =>
+                          !c.type?.includes("Creature") &&
+                          !c.type?.includes("Land")
+                      );
 
-                      const renderGroup = (title: string, cards: any[], color: string) =>
+                      const renderGroup = (
+                        title: string,
+                        cards: DeckCard[],
+                        color: string
+                      ) =>
                         cards.length > 0 && (
                           <div key={title} className="mb-4">
-                            <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${color}`}>
-                              {title} ({cards.reduce((s: number, c: any) => s + c.quantity, 0)})
+                            <p
+                              className={`text-xs font-semibold uppercase tracking-wide mb-2 ${color}`}
+                            >
+                              {title} (
+                              {cards.reduce(
+                                (s: number, c) => s + c.quantity,
+                                0
+                              )}
+                              )
                             </p>
                             <div className="space-y-1">
-                              {cards.map((card: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border border-purple-500/10 hover:border-purple-500/30 transition-colors">
+                              {cards.map((card, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between px-3 py-2 bg-slate-800/40 rounded border border-purple-500/10 hover:border-purple-500/30 transition-colors"
+                                >
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-white text-sm font-medium truncate">{card.name}</p>
-                                    <p className="text-gray-500 text-xs truncate">{card.type}</p>
+                                    <p className="text-white text-sm font-medium truncate">
+                                      {card.name}
+                                    </p>
+                                    <p className="text-gray-500 text-xs truncate">
+                                      {card.type}
+                                    </p>
                                   </div>
                                   <div className="flex items-center gap-3 ml-3 shrink-0">
                                     {card.cmc != null && (
-                                      <span className="text-gray-400 text-xs">CMC {card.cmc}</span>
+                                      <span className="text-gray-400 text-xs">
+                                        CMC {card.cmc}
+                                      </span>
                                     )}
-                                    <span className="text-purple-300 font-bold text-sm w-6 text-right">{card.quantity}×</span>
+                                    <span className="text-purple-300 font-bold text-sm w-6 text-right">
+                                      {card.quantity}×
+                                    </span>
                                   </div>
                                 </div>
                               ))}

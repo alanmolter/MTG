@@ -6,9 +6,11 @@ global.fetch = vi.fn();
 
 // Mock db — source uses `getRawClient()` (postgres.js tagged-template).
 function makeFakePg() {
-  const pg = vi.fn(async (_strings: TemplateStringsArray, ..._values: any[]) => {
-    return [{ id: 1 }];
-  });
+  const pg = vi.fn(
+    async (_strings: TemplateStringsArray, ..._values: any[]) => {
+      return [{ id: 1 }];
+    }
+  );
   return Object.assign(pg, {
     begin: async (fn: (tx: typeof pg) => Promise<unknown>) => fn(pg),
   });
@@ -41,12 +43,35 @@ describe("importMTGTop8Decks", () => {
     const deckTxt = `4 Lightning Bolt\n20 Mountain\nSideboard\n1 Pyroblast`;
 
     (global.fetch as any)
-      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(metagameHtml) })
-      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(archetypeHtml) })
-      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(deckTxt) });
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(metagameHtml),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(archetypeHtml),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(deckTxt),
+      });
 
     const result = await importMTGTop8Decks("modern", 1);
 
     expect(result.decksImported).toBe(1);
+  });
+});
+
+describe("robots.txt helpers", () => {
+  it("applies User-agent: * rules with longest-match allow", async () => {
+    const { parseRobots, isPathAllowed } = await import("./mtgtop8Scraper");
+    const rules = parseRobots(
+      "User-agent: bad\nDisallow: /\n\nUser-agent: *\nDisallow: /search\nDisallow: /private/*.php$\nAllow: /search/ok\n"
+    );
+    expect(isPathAllowed(rules, "/format?f=MO")).toBe(true);
+    expect(isPathAllowed(rules, "/search?x=1")).toBe(false);
+    expect(isPathAllowed(rules, "/search/ok")).toBe(true);
+    expect(isPathAllowed(rules, "/private/a.php")).toBe(false);
+    expect(isPathAllowed(rules, "/private/a.phpx")).toBe(true);
   });
 });

@@ -1,5 +1,12 @@
 import { getDb } from "./db";
-import { decks, deckCards, Deck, DeckCard, Card, cards } from "../drizzle/schema";
+import {
+  decks,
+  deckCards,
+  Deck,
+  DeckCard,
+  Card,
+  cards,
+} from "../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 export async function createDeck(
@@ -13,14 +20,17 @@ export async function createDeck(
   if (!db) return null;
 
   try {
-    const result = await db.insert(decks).values({
-      userId,
-      name,
-      format,
-      archetype,
-      description,
-      isPublic: 0,
-    }).returning();
+    const result = await db
+      .insert(decks)
+      .values({
+        userId,
+        name,
+        format,
+        archetype,
+        description,
+        isPublic: 0,
+      })
+      .returning();
 
     return result[0] || null;
   } catch (error) {
@@ -33,7 +43,11 @@ export async function getDeckById(deckId: number): Promise<Deck | null> {
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.select().from(decks).where(eq(decks.id, deckId)).limit(1);
+  const result = await db
+    .select()
+    .from(decks)
+    .where(eq(decks.id, deckId))
+    .limit(1);
   return result[0] || null;
 }
 
@@ -63,7 +77,8 @@ export async function addCardToDeck(
         .from(cards)
         .where(eq(cards.id, cardId))
         .limit(1);
-      const isBasicLand = cardRow[0]?.type?.toLowerCase().includes("basic") ?? false;
+      const isBasicLand =
+        cardRow[0]?.type?.toLowerCase().includes("basic") ?? false;
       if (!isBasicLand) copyLimit = 1;
     }
 
@@ -105,7 +120,10 @@ export async function addCardToDeck(
   }
 }
 
-export async function removeCardFromDeck(deckId: number, cardId: number): Promise<boolean> {
+export async function removeCardFromDeck(
+  deckId: number,
+  cardId: number
+): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
 
@@ -120,7 +138,9 @@ export async function removeCardFromDeck(deckId: number, cardId: number): Promis
   }
 }
 
-export async function getDeckCards(deckId: number): Promise<(DeckCard & { card: Card })[]> {
+export async function getDeckCards(
+  deckId: number
+): Promise<(DeckCard & { card: Card })[]> {
   const db = await getDb();
   if (!db) return [];
 
@@ -131,7 +151,7 @@ export async function getDeckCards(deckId: number): Promise<(DeckCard & { card: 
       .innerJoin(cards, eq(deckCards.cardId, cards.id))
       .where(eq(deckCards.deckId, deckId));
 
-    return rows.map((row) => ({
+    return rows.map(row => ({
       ...row.deck_cards,
       card: row.cards,
     }));
@@ -160,7 +180,12 @@ export async function getDeckCardCount(deckId: number): Promise<number> {
 
 export async function updateDeck(
   deckId: number,
-  updates: { name?: string; archetype?: string; description?: string; isPublic?: number }
+  updates: {
+    name?: string;
+    archetype?: string;
+    description?: string;
+    isPublic?: number;
+  }
 ): Promise<Deck | null> {
   const db = await getDb();
   if (!db) return null;
@@ -168,7 +193,11 @@ export async function updateDeck(
   try {
     await db.update(decks).set(updates).where(eq(decks.id, deckId));
 
-    const result = await db.select().from(decks).where(eq(decks.id, deckId)).limit(1);
+    const result = await db
+      .select()
+      .from(decks)
+      .where(eq(decks.id, deckId))
+      .limit(1);
     return result[0] || null;
   } catch (error) {
     console.error("Error updating deck:", error);

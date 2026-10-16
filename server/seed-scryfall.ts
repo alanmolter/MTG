@@ -87,14 +87,14 @@ export function resolveScryfallColors(card: {
     if (union.size > 0) {
       // Preserve WUBRG canonical order for display stability
       const order = ["W", "U", "B", "R", "G"];
-      return order.filter((c) => union.has(c)).join("");
+      return order.filter(c => union.has(c)).join("");
     }
   }
 
   // 3. color_identity (authoritative — Scryfall aggregates across faces)
   if (Array.isArray(card.color_identity) && card.color_identity.length > 0) {
     const order = ["W", "U", "B", "R", "G"];
-    return order.filter((c) => card.color_identity!.includes(c)).join("");
+    return order.filter(c => card.color_identity!.includes(c)).join("");
   }
 
   // 4. Genuinely colorless? If we have Scryfall data but all three fields
@@ -115,18 +115,18 @@ async function getImageUrl(card: ScryfallCard): Promise<string | null> {
   if (card.image_uris?.normal) {
     return card.image_uris.normal;
   }
-  
+
   // Para cartas dupla-face, tentar primeira face
   if (card.card_faces?.[0]?.image_uris?.normal) {
     return card.card_faces[0].image_uris.normal;
   }
-  
+
   return null;
 }
 
 async function seedScryfall() {
   console.log("\n🚀 Iniciando seed de dados do Scryfall");
-  console.log("=" .repeat(60));
+  console.log("=".repeat(60));
 
   const db = await getDb();
   if (!db) {
@@ -164,7 +164,7 @@ async function seedScryfall() {
       for (const scryfallCard of scryfallCards) {
         try {
           const imageUrl = await getImageUrl(scryfallCard);
-          
+
           if (!imageUrl) {
             totalSkipped++;
             continue;
@@ -212,7 +212,9 @@ async function seedScryfall() {
             toughness: scryfallCard.toughness || null,
             text: scryfallCard.oracle_text || null,
             isArena: isArena,
-            priceUsd: scryfallCard.prices?.usd ? parseFloat(scryfallCard.prices.usd) : null,
+            priceUsd: scryfallCard.prices?.usd
+              ? parseFloat(scryfallCard.prices.usd)
+              : null,
           };
 
           await db.insert(cards).values(insertData);
@@ -232,7 +234,7 @@ async function seedScryfall() {
       nextPageUrl = data.next_page;
 
       // Respeitar rate limit
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (err) {
       console.error("❌ Erro ao buscar página:", err);
       break;

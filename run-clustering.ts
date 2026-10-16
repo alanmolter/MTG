@@ -1,14 +1,22 @@
 import "dotenv/config";
-import { clusterCompetitiveDecks, getClusterStatsByArchetype } from "./server/services/clustering.ts";
+import {
+  clusterCompetitiveDecks,
+  getClusterStatsByArchetype,
+} from "./server/services/clustering.ts";
 import { getDb, closeDb } from "./server/db.ts";
 import { competitiveDecks } from "./drizzle/schema.ts";
 import { count } from "drizzle-orm";
 
 // Timeout global de 5 minutos
-const GLOBAL_TIMEOUT = setTimeout(() => {
-  console.log("\n[clustering] Timeout global atingido (5min). Encerrando...");
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
-}, 5 * 60 * 1000);
+const GLOBAL_TIMEOUT = setTimeout(
+  () => {
+    console.log("\n[clustering] Timeout global atingido (5min). Encerrando...");
+    closeDb()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(0));
+  },
+  5 * 60 * 1000
+);
 GLOBAL_TIMEOUT.unref();
 
 function divider(label: string) {
@@ -39,17 +47,25 @@ async function main() {
   const db = await getDb();
   if (!db) {
     console.error("  [ERRO] Nao foi possivel conectar ao banco. Abortando.");
-    closeDb().then(() => process.exit(1)).catch(() => process.exit(1));
+    closeDb()
+      .then(() => process.exit(1))
+      .catch(() => process.exit(1));
   }
 
-  const [{ value: totalDecks }] = await db.select({ value: count() }).from(competitiveDecks);
+  const [{ value: totalDecks }] = await db
+    .select({ value: count() })
+    .from(competitiveDecks);
   console.log(`  Decks competitivos no banco: ${totalDecks}`);
 
   if (totalDecks === 0) {
-    console.warn("  [AVISO] Nenhum deck encontrado. Execute o passo de importacao primeiro.");
+    console.warn(
+      "  [AVISO] Nenhum deck encontrado. Execute o passo de importacao primeiro."
+    );
     console.warn("  Encerrando clustering.");
     clearTimeout(GLOBAL_TIMEOUT);
-    closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+    closeDb()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(0));
   }
 
   // ─── 2. Clustering KMeans ─────────────────────────
@@ -70,9 +86,13 @@ async function main() {
     const dur2 = ((Date.now() - t2) / 1000).toFixed(1);
 
     if (clusters.length === 0) {
-      console.warn("  [AVISO] Nenhum cluster gerado. Verifique se as cartas possuem embeddings.");
+      console.warn(
+        "  [AVISO] Nenhum cluster gerado. Verifique se as cartas possuem embeddings."
+      );
       clearTimeout(GLOBAL_TIMEOUT);
-      closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+      closeDb()
+        .then(() => process.exit(0))
+        .catch(() => process.exit(0));
     }
 
     console.log(`  Clusters gerados       : ${clusters.length}`);
@@ -80,13 +100,19 @@ async function main() {
   } catch (e: any) {
     console.warn(`  [AVISO] Clustering falhou: ${e?.message}. Continuando...`);
     clearTimeout(GLOBAL_TIMEOUT);
-    closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+    closeDb()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(0));
   }
 
   // ─── 3. Resultados ───────────────────────────────
   divider("3/3  Resultados do Clustering");
-  console.log(`  Silhouette Score     : ${stats.silhouetteScore?.toFixed(4) ?? "N/A"}`);
-  console.log(`  Davies-Bouldin Index : ${stats.daviesBouldinIndex?.toFixed(4) ?? "N/A"}`);
+  console.log(
+    `  Silhouette Score     : ${stats.silhouetteScore?.toFixed(4) ?? "N/A"}`
+  );
+  console.log(
+    `  Davies-Bouldin Index : ${stats.daviesBouldinIndex?.toFixed(4) ?? "N/A"}`
+  );
   console.log(`  Inertia (SSW)        : ${stats.inertia?.toFixed(2) ?? "N/A"}`);
 
   const archetypeStats = getClusterStatsByArchetype(clusters);
@@ -95,7 +121,9 @@ async function main() {
     archetypeStats.forEach((as: any, i: number) => {
       const conf = (as.avgConfidence * 100).toFixed(1);
       const prog = bar(Math.round(as.avgConfidence * 100), 100, 15);
-      console.log(`  ${String(i + 1).padStart(2)}. ${prog} ${conf}%  ${as.archetype} (${as.totalDecks} decks, ${as.clusterCount} clusters)`);
+      console.log(
+        `  ${String(i + 1).padStart(2)}. ${prog} ${conf}%  ${as.archetype} (${as.totalDecks} decks, ${as.clusterCount} clusters)`
+      );
     });
   } else {
     console.log("  Nenhum arquetipo identificado.");
@@ -108,10 +136,14 @@ async function main() {
   console.log("=".repeat(52) + "\n");
 
   clearTimeout(GLOBAL_TIMEOUT);
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+  closeDb()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(0));
 }
 
-main().catch((e) => {
+main().catch(e => {
   console.error("[clustering] Erro fatal:", e?.message);
-  closeDb().then(() => process.exit(0)).catch(() => process.exit(0));
+  closeDb()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(0));
 });

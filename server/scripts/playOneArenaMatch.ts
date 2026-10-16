@@ -53,19 +53,28 @@ import { describeTrainingPool } from "./utils/poolFilter";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const FORGE_JAR_REL = "forge/forge-gui-desktop/target/forge-gui-desktop-2.0.12-SNAPSHOT-jar-with-dependencies.jar";
+const FORGE_JAR_REL =
+  "forge/forge-gui-desktop/target/forge-gui-desktop-2.0.12-SNAPSHOT-jar-with-dependencies.jar";
 const FORGE_BRIDGE_JAR_REL = "forge/rlbridge/target/rlbridge.jar";
 const FORGE_BRIDGE_BUILD_DIR = "forge/rlbridge";
 const FORGE_ASSETS_ROOT = "forge/forge-gui";
 const HISTORIC_TABLE_FORMAT = "historic";
-const HISTORIC_COMPATIBLE_SOURCE_FORMATS = ["historic", "standard", "pioneer"] as const;
+const HISTORIC_COMPATIBLE_SOURCE_FORMATS = [
+  "historic",
+  "standard",
+  "pioneer",
+] as const;
 const DECK_TARGET_SIZE = 60;
 const MAX_BASIC_PAD = 4;
 const PREFLIGHT_ONLY = process.argv.includes("--preflight-only");
-const AUTO_VISUAL_MATCH = process.argv.includes("--auto") || process.env.VISUAL_AUTO_MATCH === "1";
+const AUTO_VISUAL_MATCH =
+  process.argv.includes("--auto") || process.env.VISUAL_AUTO_MATCH === "1";
 const APPLY_LEARNING_SIGNAL = process.argv.includes("--apply-learning-signal");
 const candidateCheckpointArg = process.argv.indexOf("--candidate-checkpoint");
-const CANDIDATE_CHECKPOINT = candidateCheckpointArg >= 0 ? process.argv[candidateCheckpointArg + 1] : undefined;
+const CANDIDATE_CHECKPOINT =
+  candidateCheckpointArg >= 0
+    ? process.argv[candidateCheckpointArg + 1]
+    : undefined;
 const MIN_FORGE_GUI_LIFETIME_MS = 8_000;
 const VISUAL_AUTO_RESULT_PREFIX = "VISUAL_AUTO_MATCH_RESULT ";
 const FORGE_JVM_OPENS = [
@@ -87,7 +96,7 @@ const FORGE_JVM_OPENS = [
 ];
 
 // Reward signal — same magnitudes as applyTournamentSignal, just per-card here.
-const DELTA_WIN = 0.10;
+const DELTA_WIN = 0.1;
 const DELTA_LOSS = -0.04;
 
 function normalizeCheckpoint(value: string | null | undefined): string | null {
@@ -112,16 +121,33 @@ function sub(label: string) {
 }
 
 async function ask(question: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => rl.question(question, (a) => { rl.close(); resolve(a.trim()); }));
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise(resolve =>
+    rl.question(question, a => {
+      rl.close();
+      resolve(a.trim());
+    })
+  );
 }
 
 function colorsToBasics(colors: string | null): string[] {
   // Map "WUBRG" string to basic land names; default to Wastes (not Arena legal
   // for some formats) → fallback Plains. The basics here are all canonical
   // and Arena-legal everywhere.
-  const map: Record<string, string> = { W: "Plains", U: "Island", B: "Swamp", R: "Mountain", G: "Forest" };
-  const out = (colors ?? "").split("").map((c) => map[c]).filter(Boolean);
+  const map: Record<string, string> = {
+    W: "Plains",
+    U: "Island",
+    B: "Swamp",
+    R: "Mountain",
+    G: "Forest",
+  };
+  const out = (colors ?? "")
+    .split("")
+    .map(c => map[c])
+    .filter(Boolean);
   return out.length > 0 ? out : ["Plains"];
 }
 
@@ -164,13 +190,17 @@ function pngChunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([len, typeBuf, data, crc]);
 }
 
-function solidPng(width: number, height: number, rgba: [number, number, number, number]): Buffer {
+function solidPng(
+  width: number,
+  height: number,
+  rgba: [number, number, number, number]
+): Buffer {
   const header = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8;  // bit depth
-  ihdr[9] = 6;  // RGBA
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // RGBA
 
   const row = Buffer.alloc(1 + width * 4);
   row[0] = 0; // no filter
@@ -192,7 +222,12 @@ function solidPng(width: number, height: number, rgba: [number, number, number, 
   ]);
 }
 
-function writePngIfMissing(filePath: string, width: number, height: number, color: [number, number, number, number]) {
+function writePngIfMissing(
+  filePath: string,
+  width: number,
+  height: number,
+  color: [number, number, number, number]
+) {
   if (fs.existsSync(filePath)) return;
   fs.writeFileSync(filePath, solidPng(width, height, color));
 }
@@ -209,7 +244,7 @@ function copySystemFontIfMissing(target: string) {
     "C:/Windows/Fonts/segoeui.ttf",
     "C:/Windows/Fonts/calibri.ttf",
   ];
-  const source = candidates.find((p) => fs.existsSync(p));
+  const source = candidates.find(p => fs.existsSync(p));
   if (source) fs.copyFileSync(source, target);
 }
 
@@ -223,27 +258,58 @@ function ensureForgeGuiAssets(): string {
   // refuses to open without a default skin, so create deterministic fallback
   // assets that let the GUI boot and still render the board/card text.
   const bgFiles = [
-    "bg_splash.png", "bg_splash_hd.png", "bg_texture.jpg", "bg_match.jpg",
-    "bg_day.jpg", "bg_night.jpg", "bg_space.png", "bg_chaos_wheel.png",
+    "bg_splash.png",
+    "bg_splash_hd.png",
+    "bg_texture.jpg",
+    "bg_match.jpg",
+    "bg_day.jpg",
+    "bg_night.jpg",
+    "bg_space.png",
+    "bg_chaos_wheel.png",
     "bg_draft_deck.png",
   ];
   for (const file of bgFiles) {
-    writePngIfMissing(path.join(defaultSkinDir, file), 1200, 800, [32, 38, 46, 255]);
+    writePngIfMissing(
+      path.join(defaultSkinDir, file),
+      1200,
+      800,
+      [32, 38, 46, 255]
+    );
   }
 
   const spriteFiles = [
-    "sprite_icons.png", "sprite_foils.png", "sprite_old_foils.png",
-    "sprite_trophies.png", "sprite_ability.png", "sprite_adv_buttons.png",
-    "sprite_buttons.png", "sprite_deckbox.png", "sprite_start.png",
-    "sprite_manaicons.png", "sprite_phyrexian.png",
-    "sprite_hybrid_colorless.png", "sprite_attraction_lights.png",
-    "sprite_cursor.png", "sprite_avatars.png", "sprite_cracks.png",
-    "sprite_sleeves.png", "sprite_sleeves2.png", "sprite_favicons.png",
-    "sprite_planar_conquest.png", "sprite_setlogo.png",
-    "sprite_watermark.png", "sprite_zone.png", "sprite_draftranks.png",
+    "sprite_icons.png",
+    "sprite_foils.png",
+    "sprite_old_foils.png",
+    "sprite_trophies.png",
+    "sprite_ability.png",
+    "sprite_adv_buttons.png",
+    "sprite_buttons.png",
+    "sprite_deckbox.png",
+    "sprite_start.png",
+    "sprite_manaicons.png",
+    "sprite_phyrexian.png",
+    "sprite_hybrid_colorless.png",
+    "sprite_attraction_lights.png",
+    "sprite_cursor.png",
+    "sprite_avatars.png",
+    "sprite_cracks.png",
+    "sprite_sleeves.png",
+    "sprite_sleeves2.png",
+    "sprite_favicons.png",
+    "sprite_planar_conquest.png",
+    "sprite_setlogo.png",
+    "sprite_watermark.png",
+    "sprite_zone.png",
+    "sprite_draftranks.png",
   ];
   for (const file of spriteFiles) {
-    writePngIfMissing(path.join(defaultSkinDir, file), 2048, 3072, [96, 112, 128, 255]);
+    writePngIfMissing(
+      path.join(defaultSkinDir, file),
+      2048,
+      3072,
+      [96, 112, 128, 255]
+    );
   }
 
   copySystemFontIfMissing(path.join(defaultSkinDir, "font1.ttf"));
@@ -251,12 +317,17 @@ function ensureForgeGuiAssets(): string {
 }
 
 function sanitizeForFilename(s: string): string {
-  return s.replace(/[^a-zA-Z0-9_\- ]/g, "").replace(/\s+/g, "_").slice(0, 60);
+  return s
+    .replace(/[^a-zA-Z0-9_\- ]/g, "")
+    .replace(/\s+/g, "_")
+    .slice(0, 60);
 }
 
 // ── DB queries ───────────────────────────────────────────────────────────────
 
-async function preflight(db: any): Promise<{ arenaCards: number; eligibleDecks: number }> {
+async function preflight(
+  db: any
+): Promise<{ arenaCards: number; eligibleDecks: number }> {
   const arenaRows = await db.execute(sql`
     SELECT COUNT(DISTINCT name)::int AS value
     FROM cards
@@ -267,11 +338,13 @@ async function preflight(db: any): Promise<{ arenaCards: number; eligibleDecks: 
   const [{ value: eligibleDecks }] = await db
     .select({ value: count() })
     .from(competitiveDecks)
-    .where(and(
-      eq(competitiveDecks.isSynthetic, false),
-      eq(competitiveDecks.isTrainingEligible, true),
-      inArray(competitiveDecks.format, HISTORIC_COMPATIBLE_SOURCE_FORMATS),
-    ));
+    .where(
+      and(
+        eq(competitiveDecks.isSynthetic, false),
+        eq(competitiveDecks.isTrainingEligible, true),
+        inArray(competitiveDecks.format, HISTORIC_COMPATIBLE_SOURCE_FORMATS)
+      )
+    );
 
   return { arenaCards, eligibleDecks: Number(eligibleDecks) };
 }
@@ -305,19 +378,19 @@ type ArenaArchetype = { name: string; colors: string; basics: string[] };
 
 const ARENA_ARCHETYPE_ROTATION: readonly ArenaArchetype[] = [
   // Mono-color
-  { name: "Mono Red Aggro",      colors: "R",  basics: ["Mountain"] },
-  { name: "Mono White Soldiers", colors: "W",  basics: ["Plains"] },
-  { name: "Mono Blue Tempo",     colors: "U",  basics: ["Island"] },
-  { name: "Mono Black Midrange", colors: "B",  basics: ["Swamp"] },
-  { name: "Mono Green Stompy",   colors: "G",  basics: ["Forest"] },
+  { name: "Mono Red Aggro", colors: "R", basics: ["Mountain"] },
+  { name: "Mono White Soldiers", colors: "W", basics: ["Plains"] },
+  { name: "Mono Blue Tempo", colors: "U", basics: ["Island"] },
+  { name: "Mono Black Midrange", colors: "B", basics: ["Swamp"] },
+  { name: "Mono Green Stompy", colors: "G", basics: ["Forest"] },
   // Two-color
-  { name: "Azorius Control",     colors: "WU", basics: ["Plains", "Island"] },
-  { name: "Dimir Midrange",      colors: "UB", basics: ["Island", "Swamp"] },
-  { name: "Rakdos Aggro",        colors: "BR", basics: ["Swamp", "Mountain"] },
-  { name: "Gruul Stompy",        colors: "RG", basics: ["Mountain", "Forest"] },
-  { name: "Selesnya Tokens",    colors: "WG", basics: ["Plains", "Forest"] },
-  { name: "Boros Aggro",        colors: "WR", basics: ["Plains", "Mountain"] },
-  { name: "Golgari Midrange",   colors: "BG", basics: ["Swamp", "Forest"] },
+  { name: "Azorius Control", colors: "WU", basics: ["Plains", "Island"] },
+  { name: "Dimir Midrange", colors: "UB", basics: ["Island", "Swamp"] },
+  { name: "Rakdos Aggro", colors: "BR", basics: ["Swamp", "Mountain"] },
+  { name: "Gruul Stompy", colors: "RG", basics: ["Mountain", "Forest"] },
+  { name: "Selesnya Tokens", colors: "WG", basics: ["Plains", "Forest"] },
+  { name: "Boros Aggro", colors: "WR", basics: ["Plains", "Mountain"] },
+  { name: "Golgari Midrange", colors: "BG", basics: ["Swamp", "Forest"] },
 ];
 
 function archetypeStateFile(): string {
@@ -333,7 +406,9 @@ function readLastArchetypeIdx(): number {
     if (!fs.existsSync(f)) return -1;
     const parsed = JSON.parse(fs.readFileSync(f, "utf8"));
     if (typeof parsed?.lastAgentIdx === "number") return parsed.lastAgentIdx;
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
   return -1;
 }
 
@@ -350,7 +425,9 @@ function writeLastArchetypeIdx(agentIdx: number, opponentIdx: number) {
       }),
       "utf8"
     );
-  } catch { /* noop — non-fatal */ }
+  } catch {
+    /* noop — non-fatal */
+  }
 }
 
 /**
@@ -373,10 +450,10 @@ function writeLastArchetypeIdx(agentIdx: number, opponentIdx: number) {
 type CardCandidate = {
   name: string;
   type: string | null;
-  weight: number;        // brain weight (card_learning)
-  games: number;         // win + loss count (signal maturity)
-  winrate: number;       // 0..1
-  source: "learned" | "neutral";  // 'learned' if >=10 games, else neutral 1.0
+  weight: number; // brain weight (card_learning)
+  games: number; // win + loss count (signal maturity)
+  winrate: number; // 0..1
+  source: "learned" | "neutral"; // 'learned' if >=10 games, else neutral 1.0
 };
 
 type SynergyEdge = { partner: string; weight: number };
@@ -388,7 +465,7 @@ type DeckCardProvenance = {
   games: number;
   winrate: number;
   source: "learned" | "neutral" | "synergy" | "basic-land";
-  synergyBoostFrom?: string;  // which already-picked card pulled this in
+  synergyBoostFrom?: string; // which already-picked card pulled this in
 };
 
 /**
@@ -414,15 +491,26 @@ type DeckCardProvenance = {
  */
 async function synthesizeArenaDeckFromBrain(
   db: any,
-  recipe: ArenaArchetype,
-): Promise<{ deck: PickedDeck; provenance: DeckCardProvenance[]; stats: { learnedCount: number; synergyAssistCount: number; avgBrainWeight: number; avgWinrate: number; pool: number } } | null> {
+  recipe: ArenaArchetype
+): Promise<{
+  deck: PickedDeck;
+  provenance: DeckCardProvenance[];
+  stats: {
+    learnedCount: number;
+    synergyAssistCount: number;
+    avgBrainWeight: number;
+    avgWinrate: number;
+    pool: number;
+  };
+} | null> {
   const colorLetters = recipe.colors.split("");
   const colorConditions = colorLetters.map(
-    (c) => sql`c.colors LIKE ${'%' + c + '%'}`
+    c => sql`c.colors LIKE ${"%" + c + "%"}`
   );
-  const colorClause = colorConditions.length > 0
-    ? sql.join(colorConditions, sql` AND `)
-    : sql`TRUE`;
+  const colorClause =
+    colorConditions.length > 0
+      ? sql.join(colorConditions, sql` AND `)
+      : sql`TRUE`;
 
   // DISTINCT ON (c.name) → one row per unique card name. Without this, a
   // card with 10 reprints accumulates 10× the weighted-sampling probability
@@ -452,7 +540,7 @@ async function synthesizeArenaDeckFromBrain(
   `);
 
   const candidates: CardCandidate[] = (rows as any[])
-    .map((r) => {
+    .map(r => {
       const games = Number(r.win_count ?? 0) + Number(r.loss_count ?? 0);
       const wins = Number(r.win_count ?? 0);
       return {
@@ -464,7 +552,7 @@ async function synthesizeArenaDeckFromBrain(
         source: (games >= 10 ? "learned" : "neutral") as "learned" | "neutral",
       };
     })
-    .filter((r) => r.name.length > 0);
+    .filter(r => r.name.length > 0);
 
   if (candidates.length < 9) return null;
 
@@ -474,8 +562,11 @@ async function synthesizeArenaDeckFromBrain(
   // We expand to an IN (...) list using sql.join — same semantics, valid SQL.
   // Edge case: empty IN () would be a Postgres syntax error, but we've
   // already returned null above when candidates.length < 9.
-  const candNameList = candidates.map((c) => c.name);
-  const inFragment = sql.join(candNameList.map((n) => sql`${n}`), sql`, `);
+  const candNameList = candidates.map(c => c.name);
+  const inFragment = sql.join(
+    candNameList.map(n => sql`${n}`),
+    sql`, `
+  );
   const synRows = await db.execute(sql`
     SELECT c1.name AS a, c2.name AS b, cs.weight AS w
     FROM card_synergies cs
@@ -493,7 +584,9 @@ async function synthesizeArenaDeckFromBrain(
     synergyMap.get(from)!.push({ partner: to, weight: w });
   };
   for (const r of synRows as any[]) {
-    const a = String(r.a), b = String(r.b), w = Number(r.w ?? 0);
+    const a = String(r.a),
+      b = String(r.b),
+      w = Number(r.w ?? 0);
     if (!a || !b || w <= 0) continue;
     addEdge(a, b, w);
     addEdge(b, a, w);
@@ -510,8 +603,8 @@ async function synthesizeArenaDeckFromBrain(
   let synergyAssists = 0;
 
   while (provenance.length < 9 && pool.length > 0) {
-    const pickedNames = new Set(provenance.map((p) => p.name));
-    const effective = pool.map((c) => {
+    const pickedNames = new Set(provenance.map(p => p.name));
+    const effective = pool.map(c => {
       let synBoost = 0;
       let bestSynPartner = "";
       let bestSynWeight = 0;
@@ -538,17 +631,26 @@ async function synthesizeArenaDeckFromBrain(
     let idx = effective.length - 1;
     for (let i = 0; i < effective.length; i++) {
       r -= effective[i].effective;
-      if (r <= 0) { idx = i; break; }
+      if (r <= 0) {
+        idx = i;
+        break;
+      }
     }
     const chosen = effective[idx];
     pool.splice(idx, 1);
     if (pickedNames.has(chosen.cand.name)) continue;
 
     const source: DeckCardProvenance["source"] =
-      chosen.synBoost > 0 ? "synergy" :
-      chosen.cand.source === "learned" ? "learned" : "neutral";
+      chosen.synBoost > 0
+        ? "synergy"
+        : chosen.cand.source === "learned"
+          ? "learned"
+          : "neutral";
     if (source === "learned") learnedPicks++;
-    if (source === "synergy") { synergyAssists++; learnedPicks++; }
+    if (source === "synergy") {
+      synergyAssists++;
+      learnedPicks++;
+    }
 
     provenance.push({
       name: chosen.cand.name,
@@ -586,48 +688,77 @@ async function synthesizeArenaDeckFromBrain(
     format: "historic",
     archetype: recipe.name.toLowerCase().replace(/\s+/g, "_"),
     colors: recipe.colors,
-    cards: totalProvenance.map((p) => ({
+    cards: totalProvenance.map(p => ({
       name: p.name,
       quantity: p.quantity,
       section: "mainboard" as const,
     })),
   };
 
-  const learned = provenance.filter((p) => p.source === "learned" || p.source === "synergy");
+  const learned = provenance.filter(
+    p => p.source === "learned" || p.source === "synergy"
+  );
   const stats = {
     learnedCount: learnedPicks,
     synergyAssistCount: synergyAssists,
-    avgBrainWeight: learned.length > 0
-      ? learned.reduce((s, p) => s + p.brainWeight, 0) / learned.length
-      : 0,
-    avgWinrate: learned.length > 0
-      ? learned.reduce((s, p) => s + p.winrate, 0) / learned.length
-      : 0,
+    avgBrainWeight:
+      learned.length > 0
+        ? learned.reduce((s, p) => s + p.brainWeight, 0) / learned.length
+        : 0,
+    avgWinrate:
+      learned.length > 0
+        ? learned.reduce((s, p) => s + p.winrate, 0) / learned.length
+        : 0,
     pool: candidates.length,
   };
 
   return { deck, provenance: totalProvenance, stats };
 }
 
-function printProvenance(label: string, prov: DeckCardProvenance[], stats: { learnedCount: number; synergyAssistCount: number; avgBrainWeight: number; avgWinrate: number; pool: number }) {
+function printProvenance(
+  label: string,
+  prov: DeckCardProvenance[],
+  stats: {
+    learnedCount: number;
+    synergyAssistCount: number;
+    avgBrainWeight: number;
+    avgWinrate: number;
+    pool: number;
+  }
+) {
   console.log(`\n  ── ${label} — provenance (de onde veio cada carta) ──`);
-  const spells = prov.filter((p) => p.source !== "basic-land");
-  const lands  = prov.filter((p) => p.source === "basic-land");
+  const spells = prov.filter(p => p.source !== "basic-land");
+  const lands = prov.filter(p => p.source === "basic-land");
   for (const p of spells) {
     const tag =
-      p.source === "synergy" ? `S+${p.synergyBoostFrom?.slice(0, 22) ?? "?"}`.padEnd(26) :
-      p.source === "learned" ? "L (card_learning)        ".padEnd(26) :
-                               "N (peso neutro 1.0)      ".padEnd(26);
-    const wrTag = p.games >= 10 ? `${(p.winrate * 100).toFixed(0)}%wr/${p.games}j` : `${p.games}j`;
-    console.log(`    ${p.quantity}x ${p.name.padEnd(32)} w=${p.brainWeight.toFixed(2).padStart(6)}  ${wrTag.padStart(10)}  ${tag}`);
+      p.source === "synergy"
+        ? `S+${p.synergyBoostFrom?.slice(0, 22) ?? "?"}`.padEnd(26)
+        : p.source === "learned"
+          ? "L (card_learning)        ".padEnd(26)
+          : "N (peso neutro 1.0)      ".padEnd(26);
+    const wrTag =
+      p.games >= 10
+        ? `${(p.winrate * 100).toFixed(0)}%wr/${p.games}j`
+        : `${p.games}j`;
+    console.log(
+      `    ${p.quantity}x ${p.name.padEnd(32)} w=${p.brainWeight.toFixed(2).padStart(6)}  ${wrTag.padStart(10)}  ${tag}`
+    );
   }
-  console.log(`    ${lands.map((l) => `${l.quantity} ${l.name}`).join(" + ")}`);
+  console.log(`    ${lands.map(l => `${l.quantity} ${l.name}`).join(" + ")}`);
   console.log(`  ───────────────────────────────────────────────────`);
-  console.log(`    Pool candidato       : ${stats.pool} cartas Arena (DISTINCT name)`);
-  console.log(`    Spells learned       : ${stats.learnedCount}/9  (>=10 partidas no card_learning)`);
-  console.log(`    Spells via sinergia  : ${stats.synergyAssistCount}/9  (boost de card_synergies)`);
+  console.log(
+    `    Pool candidato       : ${stats.pool} cartas Arena (DISTINCT name)`
+  );
+  console.log(
+    `    Spells learned       : ${stats.learnedCount}/9  (>=10 partidas no card_learning)`
+  );
+  console.log(
+    `    Spells via sinergia  : ${stats.synergyAssistCount}/9  (boost de card_synergies)`
+  );
   console.log(`    Peso medio cerebro   : ${stats.avgBrainWeight.toFixed(2)}`);
-  console.log(`    Winrate medio        : ${(stats.avgWinrate * 100).toFixed(1)}%`);
+  console.log(
+    `    Winrate medio        : ${(stats.avgWinrate * 100).toFixed(1)}%`
+  );
 }
 
 async function pickTwoArenaDecks(db: any): Promise<PickedDeck[]> {
@@ -644,8 +775,12 @@ async function pickTwoArenaDecks(db: any): Promise<PickedDeck[]> {
   const agentRecipe = ARENA_ARCHETYPE_ROTATION[agentIdx];
   const opponentRecipe = ARENA_ARCHETYPE_ROTATION[opponentIdx];
 
-  console.log(`  Rotação agent    : [${agentIdx}] ${agentRecipe.name} (${agentRecipe.colors})`);
-  console.log(`  Rotação opponent : [${opponentIdx}] ${opponentRecipe.name} (${opponentRecipe.colors})`);
+  console.log(
+    `  Rotação agent    : [${agentIdx}] ${agentRecipe.name} (${agentRecipe.colors})`
+  );
+  console.log(
+    `  Rotação opponent : [${opponentIdx}] ${opponentRecipe.name} (${opponentRecipe.colors})`
+  );
 
   // 2. Try brain-driven synthesis first. Uses card_learning weights + card_
   //    synergies pair bias so every spell pick reflects what the model has
@@ -656,9 +791,19 @@ async function pickTwoArenaDecks(db: any): Promise<PickedDeck[]> {
   ]);
 
   if (agentSynth && opponentSynth) {
-    console.log("  Síntese cerebro  : OK (card_learning + card_synergies aplicados)");
-    printProvenance("AGENT  " + agentRecipe.name,      agentSynth.provenance,     agentSynth.stats);
-    printProvenance("OPPNT  " + opponentRecipe.name,   opponentSynth.provenance,  opponentSynth.stats);
+    console.log(
+      "  Síntese cerebro  : OK (card_learning + card_synergies aplicados)"
+    );
+    printProvenance(
+      "AGENT  " + agentRecipe.name,
+      agentSynth.provenance,
+      agentSynth.stats
+    );
+    printProvenance(
+      "OPPNT  " + opponentRecipe.name,
+      opponentSynth.provenance,
+      opponentSynth.stats
+    );
     return [agentSynth.deck, opponentSynth.deck];
   }
 
@@ -682,11 +827,13 @@ async function pickTwoArenaDecksFromImports(db: any): Promise<PickedDeck[]> {
       colors: competitiveDecks.colors,
     })
     .from(competitiveDecks)
-    .where(and(
-      eq(competitiveDecks.isSynthetic, false),
-      eq(competitiveDecks.isTrainingEligible, true),
-      inArray(competitiveDecks.format, HISTORIC_COMPATIBLE_SOURCE_FORMATS),
-    ))
+    .where(
+      and(
+        eq(competitiveDecks.isSynthetic, false),
+        eq(competitiveDecks.isTrainingEligible, true),
+        inArray(competitiveDecks.format, HISTORIC_COMPATIBLE_SOURCE_FORMATS)
+      )
+    )
     .orderBy(sql`RANDOM()`)
     .limit(250);
 
@@ -705,14 +852,19 @@ async function pickTwoArenaDecksFromImports(db: any): Promise<PickedDeck[]> {
     const mainboard = allCards.filter((r: any) => r.section === "mainboard");
     if (mainboard.length === 0) continue;
 
-    const cardNames: string[] = Array.from(new Set(allCards.map((r: any) => String(r.name))));
+    const cardNames: string[] = Array.from(
+      new Set(allCards.map((r: any) => String(r.name)))
+    );
     const arenaRows = await db
       .select({ name: cards.name })
       .from(cards)
       .where(and(eq(cards.isArena, 1), inArray(cards.name, cardNames)));
     const arenaSet = new Set(arenaRows.map((r: any) => r.name));
 
-    const mainboardQty = mainboard.reduce((s: number, r: any) => s + (r.quantity ?? 1), 0);
+    const mainboardQty = mainboard.reduce(
+      (s: number, r: any) => s + (r.quantity ?? 1),
+      0
+    );
     const invalidCards = allCards.filter((r: any) => !arenaSet.has(r.name));
     const padNeeded = Math.max(0, DECK_TARGET_SIZE - mainboardQty);
 
@@ -724,7 +876,9 @@ async function pickTwoArenaDecksFromImports(db: any): Promise<PickedDeck[]> {
       const basics = colorsToBasics(c.colors);
       for (let i = 0; i < padNeeded; i++) {
         const basic = basics[i % basics.length];
-        const existing = filtered.find((r: any) => r.name === basic && r.section === "mainboard");
+        const existing = filtered.find(
+          (r: any) => r.name === basic && r.section === "mainboard"
+        );
         if (existing) existing.quantity = (existing.quantity ?? 1) + 1;
         else filtered.push({ name: basic, quantity: 1, section: "mainboard" });
       }
@@ -766,8 +920,8 @@ function buildDckContent(deck: PickedDeck, displayName: string): string {
   if (deck.archetype) lines.push(`Description=${deck.archetype}`);
   lines.push("Deck Type=constructed");
 
-  const main = deck.cards.filter((c) => c.section === "mainboard");
-  const side = deck.cards.filter((c) => c.section === "sideboard");
+  const main = deck.cards.filter(c => c.section === "mainboard");
+  const side = deck.cards.filter(c => c.section === "sideboard");
 
   if (main.length > 0) {
     lines.push("[Main]");
@@ -780,7 +934,11 @@ function buildDckContent(deck: PickedDeck, displayName: string): string {
   return lines.join("\n") + "\n";
 }
 
-function writeDeckFiles(decks: PickedDeck[]): { dir: string; files: string[]; displayNames: string[] } {
+function writeDeckFiles(decks: PickedDeck[]): {
+  dir: string;
+  files: string[];
+  displayNames: string[];
+} {
   const dir = deckOutputDir();
   ensureDir(dir);
 
@@ -816,17 +974,26 @@ function ensureRlBridgeJar(): string {
     "forge/rlbridge/src/main/java/forge/rlbridge/ForgeRLBridge.java",
     "forge/rlbridge/src/main/java/forge/rlbridge/VisualAutoMatch.java",
     "forge/rlbridge/build.cmd",
-  ].map((p) => path.resolve(p));
+  ].map(p => path.resolve(p));
 
   const jarExists = fs.existsSync(jar);
   const jarMtime = jarExists ? fs.statSync(jar).mtimeMs : 0;
-  const needsBuild = !jarExists || sources.some((p) => fs.existsSync(p) && fs.statSync(p).mtimeMs > jarMtime);
+  const needsBuild =
+    !jarExists ||
+    sources.some(p => fs.existsSync(p) && fs.statSync(p).mtimeMs > jarMtime);
   if (!needsBuild) return jar;
 
   console.log("  Build rlbridge.jar       : necessário para VisualAutoMatch");
-  const build = process.platform === "win32"
-    ? spawnSync("cmd", ["/c", "build.cmd"], { cwd: path.resolve(FORGE_BRIDGE_BUILD_DIR), stdio: "inherit" })
-    : spawnSync("sh", ["build.cmd"], { cwd: path.resolve(FORGE_BRIDGE_BUILD_DIR), stdio: "inherit" });
+  const build =
+    process.platform === "win32"
+      ? spawnSync("cmd", ["/c", "build.cmd"], {
+          cwd: path.resolve(FORGE_BRIDGE_BUILD_DIR),
+          stdio: "inherit",
+        })
+      : spawnSync("sh", ["build.cmd"], {
+          cwd: path.resolve(FORGE_BRIDGE_BUILD_DIR),
+          stdio: "inherit",
+        });
 
   if (build.status !== 0 || !fs.existsSync(jar)) {
     throw new Error("Falha ao compilar forge/rlbridge/target/rlbridge.jar");
@@ -846,8 +1013,11 @@ type ForgeLaunchResult = {
   };
 };
 
-async function launchForgeGui(jarPath: string, deckFiles?: string[]): Promise<ForgeLaunchResult> {
-  return new Promise((resolve) => {
+async function launchForgeGui(
+  jarPath: string,
+  deckFiles?: string[]
+): Promise<ForgeLaunchResult> {
+  return new Promise(resolve => {
     const assetsRoot = ensureForgeGuiAssets();
     const startedAt = Date.now();
 
@@ -861,30 +1031,31 @@ async function launchForgeGui(jarPath: string, deckFiles?: string[]): Promise<Fo
         // Keep streaming; close handler will surface missing result.
       }
     };
-    const args = AUTO_VISUAL_MATCH && deckFiles?.length === 2
-      ? [
-          "-Xmx2G",
-          ...FORGE_JVM_OPENS,
-          "-cp",
-          `${jarPath}${path.delimiter}${ensureRlBridgeJar()}`,
-          "forge.rlbridge.VisualAutoMatch",
-          "--agent-deck",
-          deckFiles[0],
-          "--opponent-deck",
-          deckFiles[1],
-          "--timeout-sec",
-          "900",
-          "--close-delay-sec",
-          "8",
-        ]
-      : ["-Xmx2G", ...FORGE_JVM_OPENS, "-jar", jarPath];
+    const args =
+      AUTO_VISUAL_MATCH && deckFiles?.length === 2
+        ? [
+            "-Xmx2G",
+            ...FORGE_JVM_OPENS,
+            "-cp",
+            `${jarPath}${path.delimiter}${ensureRlBridgeJar()}`,
+            "forge.rlbridge.VisualAutoMatch",
+            "--agent-deck",
+            deckFiles[0],
+            "--opponent-deck",
+            deckFiles[1],
+            "--timeout-sec",
+            "900",
+            "--close-delay-sec",
+            "8",
+          ]
+        : ["-Xmx2G", ...FORGE_JVM_OPENS, "-jar", jarPath];
 
     const proc = spawn("java", args, {
       stdio: AUTO_VISUAL_MATCH ? ["ignore", "pipe", "pipe"] : "inherit",
       cwd: assetsRoot,
     });
     if (AUTO_VISUAL_MATCH) {
-      proc.stdout?.on("data", (chunk) => {
+      proc.stdout?.on("data", chunk => {
         const text = chunk.toString();
         process.stdout.write(text);
         stdoutRemainder += text;
@@ -894,15 +1065,15 @@ async function launchForgeGui(jarPath: string, deckFiles?: string[]): Promise<Fo
           captureAutoResult(line);
         }
       });
-      proc.stderr?.on("data", (chunk) => process.stderr.write(chunk));
+      proc.stderr?.on("data", chunk => process.stderr.write(chunk));
     }
-    proc.on("close", (exitCode) => {
+    proc.on("close", exitCode => {
       if (AUTO_VISUAL_MATCH && stdoutRemainder.trim()) {
         captureAutoResult(stdoutRemainder.trim());
       }
       resolve({ exitCode, elapsedMs: Date.now() - startedAt, autoResult });
     });
-    proc.on("error", (err) => {
+    proc.on("error", err => {
       console.warn(`  [AVISO] Falha ao spawnar Forge: ${err.message}`);
       resolve({ exitCode: 1, elapsedMs: Date.now() - startedAt });
     });
@@ -917,7 +1088,7 @@ async function recordForgeMatch(
   opponentDeck: PickedDeck | null,
   winnerDeck: PickedDeck | null,
   loserDeck: PickedDeck | null,
-  result?: ForgeLaunchResult["autoResult"],
+  result?: ForgeLaunchResult["autoResult"]
 ) {
   // Evaluation is immutable evidence. It is intentionally recorded before any
   // optional update and carries the candidate identity used by promotion.
@@ -938,7 +1109,9 @@ async function recordForgeMatch(
       winnerName: winnerDeck?.name ?? null,
       loserName: loserDeck?.name ?? null,
       outcome: result?.outcome ?? null,
-      evaluationMode: APPLY_LEARNING_SIGNAL ? "post_promotion_learning" : "pre_promotion_evaluation",
+      evaluationMode: APPLY_LEARNING_SIGNAL
+        ? "post_promotion_learning"
+        : "pre_promotion_evaluation",
       candidateCheckpoint: normalizeCheckpoint(CANDIDATE_CHECKPOINT),
       // ForgeRLBridge currently drives both sides with Forge AI. This match is
       // valuable deck evidence, but it is NOT evidence that a Ray checkpoint
@@ -951,36 +1124,50 @@ async function recordForgeMatch(
   });
 }
 
-async function candidateIsApproved(db: any, candidate: string): Promise<boolean> {
+async function candidateIsApproved(
+  db: any,
+  candidate: string
+): Promise<boolean> {
   const normalized = normalizeCheckpoint(candidate);
   if (!normalized) return false;
-  const runs = await db.select({ artifactPath: trainingRuns.artifactPath })
+  const runs = await db
+    .select({ artifactPath: trainingRuns.artifactPath })
     .from(trainingRuns)
     .where(eq(trainingRuns.status, "approved_for_policy_evaluation"));
-  return runs.some((run: { artifactPath: string | null }) => normalizeCheckpoint(run.artifactPath) === normalized);
+  return runs.some(
+    (run: { artifactPath: string | null }) =>
+      normalizeCheckpoint(run.artifactPath) === normalized
+  );
 }
 
 async function applyMatchSignal(
   db: any,
   winnerDeck: PickedDeck | null,
-  loserDeck: PickedDeck | null,
+  loserDeck: PickedDeck | null
 ) {
-
   const queue = getCardLearningQueue();
   let plus = 0;
   let minus = 0;
 
   if (winnerDeck) {
-    for (const c of winnerDeck.cards.filter((x) => x.section === "mainboard")) {
+    for (const c of winnerDeck.cards.filter(x => x.section === "mainboard")) {
       const qtyBonus = Math.log2((c.quantity ?? 1) + 1);
-      await queue.enqueue({ cardName: c.name, delta: DELTA_WIN * qtyBonus, source: "unified_learning" });
+      await queue.enqueue({
+        cardName: c.name,
+        delta: DELTA_WIN * qtyBonus,
+        source: "unified_learning",
+      });
       plus++;
     }
   }
   if (loserDeck) {
-    for (const c of loserDeck.cards.filter((x) => x.section === "mainboard")) {
+    for (const c of loserDeck.cards.filter(x => x.section === "mainboard")) {
       const qtyBonus = Math.log2((c.quantity ?? 1) + 1);
-      await queue.enqueue({ cardName: c.name, delta: DELTA_LOSS * qtyBonus, source: "unified_learning" });
+      await queue.enqueue({
+        cardName: c.name,
+        delta: DELTA_LOSS * qtyBonus,
+        source: "unified_learning",
+      });
       minus++;
     }
   }
@@ -1050,22 +1237,32 @@ async function computeLearningLevel(db: any): Promise<LearningLevel> {
   // Tier mapping. The thresholds are deliberately conservative — "Mestre"
   // requires that the model has stable signal on most of the Arena pool,
   // which is the precondition for generating consistently-good Arena decks.
-  let tier = "Aprendiz", emoji = "🥉";
-  if (coveragePct >= 90) { tier = "Mestre"; emoji = "🏆"; }
-  else if (coveragePct >= 75) { tier = "Avançado"; emoji = "🥇"; }
-  else if (coveragePct >= 50) { tier = "Intermediário"; emoji = "🥈"; }
-  else if (coveragePct >= 25) { tier = "Iniciante"; emoji = "🥉"; }
+  let tier = "Aprendiz",
+    emoji = "🥉";
+  if (coveragePct >= 90) {
+    tier = "Mestre";
+    emoji = "🏆";
+  } else if (coveragePct >= 75) {
+    tier = "Avançado";
+    emoji = "🥇";
+  } else if (coveragePct >= 50) {
+    tier = "Intermediário";
+    emoji = "🥈";
+  } else if (coveragePct >= 25) {
+    tier = "Iniciante";
+    emoji = "🥉";
+  }
 
   // Crude ETA — use a coarse band based on the gap to 90%. Each `teach`
   // run touches ~150k card-game records, so the marginal gain on stable-
   // count tapers as you climb.
   const gap = Math.max(0, 90 - coveragePct);
   let etaRuns = "Pronto.";
-  if (gap > 60)      etaRuns = "30–50 runs";
+  if (gap > 60) etaRuns = "30–50 runs";
   else if (gap > 40) etaRuns = "20–35 runs";
   else if (gap > 25) etaRuns = "12–22 runs";
   else if (gap > 10) etaRuns = "5–12 runs";
-  else if (gap > 0)  etaRuns = "1–5 runs";
+  else if (gap > 0) etaRuns = "1–5 runs";
 
   const topRows = await db.execute(sql`
     SELECT cl.card_name AS name, cl.weight, cl.win_count, cl.loss_count
@@ -1082,11 +1279,21 @@ async function computeLearningLevel(db: any): Promise<LearningLevel> {
   `);
   const topCards = (topRows as any[]).map((r: any) => {
     const games = Number(r.win_count) + Number(r.loss_count);
-    const wr = games > 0 ? `${((Number(r.win_count) / games) * 100).toFixed(0)}%` : "—";
+    const wr =
+      games > 0 ? `${((Number(r.win_count) / games) * 100).toFixed(0)}%` : "—";
     return { name: r.name, weight: Number(r.weight), wr, games };
   });
 
-  return { tier, emoji, coveragePct, arenaTotal: at, arenaWithData, arenaStable, estimatedRunsToMaster: etaRuns, topCards };
+  return {
+    tier,
+    emoji,
+    coveragePct,
+    arenaTotal: at,
+    arenaWithData,
+    arenaStable,
+    estimatedRunsToMaster: etaRuns,
+    topCards,
+  };
 }
 
 function bar(value: number, max: number, width = 30): string {
@@ -1099,16 +1306,24 @@ function printLearningLevel(l: LearningLevel) {
   div("CEREBRO — NÍVEL DE APRENDIZADO ATUAL");
   console.log(`  Tier atual            : ${l.emoji} ${l.tier}`);
   console.log(`  Cartas Arena no pool  : ${l.arenaTotal}`);
-  console.log(`  Com algum dado (>=1)  : ${l.arenaWithData} (${((l.arenaWithData / Math.max(l.arenaTotal, 1)) * 100).toFixed(1)}%)`);
-  console.log(`  Estáveis (>=10 partidas): ${l.arenaStable} (${l.coveragePct.toFixed(1)}%)`);
-  console.log(`  Cobertura estável     : ${bar(l.arenaStable, l.arenaTotal)} ${l.coveragePct.toFixed(1)}%`);
+  console.log(
+    `  Com algum dado (>=1)  : ${l.arenaWithData} (${((l.arenaWithData / Math.max(l.arenaTotal, 1)) * 100).toFixed(1)}%)`
+  );
+  console.log(
+    `  Estáveis (>=10 partidas): ${l.arenaStable} (${l.coveragePct.toFixed(1)}%)`
+  );
+  console.log(
+    `  Cobertura estável     : ${bar(l.arenaStable, l.arenaTotal)} ${l.coveragePct.toFixed(1)}%`
+  );
   console.log(`  ETA até "Mestre" (90%): ${l.estimatedRunsToMaster}`);
 
   if (l.topCards.length > 0) {
     console.log("\n  TOP 5 CARTAS ARENA (>=5 partidas, ordenadas por peso):");
     for (let i = 0; i < l.topCards.length; i++) {
       const c = l.topCards[i];
-      console.log(`    ${i + 1}. ${c.name.padEnd(34)} peso ${c.weight.toFixed(2).padStart(6)} | ${c.wr.padStart(4)} wr | ${c.games} jogos`);
+      console.log(
+        `    ${i + 1}. ${c.name.padEnd(34)} peso ${c.weight.toFixed(2).padStart(6)} | ${c.wr.padStart(4)} wr | ${c.games} jogos`
+      );
     }
   }
   console.log("═".repeat(64));
@@ -1122,10 +1337,16 @@ async function main() {
   console.log(`  Formato da partida    : ${HISTORIC_TABLE_FORMAT}`);
   console.log(`  Forge mode            : GUI desktop (não-headless, visual)`);
   console.log(`  Quantidade de partidas: 1`);
-  console.log(`  Modo                  : ${APPLY_LEARNING_SIGNAL ? "aprendizado pós-promoção" : "avaliação pré-promoção (somente evidência)"}`);
-  console.log(`  Candidato             : ${normalizeCheckpoint(CANDIDATE_CHECKPOINT) ?? "não vinculado (não conta para promoção)"}`);
+  console.log(
+    `  Modo                  : ${APPLY_LEARNING_SIGNAL ? "aprendizado pós-promoção" : "avaliação pré-promoção (somente evidência)"}`
+  );
+  console.log(
+    `  Candidato             : ${normalizeCheckpoint(CANDIDATE_CHECKPOINT) ?? "não vinculado (não conta para promoção)"}`
+  );
   if (CANDIDATE_CHECKPOINT && !APPLY_LEARNING_SIGNAL) {
-    console.log("  Nota: Forge GUI ainda usa IA interna; esta partida não valida a política Ray e não conta para promoção.");
+    console.log(
+      "  Nota: Forge GUI ainda usa IA interna; esta partida não valida a política Ray e não conta para promoção."
+    );
   }
 
   const db = await getDb();
@@ -1135,10 +1356,14 @@ async function main() {
   }
   if (APPLY_LEARNING_SIGNAL) {
     if (!CANDIDATE_CHECKPOINT) {
-      throw new Error("--apply-learning-signal exige --candidate-checkpoint <checkpoint aprovado>");
+      throw new Error(
+        "--apply-learning-signal exige --candidate-checkpoint <checkpoint aprovado>"
+      );
     }
     if (!(await candidateIsApproved(db, CANDIDATE_CHECKPOINT))) {
-      throw new Error("o checkpoint informado não foi aprovado; sinais de aprendizado permanecem bloqueados");
+      throw new Error(
+        "o checkpoint informado não foi aprovado; sinais de aprendizado permanecem bloqueados"
+      );
     }
   }
 
@@ -1146,7 +1371,9 @@ async function main() {
   sub("1/6  Pré-flight — banco + decks + Forge");
   const pf = await preflight(db);
   console.log(`  Cartas Arena no banco          : ${pf.arenaCards}`);
-  console.log(`  Decks competitivos elegíveis   : ${pf.eligibleDecks} (fontes: ${HISTORIC_COMPATIBLE_SOURCE_FORMATS.join(", ")})`);
+  console.log(
+    `  Decks competitivos elegíveis   : ${pf.eligibleDecks} (fontes: ${HISTORIC_COMPATIBLE_SOURCE_FORMATS.join(", ")})`
+  );
   if (pf.arenaCards < 100) {
     console.error("\n[ERRO] Pool Arena vazio ou pequeno demais. Rode:");
     console.error("       npm run db:repair-arena -- --apply");
@@ -1161,7 +1388,9 @@ async function main() {
   const jarPath = forgeJarPath();
   if (!jarPath) {
     console.error(`\n[ERRO] Forge JAR não encontrado em ${FORGE_JAR_REL}.`);
-    console.error("       Rode o build do Forge antes (mvn package em forge/).");
+    console.error(
+      "       Rode o build do Forge antes (mvn package em forge/)."
+    );
     process.exit(2);
   }
   console.log(`  Forge JAR                      : ${path.basename(jarPath)} ✓`);
@@ -1170,12 +1399,20 @@ async function main() {
   sub("2/6  Selecionar 2 decks Arena-legais");
   const decks = await pickTwoArenaDecks(db);
   if (decks.length < 2) {
-    console.error("\n[ERRO] Não consegui validar 2 decks compatíveis com Historic com 100% das cartas Arena-legais.");
-    console.error("       Re-importe decks com `npm run import:competitive:arena` e tente de novo.");
+    console.error(
+      "\n[ERRO] Não consegui validar 2 decks compatíveis com Historic com 100% das cartas Arena-legais."
+    );
+    console.error(
+      "       Re-importe decks com `npm run import:competitive:arena` e tente de novo."
+    );
     process.exit(3);
   }
-  console.log(`  Agent    : ${decks[0].name}  (${decks[0].format}, ${decks[0].colors ?? "—"}, ${decks[0].archetype ?? "—"})`);
-  console.log(`  Opponent : ${decks[1].name}  (${decks[1].format}, ${decks[1].colors ?? "—"}, ${decks[1].archetype ?? "—"})`);
+  console.log(
+    `  Agent    : ${decks[0].name}  (${decks[0].format}, ${decks[0].colors ?? "—"}, ${decks[0].archetype ?? "—"})`
+  );
+  console.log(
+    `  Opponent : ${decks[1].name}  (${decks[1].format}, ${decks[1].colors ?? "—"}, ${decks[1].archetype ?? "—"})`
+  );
 
   // 3. Write .dck files ──────────────────────────────────────────────────────
   sub("3/6  Gravar arquivos .dck pro Forge");
@@ -1189,7 +1426,9 @@ async function main() {
   if (PREFLIGHT_ONLY) {
     const assetsRoot = ensureForgeGuiAssets();
     console.log(`  Assets Forge preparados em: ${assetsRoot}`);
-    console.log("\n  Pré-flight concluído. Forge não foi aberto porque --preflight-only foi usado.");
+    console.log(
+      "\n  Pré-flight concluído. Forge não foi aberto porque --preflight-only foi usado."
+    );
     return;
   }
 
@@ -1198,33 +1437,72 @@ async function main() {
   console.log("  Janela do Forge vai abrir em alguns segundos...");
   console.log("");
   if (AUTO_VISUAL_MATCH) {
-    console.log("  ┌─ MODO AUTOMÁTICO ──────────────────────────────────────────┐");
-    console.log("  │ O Forge abrirá, iniciará AI vs AI sozinho, mostrará a mesa │");
-    console.log("  │ até o resultado, imprimirá o vencedor e fechará sozinho.   │");
+    console.log(
+      "  ┌─ MODO AUTOMÁTICO ──────────────────────────────────────────┐"
+    );
+    console.log(
+      "  │ O Forge abrirá, iniciará AI vs AI sozinho, mostrará a mesa │"
+    );
+    console.log(
+      "  │ até o resultado, imprimirá o vencedor e fechará sozinho.   │"
+    );
     console.log(`  │ Agent    → ${displayNames[0].slice(0, 38).padEnd(38)} │`);
     console.log(`  │ Opponent → ${displayNames[1].slice(0, 38).padEnd(38)} │`);
-    console.log("  └───────────────────────────────────────────────────────────┘");
+    console.log(
+      "  └───────────────────────────────────────────────────────────┘"
+    );
   } else {
-    console.log("  ┌─ COMO INICIAR A PARTIDA NO FORGE ─────────────────────────┐");
-    console.log("  │ 1. Tela inicial → \"Sanctioned\" → \"Constructed\"            │");
-    console.log("  │ 2. Em \"Player 1\", clique no botão de avatar e selecione   │");
-    console.log("  │    AI (não Human).                                        │");
-    console.log("  │ 3. Em \"Player 2\", também selecione AI.                    │");
-    console.log("  │ 4. Em cada Player, clique \"Constructed Decks\" e procure   │");
-    console.log("  │    pela pasta \"AutoArena\". Dentro:                        │");
-    console.log(`  │      Player 1 → ${displayNames[0].slice(0, 38).padEnd(38)} │`);
-    console.log(`  │      Player 2 → ${displayNames[1].slice(0, 38).padEnd(38)} │`);
-    console.log("  │ 5. Clique \"Start Game\" e assista à partida.               │");
-    console.log("  │ 6. Ao final, FECHE A JANELA do Forge para voltar aqui.    │");
-    console.log("  └───────────────────────────────────────────────────────────┘");
+    console.log(
+      "  ┌─ COMO INICIAR A PARTIDA NO FORGE ─────────────────────────┐"
+    );
+    console.log(
+      '  │ 1. Tela inicial → "Sanctioned" → "Constructed"            │'
+    );
+    console.log(
+      '  │ 2. Em "Player 1", clique no botão de avatar e selecione   │'
+    );
+    console.log(
+      "  │    AI (não Human).                                        │"
+    );
+    console.log(
+      '  │ 3. Em "Player 2", também selecione AI.                    │'
+    );
+    console.log(
+      '  │ 4. Em cada Player, clique "Constructed Decks" e procure   │'
+    );
+    console.log(
+      '  │    pela pasta "AutoArena". Dentro:                        │'
+    );
+    console.log(
+      `  │      Player 1 → ${displayNames[0].slice(0, 38).padEnd(38)} │`
+    );
+    console.log(
+      `  │      Player 2 → ${displayNames[1].slice(0, 38).padEnd(38)} │`
+    );
+    console.log(
+      '  │ 5. Clique "Start Game" e assista à partida.               │'
+    );
+    console.log(
+      "  │ 6. Ao final, FECHE A JANELA do Forge para voltar aqui.    │"
+    );
+    console.log(
+      "  └───────────────────────────────────────────────────────────┘"
+    );
   }
   console.log("");
 
   const forgeRun = await launchForgeGui(jarPath, files);
-  if (forgeRun.exitCode !== 0 || forgeRun.elapsedMs < MIN_FORGE_GUI_LIFETIME_MS) {
+  if (
+    forgeRun.exitCode !== 0 ||
+    forgeRun.elapsedMs < MIN_FORGE_GUI_LIFETIME_MS
+  ) {
     console.error("\n[ERRO] O Forge fechou antes da partida começar.");
-    console.error(`       exitCode=${forgeRun.exitCode ?? "n/a"} | duração=${(forgeRun.elapsedMs / 1000).toFixed(1)}s`);
-    console.error("       Verifique os logs acima; o launcher agora prepara skins locais em forge/forge-gui/res/skins/default.");
+    console.error(
+      `       exitCode=${forgeRun.exitCode ?? "n/a"} | duração=${(forgeRun.elapsedMs / 1000).toFixed(1)}s`
+    );
+    console.error(
+      "       Verifique os logs acima; o launcher agora prepara skins locais em forge/forge-gui/res/skins/default."
+    );
     process.exit(4);
   }
   console.log("  Forge fechado. Continuando...");
@@ -1234,17 +1512,31 @@ async function main() {
   let winnerIdx = -1;
   if (AUTO_VISUAL_MATCH) {
     if (!forgeRun.autoResult) {
-      console.error("\n[ERRO] Forge automático fechou sem emitir resultado parseável.");
+      console.error(
+        "\n[ERRO] Forge automático fechou sem emitir resultado parseável."
+      );
       process.exit(5);
     }
     console.log(`  Status visual auto : ${forgeRun.autoResult.status}`);
-    console.log(`  Resultado bruto    : ${forgeRun.autoResult.winner} (outcome=${forgeRun.autoResult.outcome})`);
-    if (forgeRun.autoResult.outcome === 1 || forgeRun.autoResult.winner === "agent") winnerIdx = 0;
-    else if (forgeRun.autoResult.outcome === -1 || forgeRun.autoResult.winner === "opponent") winnerIdx = 1;
+    console.log(
+      `  Resultado bruto    : ${forgeRun.autoResult.winner} (outcome=${forgeRun.autoResult.outcome})`
+    );
+    if (
+      forgeRun.autoResult.outcome === 1 ||
+      forgeRun.autoResult.winner === "agent"
+    )
+      winnerIdx = 0;
+    else if (
+      forgeRun.autoResult.outcome === -1 ||
+      forgeRun.autoResult.winner === "opponent"
+    )
+      winnerIdx = 1;
     else winnerIdx = -2;
   } else {
     while (winnerIdx === -1) {
-      const ans = await ask("  Quem venceu? (1 = Agent, 2 = Opponent, 0 = Empate): ");
+      const ans = await ask(
+        "  Quem venceu? (1 = Agent, 2 = Opponent, 0 = Empate): "
+      );
       if (ans === "0") winnerIdx = -2;
       else if (ans === "1") winnerIdx = 0;
       else if (ans === "2") winnerIdx = 1;
@@ -1253,7 +1545,14 @@ async function main() {
   }
 
   if (winnerIdx === -2) {
-    await recordForgeMatch(db, decks[0], decks[1], null, null, forgeRun.autoResult);
+    await recordForgeMatch(
+      db,
+      decks[0],
+      decks[1],
+      null,
+      null,
+      forgeRun.autoResult
+    );
     console.log("  Empate registrado como evidência — nenhum sinal aplicado.");
   } else {
     const winnerDeck = decks[winnerIdx];
@@ -1261,12 +1560,21 @@ async function main() {
     console.log(`  Vencedor : ${winnerDeck.name}`);
     console.log(`  Perdedor : ${loserDeck.name}`);
     console.log("");
-    await recordForgeMatch(db, decks[0], decks[1], winnerDeck, loserDeck, forgeRun.autoResult);
+    await recordForgeMatch(
+      db,
+      decks[0],
+      decks[1],
+      winnerDeck,
+      loserDeck,
+      forgeRun.autoResult
+    );
     if (APPLY_LEARNING_SIGNAL) {
       console.log("  Checkpoint aprovado: aplicando sinal em card_learning...");
       await applyMatchSignal(db, winnerDeck, loserDeck);
     } else {
-      console.log("  Evidência registrada; card_learning não foi alterado (gate pré-promoção).");
+      console.log(
+        "  Evidência registrada; card_learning não foi alterado (gate pré-promoção)."
+      );
     }
   }
 
@@ -1277,8 +1585,12 @@ async function main() {
 
   console.log("\n  PRÓXIMOS PASSOS RECOMENDADOS:");
   if (level.coveragePct < 25) {
-    console.log("    npm run teach:arena:20         # 20 ciclos pra base inicial");
-    console.log("    npm run import:competitive:arena   # mais sinal de torneio");
+    console.log(
+      "    npm run teach:arena:20         # 20 ciclos pra base inicial"
+    );
+    console.log(
+      "    npm run import:competitive:arena   # mais sinal de torneio"
+    );
   } else if (level.coveragePct < 75) {
     console.log("    npm run teach:arena:20         # mais decay + cobertura");
     console.log("    npm run calibrate:llm           # refinamento LLM");
@@ -1293,11 +1605,13 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
+  .catch(e => {
     console.error("\n[playOneArenaMatch] erro fatal:", e?.message ?? e);
     if (e?.stack) console.error(e.stack);
     process.exitCode = 1;
   })
   .finally(() => {
-    closeDb().then(() => process.exit(process.exitCode ?? 0)).catch(() => process.exit(1));
+    closeDb()
+      .then(() => process.exit(process.exitCode ?? 0))
+      .catch(() => process.exit(1));
   });

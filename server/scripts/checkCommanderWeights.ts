@@ -62,7 +62,8 @@ async function check() {
       personagemMap.set(personagem, c);
     } else {
       // Preferir a versão com mais partidas reais (winCount + lossCount)
-      const existingTotal = (existing.winCount ?? 0) + (existing.lossCount ?? 0);
+      const existingTotal =
+        (existing.winCount ?? 0) + (existing.lossCount ?? 0);
       const newTotal = (c.winCount ?? 0) + (c.lossCount ?? 0);
       if (newTotal > existingTotal) {
         personagemMap.set(personagem, c);
@@ -94,7 +95,7 @@ async function check() {
       return Math.min(40, c.weight);
     }
 
-    if (total >= MIN_GAMES_FOR_CONFIDENCE && wr < 0.20) {
+    if (total >= MIN_GAMES_FOR_CONFIDENCE && wr < 0.2) {
       // Reality guard: winrate horrível com dados = CAI para baixo.
       // Mantém peso mas drena 50 pontos para empurrar para o fim da lista.
       return c.weight - 50 + wr * 10;
@@ -119,17 +120,25 @@ async function check() {
   console.log("=".repeat(70));
   topCommanders.forEach((c, i) => {
     // Exibir nome limpo (sem face B)
-    const cleanName = c.name.includes(" // ") ? c.name.split(" // ")[0].trim() : c.name;
-    const displayName = cleanName.length > 35 ? cleanName.substring(0, 32) + "..." : cleanName;
+    const cleanName = c.name.includes(" // ")
+      ? c.name.split(" // ")[0].trim()
+      : c.name;
+    const displayName =
+      cleanName.length > 35 ? cleanName.substring(0, 32) + "..." : cleanName;
     const colors = c.colors || "C";
     const total = (c.winCount ?? 0) + (c.lossCount ?? 0);
-    const wr = total > 0 ? (((c.winCount ?? 0) / total) * 100).toFixed(0) + "% wr" : "sem partidas";
+    const wr =
+      total > 0
+        ? (((c.winCount ?? 0) / total) * 100).toFixed(0) + "% wr"
+        : "sem partidas";
     console.log(
       `${String(i + 1).padStart(2)}. ${displayName.padEnd(36)} | ${colors.padEnd(5)} | Peso: ${c.weight.toFixed(2)} | ${wr}`
     );
   });
   console.log("=".repeat(70));
-  console.log(`   (${total} lendarios no banco, ${uniquePersonagens} personagens unicos mostrados)`);
+  console.log(
+    `   (${total} lendarios no banco, ${uniquePersonagens} personagens unicos mostrados)`
+  );
 
   closeDb()
     .then(() => process.exit(0))

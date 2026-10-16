@@ -73,7 +73,7 @@ describe("Synergy — corruption resilience", () => {
       }
 
       // Conta chamadas de console.error com mensagem de erro real
-      const verboseLogs = errSpy.mock.calls.filter((call) =>
+      const verboseLogs = errSpy.mock.calls.filter(call =>
         String(call[0] ?? "").includes("[synergy:getCardSynergy]")
       );
 
@@ -89,7 +89,7 @@ describe("Synergy — corruption resilience", () => {
         await getCardSynergy(1, i + 2);
       }
 
-      const suppressionMsgs = errSpy.mock.calls.filter((call) =>
+      const suppressionMsgs = errSpy.mock.calls.filter(call =>
         String(call[0] ?? "").includes("Suprimindo logs futuros")
       );
       expect(suppressionMsgs.length).toBe(1);

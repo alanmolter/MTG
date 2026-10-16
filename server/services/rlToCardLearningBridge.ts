@@ -52,7 +52,7 @@ export class RLToCardLearningBridge {
 
       console.log(
         `[RLBridge] Recorded: ${decision.cardName} ` +
-        `(prob: ${decision.policyProbability.toFixed(3)})`
+          `(prob: ${decision.policyProbability.toFixed(3)})`
       );
     } catch (error) {
       console.error("[RLBridge] Failed to record decision:", error);
@@ -65,7 +65,10 @@ export class RLToCardLearningBridge {
    *
    * @returns { synced, totalReward }
    */
-  async syncRLRewardsToCardLearning(): Promise<{ synced: number; totalReward: number }> {
+  async syncRLRewardsToCardLearning(): Promise<{
+    synced: number;
+    totalReward: number;
+  }> {
     const db = await getDb();
     if (!db) {
       console.warn("[RLBridge] Database not available");
@@ -78,10 +81,7 @@ export class RLToCardLearningBridge {
         .select()
         .from(rlDecisions)
         .where(
-          and(
-            eq(rlDecisions.processed, false),
-            isNotNull(rlDecisions.reward)
-          )
+          and(eq(rlDecisions.processed, false), isNotNull(rlDecisions.reward))
         )
         .limit(500);
 
@@ -132,7 +132,7 @@ export class RLToCardLearningBridge {
 
       console.log(
         `[RLBridge] ✓ Synced ${pending.length} RL decisions ` +
-        `(total reward: ${totalReward.toFixed(2)})`
+          `(total reward: ${totalReward.toFixed(2)})`
       );
 
       return { synced: pending.length, totalReward };
@@ -150,7 +150,8 @@ export class RLToCardLearningBridge {
     deckPerformance: { wins: number; losses: number; draws: number },
     policyProbability: number
   ): number {
-    const totalGames = deckPerformance.wins + deckPerformance.losses + deckPerformance.draws;
+    const totalGames =
+      deckPerformance.wins + deckPerformance.losses + deckPerformance.draws;
     if (totalGames === 0) return 0;
 
     const winRate = deckPerformance.wins / totalGames;
@@ -194,7 +195,7 @@ export class RLToCardLearningBridge {
     const archInfo = normalizedArchetype ? ` [${normalizedArchetype}]` : "";
     console.log(
       `[RLBridge] Queued RL feedback for ${deck.length} cards${archInfo} ` +
-      `(score: ${score.toFixed(1)}, reward: ${reward.toFixed(3)})`
+        `(score: ${score.toFixed(1)}, reward: ${reward.toFixed(3)})`
     );
   }
 }

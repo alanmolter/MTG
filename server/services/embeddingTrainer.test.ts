@@ -48,7 +48,8 @@ describe("Embedding Trainer", () => {
     });
 
     it("deve lidar com valores extremos sem NaN", () => {
-      const sigmoid = (x: number) => 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, x))));
+      const sigmoid = (x: number) =>
+        1 / (1 + Math.exp(-Math.max(-500, Math.min(500, x))));
       expect(sigmoid(1000)).not.toBeNaN();
       expect(sigmoid(-1000)).not.toBeNaN();
     });
@@ -117,7 +118,10 @@ describe("Embedding Trainer", () => {
     it("deve calcular taxa de co-ocorrência relativa ao total de decks", () => {
       const totalDecks = 10;
       const coOccurrenceCount = 7;
-      const weight = Math.min(100, Math.floor((coOccurrenceCount / totalDecks) * 100));
+      const weight = Math.min(
+        100,
+        Math.floor((coOccurrenceCount / totalDecks) * 100)
+      );
 
       expect(weight).toBe(70);
     });
@@ -125,7 +129,10 @@ describe("Embedding Trainer", () => {
     it("deve limitar peso máximo a 100", () => {
       const totalDecks = 5;
       const coOccurrenceCount = 5; // 100% dos decks
-      const weight = Math.min(100, Math.floor((coOccurrenceCount / totalDecks) * 100));
+      const weight = Math.min(
+        100,
+        Math.floor((coOccurrenceCount / totalDecks) * 100)
+      );
 
       expect(weight).toBe(100);
     });
@@ -147,7 +154,9 @@ describe("Embedding Trainer", () => {
       }
 
       // "A" deve ter contexto com "B" e "C" (janela de 2)
-      const aContexts = pairs.filter(([center]) => center === "A").map(([, ctx]) => ctx);
+      const aContexts = pairs
+        .filter(([center]) => center === "A")
+        .map(([, ctx]) => ctx);
       expect(aContexts).toContain("B");
       expect(aContexts).toContain("C");
       expect(aContexts).not.toContain("D"); // fora da janela

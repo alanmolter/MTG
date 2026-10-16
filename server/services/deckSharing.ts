@@ -27,8 +27,16 @@ export interface ShareOptions {
 /**
  * Create a shareable link for a deck
  */
-export async function createDeckShare(options: ShareOptions): Promise<DeckShareData> {
-  const { deckId, title, description, includeImage = true, expiresInDays } = options;
+export async function createDeckShare(
+  options: ShareOptions
+): Promise<DeckShareData> {
+  const {
+    deckId,
+    title,
+    description,
+    includeImage = true,
+    expiresInDays,
+  } = options;
 
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
@@ -72,7 +80,9 @@ export async function createDeckShare(options: ShareOptions): Promise<DeckShareD
     }
   }
 
-  const expiresAt = expiresInDays ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000) : null;
+  const expiresAt = expiresInDays
+    ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+    : null;
 
   const shareInsert = {
     shareId,
@@ -100,7 +110,9 @@ export async function createDeckShare(options: ShareOptions): Promise<DeckShareD
 /**
  * Get shared deck data by share ID
  */
-export async function getSharedDeck(shareId: string): Promise<DeckShareData | null> {
+export async function getSharedDeck(
+  shareId: string
+): Promise<DeckShareData | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -128,7 +140,10 @@ export async function getSharedDeck(shareId: string): Promise<DeckShareData | nu
 }
 
 function generateShareId(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  return (
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15)
+  );
 }
 
 function generateDecklistText(deck: any, deckCards: any[]): string {
@@ -148,7 +163,7 @@ function extractDeckColors(deckCards: any[]): string[] {
   const colors = new Set<string>();
   for (const dc of deckCards) {
     if (dc.card.colors) {
-      dc.card.colors.split('').forEach((c: string) => colors.add(c));
+      dc.card.colors.split("").forEach((c: string) => colors.add(c));
     }
   }
   return Array.from(colors).sort();

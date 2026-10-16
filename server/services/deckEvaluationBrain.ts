@@ -29,13 +29,15 @@ async function initMetaBenchmarks() {
   if (isMetaInitialized) return;
   // Se já está inicializando em paralelo, aguarda a mesma promise
   if (_initPromise) return _initPromise;
-  
+
   _initPromise = (async () => {
     const initialized: string[] = [];
     for (const [archetype, decklists] of Object.entries(META_DECKS)) {
       const decks: any[][] = [];
       for (const dl of decklists) {
-        const parsed = await (import("./metaAnalytics")).then(m => m.MetaAnalytics.parseDecklist(dl));
+        const parsed = await import("./metaAnalytics").then(m =>
+          m.MetaAnalytics.parseDecklist(dl)
+        );
         if (parsed.length > 0) decks.push(parsed);
       }
       if (decks.length > 0) {
@@ -50,7 +52,7 @@ async function initMetaBenchmarks() {
     }
     isMetaInitialized = true;
   })();
-  
+
   return _initPromise;
 }
 
@@ -191,7 +193,11 @@ const ARCHETYPE_PROFILES: Record<string, ArchetypeProfile> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function normalizeScore(score: number, min: number = -50, max: number = 180): number {
+function normalizeScore(
+  score: number,
+  min: number = -50,
+  max: number = 180
+): number {
   const clamped = Math.max(min, Math.min(max, score));
   return Math.round(((clamped - min) / (max - min)) * 100);
 }
@@ -226,7 +232,9 @@ export async function evaluateDeckWithBrain(
     const nonLandWithIds = cards
       .filter((c: any) => c.id && !c.type?.toLowerCase().includes("land"))
       .slice(0, 10); // máx 10 cartas = máx 45 pares
-    const uniqueIds = Array.from(new Set(nonLandWithIds.map((c: any) => Number(c.id))));
+    const uniqueIds = Array.from(
+      new Set(nonLandWithIds.map((c: any) => Number(c.id)))
+    );
     if (uniqueIds.length >= 2) {
       let totalSyn = 0;
       let pairCount = 0;
@@ -241,7 +249,9 @@ export async function evaluateDeckWithBrain(
         dbSynergyBonus = (avgPairSynergy / 100) * 25; // até +25 pts no score final
       }
     }
-  } catch { /* não-crítico */ }
+  } catch {
+    /* não-crítico */
+  }
 
   // 1. Meta-Learning Adjustment (Comparação estatística com decks pro)
   let benchmarkBonus = 0;
@@ -262,7 +272,8 @@ export async function evaluateDeckWithBrain(
   const { ModelEvaluator } = await import("./modelEvaluation");
   const winrate = await ModelEvaluator.evaluateWinrate(cards, archetype, 10);
 
-  const finalScore = metrics.totalScore + (benchmarkBonus * 1.5) + (winrate * 30) + dbSynergyBonus;
+  const finalScore =
+    metrics.totalScore + benchmarkBonus * 1.5 + winrate * 30 + dbSynergyBonus;
   const normalizedFinalScore = normalizeScore(finalScore, -50, 250);
 
   // 3. Análise Detalhada
@@ -273,27 +284,41 @@ export async function evaluateDeckWithBrain(
   const removalCount = metrics.removalCount;
   const threatCount = metrics.roleCounts.threat || 0;
 
-  if (removalCount >= profile.minRemovalCount) strengths.push("Remoção adequada para o meta");
+  if (removalCount >= profile.minRemovalCount)
+    strengths.push("Remoção adequada para o meta");
   else {
     weaknesses.push("Remoção insuficiente");
-    suggestions.push(`Adicione mais respostas para controlar o board (alvo: ${profile.minRemovalCount})`);
+    suggestions.push(
+      `Adicione mais respostas para controlar o board (alvo: ${profile.minRemovalCount})`
+    );
   }
 
-  if (threatCount >= profile.minThreatCount) strengths.push("Densidade de ameaças sólida");
+  if (threatCount >= profile.minThreatCount)
+    strengths.push("Densidade de ameaças sólida");
   else {
     weaknesses.push("Poucas ameaças para finalizar o jogo");
     suggestions.push(`Aumente o número de criaturas ou spells de impacto`);
   }
 
-  if (benchmarkBonus > 15) strengths.push("Excelente alinhamento com arquétipos profissionais");
-  if (winrate > 0.6) strengths.push(`Winrate simulado excepcional (${(winrate * 100).toFixed(0)}%)`);
+  if (benchmarkBonus > 15)
+    strengths.push("Excelente alinhamento com arquétipos profissionais");
+  if (winrate > 0.6)
+    strengths.push(
+      `Winrate simulado excepcional (${(winrate * 100).toFixed(0)}%)`
+    );
 
   // Feedback de sinergia real (DB)
   if (avgPairSynergy > 40) {
-    strengths.push(`Sinergia entre cartas forte — média de ${avgPairSynergy.toFixed(0)}/100 por par`);
+    strengths.push(
+      `Sinergia entre cartas forte — média de ${avgPairSynergy.toFixed(0)}/100 por par`
+    );
   } else if (avgPairSynergy > 0 && avgPairSynergy <= 15) {
-    weaknesses.push("Baixa sinergia entre as cartas — considere pares com histórico de co-ocorrência");
-    suggestions.push("Adicione cartas que aparecem juntas em decks competitivos para aumentar a sinergia");
+    weaknesses.push(
+      "Baixa sinergia entre as cartas — considere pares com histórico de co-ocorrência"
+    );
+    suggestions.push(
+      "Adicione cartas que aparecem juntas em decks competitivos para aumentar a sinergia"
+    );
   }
 
   return {
@@ -322,7 +347,10 @@ export function evaluateDeckQuick(cards: any[], archetype: string): number {
  *
  * Retorna o mesmo shape de `EvaluationResult` (normalizedScore/tier/etc).
  */
-export function evaluateDeck(cards: any[], archetype: string = "default"): EvaluationResult {
+export function evaluateDeck(
+  cards: any[],
+  archetype: string = "default"
+): EvaluationResult {
   const metrics = calculateDeckMetrics(cards, archetype);
   const profile = ARCHETYPE_PROFILES[archetype] || ARCHETYPE_PROFILES.default;
   const normalizedScore = normalizeScore(metrics.totalScore, -50, 350);
@@ -340,17 +368,24 @@ export function evaluateDeck(cards: any[], archetype: string = "default"): Evalu
     strengths.push("Remoção adequada para o arquétipo");
   } else if (cards.length > 0) {
     weaknesses.push("Remoção insuficiente");
-    suggestions.push(`Adicione mais remoção (alvo: ${profile.minRemovalCount})`);
+    suggestions.push(
+      `Adicione mais remoção (alvo: ${profile.minRemovalCount})`
+    );
   }
 
   if (threatCount >= profile.minThreatCount) {
     strengths.push("Densidade de ameaças sólida");
   } else if (cards.length > 0) {
     weaknesses.push("Poucas ameaças");
-    suggestions.push(`Aumente criaturas ou spells de impacto (alvo: ${profile.minThreatCount})`);
+    suggestions.push(
+      `Aumente criaturas ou spells de impacto (alvo: ${profile.minThreatCount})`
+    );
   }
 
-  if (metrics.landCount >= profile.minLandCount && metrics.landCount <= profile.maxLandCount) {
+  if (
+    metrics.landCount >= profile.minLandCount &&
+    metrics.landCount <= profile.maxLandCount
+  ) {
     strengths.push("Quantidade de terrenos balanceada");
   }
 
@@ -378,7 +413,12 @@ export function compareDeckQuality(
   cardsA: any[],
   cardsB: any[],
   archetype: string = "default"
-): { winner: "A" | "B" | "tie"; scoreA: number; scoreB: number; difference: number } {
+): {
+  winner: "A" | "B" | "tie";
+  scoreA: number;
+  scoreB: number;
+  difference: number;
+} {
   const rawA = calculateDeckMetrics(cardsA, archetype).totalScore;
   const rawB = calculateDeckMetrics(cardsB, archetype).totalScore;
   const scoreA = normalizeScore(rawA, -50, 350);

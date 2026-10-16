@@ -84,11 +84,11 @@ async function runInBatches<T>(
 ): Promise<T[]> {
   const results: T[] = [];
   for (let i = 0; i < tasks.length; i += concurrency) {
-    const batch = tasks.slice(i, i + concurrency).map((fn) => fn());
+    const batch = tasks.slice(i, i + concurrency).map(fn => fn());
     const batchResults = await Promise.all(batch);
     results.push(...batchResults);
     if (delayMs > 0 && i + concurrency < tasks.length) {
-      await new Promise((r) => setTimeout(r, delayMs));
+      await new Promise(r => setTimeout(r, delayMs));
     }
   }
   return results;
@@ -120,13 +120,19 @@ async function getDeckIdsFromArchetype(
     // Derivar nome legível do slug
     const archetypeName = archetypeSlug
       .replace(/^(modern|standard|legacy|pioneer|vintage|pauper)-/, "")
-      .replace(/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, "")
+      .replace(
+        /-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+        ""
+      )
       .replace(/-\d+$/, "")
       .replace(/-/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+      .replace(/\b\w/g, c => c.toUpperCase());
 
     let match;
-    while ((match = deckRegex.exec(html)) !== null && results.length < maxDecks) {
+    while (
+      (match = deckRegex.exec(html)) !== null &&
+      results.length < maxDecks
+    ) {
       const id = match[1];
       if (!seen.has(id)) {
         seen.add(id);
@@ -157,7 +163,10 @@ const CLOUDFLARE_RECHECK_MS = 30 * 60_000; // re-probe every 30 min
 
 async function isCloudflareBlockingDownloads(): Promise<boolean> {
   const now = Date.now();
-  if (_cloudflareBlocked !== null && now - _cloudflareCheckedAt < CLOUDFLARE_RECHECK_MS) {
+  if (
+    _cloudflareBlocked !== null &&
+    now - _cloudflareCheckedAt < CLOUDFLARE_RECHECK_MS
+  ) {
     return _cloudflareBlocked;
   }
   try {
@@ -174,7 +183,9 @@ async function isCloudflareBlockingDownloads(): Promise<boolean> {
       return false;
     }
     const metaHtml = await metaPage.text();
-    const archeMatch = metaHtml.match(/href="\/archetype\/([^"#]+)(?:#[^"]*)?"/);
+    const archeMatch = metaHtml.match(
+      /href="\/archetype\/([^"#]+)(?:#[^"]*)?"/
+    );
     if (!archeMatch) {
       _cloudflareBlocked = false;
       _cloudflareCheckedAt = now;
@@ -378,7 +389,7 @@ export async function importMTGGoldfishDecks(
         likes: 0,
       });
     }
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 100));
   }
 
   console.log(
@@ -394,7 +405,7 @@ export async function importMTGGoldfishDecks(
 
   // Downloads paralelos em batches
   let completed = 0;
-  const downloadTasks = deckSummaries.map((summary) => async () => {
+  const downloadTasks = deckSummaries.map(summary => async () => {
     const detail = await downloadDeck(summary);
     completed++;
     process.stdout.write(
@@ -452,9 +463,13 @@ export async function importAllGoldfishFormats(
     errors: [],
   };
 
-  console.log(`\n  [MTGGoldfish] Importando ${decksPerFormat} decks de cada formato:`);
+  console.log(
+    `\n  [MTGGoldfish] Importando ${decksPerFormat} decks de cada formato:`
+  );
   console.log(`  [MTGGoldfish] Formatos: ${GOLDFISH_FORMATS.join(", ")}`);
-  console.log(`  [MTGGoldfish] Total máximo: ${GOLDFISH_FORMATS.length * decksPerFormat} decks\n`);
+  console.log(
+    `  [MTGGoldfish] Total máximo: ${GOLDFISH_FORMATS.length * decksPerFormat} decks\n`
+  );
 
   // Pre-flight: probe Cloudflare. If `/deck/download/{id}` is gated by the JS
   // challenge, downloading 60 decks is a 40s no-op. Bail with one clear line
@@ -463,10 +478,10 @@ export async function importAllGoldfishFormats(
   if (await isCloudflareBlockingDownloads()) {
     console.warn(
       `  [MTGGoldfish] BLOQUEADO: /deck/download/{id} esta atras do desafio JS\n` +
-      `              do Cloudflare ("Just a moment..."). Esse endpoint nao e\n` +
-      `              acessivel via fetch direto.\n` +
-      `              Solucao: use MTGTop8 (funciona) ou rode o scraper via\n` +
-      `              Puppeteer/Playwright. Pulando MTGGoldfish nesta sessao.`
+        `              do Cloudflare ("Just a moment..."). Esse endpoint nao e\n` +
+        `              acessivel via fetch direto.\n` +
+        `              Solucao: use MTGTop8 (funciona) ou rode o scraper via\n` +
+        `              Puppeteer/Playwright. Pulando MTGGoldfish nesta sessao.`
     );
     return totals;
   }
@@ -478,7 +493,7 @@ export async function importAllGoldfishFormats(
     totals.decksSkipped += r.decksSkipped;
     totals.errors.push(...r.errors);
     // Delay entre formatos para não sobrecarregar o servidor
-    await new Promise((res) => setTimeout(res, 1000));
+    await new Promise(res => setTimeout(res, 1000));
   }
 
   console.log(`\n  [MTGGoldfish] TOTAL GERAL:`);

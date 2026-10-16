@@ -5,7 +5,11 @@
  * touch them. Stored raw_json is preferred. When it has no mainboard, goldfish
  * and top8 ids are fetched again. Anything else is skipped and reported.
  */
-import { parseDeckExport, saveCompetitiveDeck, type CompetitiveDeckWrite } from "./competitiveDeckStore";
+import {
+  parseDeckExport,
+  saveCompetitiveDeck,
+  type CompetitiveDeckWrite,
+} from "./competitiveDeckStore";
 
 export const EMPTY_DECK_SQL = `
 SELECT d.id, d.source_id, d.source, d.name, d.format, d.archetype, d.author, d.raw_json
@@ -67,11 +71,16 @@ function asCardLines(value: unknown): CardLine[] | null {
   return lines;
 }
 
-export function deckFromStoredJson(row: EmptyDeckRow): CompetitiveDeckWrite | null {
+export function deckFromStoredJson(
+  row: EmptyDeckRow
+): CompetitiveDeckWrite | null {
   const raw = row.rawJson?.trim();
   if (!raw) return null;
 
-  const fromLists = (mainboard: CardLine[], sideboard: CardLine[]): CompetitiveDeckWrite | null => {
+  const fromLists = (
+    mainboard: CardLine[],
+    sideboard: CardLine[]
+  ): CompetitiveDeckWrite | null => {
     if (mainboard.length === 0) return null;
     return {
       sourceId: row.sourceId,
@@ -99,7 +108,8 @@ export function deckFromStoredJson(row: EmptyDeckRow): CompetitiveDeckWrite | nu
         const obj = parsed as Record<string, unknown>;
         const mainboard = asCardLines(obj.mainboard);
         const sideboard = asCardLines(obj.sideboard) ?? [];
-        if (mainboard && mainboard.length > 0) return fromLists(mainboard, sideboard);
+        if (mainboard && mainboard.length > 0)
+          return fromLists(mainboard, sideboard);
         for (const key of ["text", "deck", "list"]) {
           if (typeof obj[key] === "string") {
             const decoded = fromText(obj[key] as string);
@@ -117,7 +127,9 @@ export function deckFromStoredJson(row: EmptyDeckRow): CompetitiveDeckWrite | nu
 export async function reimportEmptyDecks(deps: {
   listEmpty: () => Promise<EmptyDeckRow[]>;
   fetchText: (url: string) => Promise<string | null>;
-  save: (deck: CompetitiveDeckWrite) => Promise<{ imported: boolean; cards: number }>;
+  save: (
+    deck: CompetitiveDeckWrite
+  ) => Promise<{ imported: boolean; cards: number }>;
 }): Promise<ReimportReport> {
   const rows = await deps.listEmpty();
   const report: ReimportReport = {

@@ -6,6 +6,7 @@
 
 -- ---- pgvector extension ----------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS vector;
+--> statement-breakpoint
 
 -- ---- Card Oracle Embeddings (S3 — Sentence Transformers output) ------------
 -- 384-dim from all-MiniLM-L6-v2, normalized. One row per card.
@@ -16,11 +17,13 @@ CREATE TABLE IF NOT EXISTS card_oracle_embeddings (
   text_hash      VARCHAR(64) NOT NULL,
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+--> statement-breakpoint
 
 -- HNSW index: cosine distance (<=>) on unit-normalized vectors == 1 - dot product
 CREATE INDEX IF NOT EXISTS idx_card_oracle_embed_hnsw
   ON card_oracle_embeddings USING hnsw (embedding vector_cosine_ops)
   WITH (m = 16, ef_construction = 64);
+--> statement-breakpoint
 
 -- ---- Semantic Cache (Pillar 4, L0 + L1) ------------------------------------
 CREATE TABLE IF NOT EXISTS semantic_cache (
@@ -38,14 +41,17 @@ CREATE TABLE IF NOT EXISTS semantic_cache (
   last_hit_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at      TIMESTAMPTZ                       -- optional TTL for errata
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_semcache_embedding_hnsw
   ON semantic_cache USING hnsw (query_embedding vector_cosine_ops)
   WITH (m = 16, ef_construction = 64);
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_semcache_expires
   ON semantic_cache (expires_at)
   WHERE expires_at IS NOT NULL;
+--> statement-breakpoint
 
 -- ---- API Budget Ledger (Pillar 4, L2 rate limit + L3 budget breaker) -------
 -- One row per hourly bucket. UPSERT on window_start.
@@ -59,8 +65,10 @@ CREATE TABLE IF NOT EXISTS api_budget_ledger (
   trip_count    INTEGER NOT NULL DEFAULT 0,         -- times breaker opened in window
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_api_budget_window ON api_budget_ledger (window_start DESC);
+--> statement-breakpoint
 
 -- ---- Contextual Weights (Pillar 8) -----------------------------------------
 -- Replaces scalar card_learning.weight. Per (card, commander, archetype) tuple.
@@ -77,22 +85,27 @@ CREATE TABLE IF NOT EXISTS card_contextual_weight (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (card_id, commander_id, archetype)
 );
+--> statement-breakpoint
 
 -- Partial unique for rows without commander (NULL in PK treated specially by Postgres)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_card_ctx_weight_no_commander
   ON card_contextual_weight (card_id, archetype)
   WHERE commander_id IS NULL;
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_card_ctx_weight_hnsw
   ON card_contextual_weight USING hnsw (weight_vec vector_cosine_ops)
   WITH (m = 16, ef_construction = 64);
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_card_ctx_weight_scalar
   ON card_contextual_weight (archetype, scalar_synergy DESC);
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_card_ctx_weight_commander
   ON card_contextual_weight (commander_id, archetype)
   WHERE commander_id IS NOT NULL;
+--> statement-breakpoint
 
 -- ---- Toxic Actions (Pillar 7 — loop prevention learning signal) ------------
 -- Tracks deck/card combinations that trigger Forge engine loops.
@@ -105,9 +118,12 @@ CREATE TABLE IF NOT EXISTS toxic_actions (
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_toxic_actions_hash ON toxic_actions (action_hash);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_toxic_actions_recent ON toxic_actions (last_seen_at DESC);
+--> statement-breakpoint
 
 -- ---- MCTS Tree Persistence (Pillar 5) --------------------------------------
 -- Persist MCTS trees across restarts so deckbuilding doesn't start from scratch
@@ -125,10 +141,14 @@ CREATE TABLE IF NOT EXISTS mcts_nodes (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_mcts_context ON mcts_nodes (deck_context);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_mcts_parent ON mcts_nodes (parent_id);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_mcts_ucb ON mcts_nodes (deck_context, mean_value DESC, visits);
+--> statement-breakpoint
 
 -- ---- League State (Pillar 1 — PBT champion tracking) -----------------------
 -- Node.js reads this to know which agent is "the champion" for UI exposure.
@@ -142,6 +162,8 @@ CREATE TABLE IF NOT EXISTS league_state (
   episode_reward_mean REAL,
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_league_state_champion ON league_state (is_champion) WHERE is_champion = TRUE;
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_league_state_agent ON league_state (agent_id, generation DESC);

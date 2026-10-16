@@ -117,7 +117,7 @@ describe("searchCards", () => {
     const result = await searchCards({ type: "instant" });
 
     expect(result).toHaveLength(2);
-    expect(result.map((c) => c.name)).toEqual(["Lightning Bolt", "Counterspell"]);
+    expect(result.map(c => c.name)).toEqual(["Lightning Bolt", "Counterspell"]);
     expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 
@@ -139,7 +139,10 @@ describe("searchCards", () => {
     const result = await searchCards({ colors: "WU" });
 
     expect(result).toHaveLength(2);
-    expect(result.map((c) => c.name).sort()).toEqual(["Counterspell", "Serra Angel"]);
+    expect(result.map(c => c.name).sort()).toEqual([
+      "Counterspell",
+      "Serra Angel",
+    ]);
     expect(mockDb.where).toHaveBeenCalledTimes(1);
   });
 

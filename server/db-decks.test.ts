@@ -70,7 +70,13 @@ describe("Deck CRUD Operations", () => {
 
       (getDb as any).mockResolvedValue(mockDb);
 
-      const result = await createDeck(1, "Test Deck", "standard", "Control", "A test deck");
+      const result = await createDeck(
+        1,
+        "Test Deck",
+        "standard",
+        "Control",
+        "A test deck"
+      );
 
       expect(result).toEqual(mockDeck);
       expect(mockDb.insert).toHaveBeenCalledWith(expect.any(Object));
@@ -297,11 +303,7 @@ describe("Deck CRUD Operations", () => {
 
   describe("getDeckCardCount", () => {
     it("should return total card count in deck", async () => {
-      const mockDeckCards = [
-        { quantity: 4 },
-        { quantity: 3 },
-        { quantity: 2 },
-      ];
+      const mockDeckCards = [{ quantity: 4 }, { quantity: 3 }, { quantity: 2 }];
       const mockDb = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),

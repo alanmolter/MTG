@@ -25,7 +25,12 @@ export interface ForgeConnectionStatus {
   forgeRealityEntries: number;
   totalLearningEntries: number;
   forgeContributionPct: number;
-  topForgeCards: Array<{ cardName: string; weight: number; wins: number; losses: number }>;
+  topForgeCards: Array<{
+    cardName: string;
+    weight: number;
+    wins: number;
+    losses: number;
+  }>;
 }
 
 // ─── Helpers de formatação ────────────────────────────────────────────────────
@@ -87,7 +92,9 @@ export async function printForgeConnectionStatus(): Promise<ForgeConnectionStatu
   console.log(divider("─"));
 
   if (!db) {
-    console.log("  [AVISO] Banco nao disponivel — Forge operando sem persistencia.");
+    console.log(
+      "  [AVISO] Banco nao disponivel — Forge operando sem persistencia."
+    );
     console.log("  Os dados de partidas serao processados em memoria apenas.");
     console.log(divider("─") + "\n");
     return status;
@@ -95,7 +102,9 @@ export async function printForgeConnectionStatus(): Promise<ForgeConnectionStatu
 
   try {
     // Total de entradas no banco de aprendizado
-    const [{ value: total }] = await db.select({ value: count() }).from(cardLearning);
+    const [{ value: total }] = await db
+      .select({ value: count() })
+      .from(cardLearning);
     status.totalLearningEntries = Number(total);
 
     // Entradas com origem forge_reality (cartas com peso > 1.0 e histórico de vitórias)
@@ -107,9 +116,10 @@ export async function printForgeConnectionStatus(): Promise<ForgeConnectionStatu
       .from(cardLearning)
       .where(gt(cardLearning.winCount, 0));
     status.forgeRealityEntries = Number(forgeContrib);
-    status.forgeContributionPct = status.totalLearningEntries > 0
-      ? (status.forgeRealityEntries / status.totalLearningEntries) * 100
-      : 0;
+    status.forgeContributionPct =
+      status.totalLearningEntries > 0
+        ? (status.forgeRealityEntries / status.totalLearningEntries) * 100
+        : 0;
 
     // Top 5 cartas com maior histórico de vitórias (proxy de dados Forge)
     const topCards = await db
@@ -133,9 +143,15 @@ export async function printForgeConnectionStatus(): Promise<ForgeConnectionStatu
 
     // Exibir status
     console.log(`  Conexao com banco              : OK`);
-    console.log(`  Total de cartas no banco       : ${status.totalLearningEntries}`);
-    console.log(`  Cartas com historico de partida: ${status.forgeRealityEntries} (${pct(status.forgeRealityEntries, status.totalLearningEntries)})`);
-    console.log(`  Contribuicao Forge no modelo   : ${bar(status.forgeRealityEntries, status.totalLearningEntries)} ${status.forgeContributionPct.toFixed(1)}%`);
+    console.log(
+      `  Total de cartas no banco       : ${status.totalLearningEntries}`
+    );
+    console.log(
+      `  Cartas com historico de partida: ${status.forgeRealityEntries} (${pct(status.forgeRealityEntries, status.totalLearningEntries)})`
+    );
+    console.log(
+      `  Contribuicao Forge no modelo   : ${bar(status.forgeRealityEntries, status.totalLearningEntries)} ${status.forgeContributionPct.toFixed(1)}%`
+    );
 
     if (status.topForgeCards.length > 0) {
       console.log("\n  TOP 5 CARTAS COM MAIS PARTIDAS REGISTRADAS:");
@@ -144,9 +160,9 @@ export async function printForgeConnectionStatus(): Promise<ForgeConnectionStatu
         const total = c.wins + c.losses;
         const wr = total > 0 ? ((c.wins / total) * 100).toFixed(0) : "0";
         console.log(
-          `  ${(i + 1)}. ${c.cardName.padEnd(28)} ` +
-          `peso: ${c.weight.toFixed(2).padStart(6)} | ` +
-          `${c.wins}V/${c.losses}D (${wr}% wr)`
+          `  ${i + 1}. ${c.cardName.padEnd(28)} ` +
+            `peso: ${c.weight.toFixed(2).padStart(6)} | ` +
+            `${c.wins}V/${c.losses}D (${wr}% wr)`
         );
       });
       console.log("  " + divider("·", 50));
@@ -178,11 +194,12 @@ export function printForgeSelfPlayStatus(
   forgeWins: number,
   rulesApplied: number
 ): void {
-  const winrate = totalMatches > 0 ? ((forgeWins / totalMatches) * 100).toFixed(1) : "0.0";
+  const winrate =
+    totalMatches > 0 ? ((forgeWins / totalMatches) * 100).toFixed(1) : "0.0";
   // Usa \n (nova linha) em vez de \r para nao sobrepor a linha do [Queue]
   process.stdout.write(
     `\n  [Forge] it:${iteration} | partidas: ${totalMatches} | ` +
-    `wins: ${forgeWins} (${winrate}%) | partidas com regras MTG: ${rulesApplied}`
+      `wins: ${forgeWins} (${winrate}%) | partidas com regras MTG: ${rulesApplied}`
   );
 }
 
@@ -196,7 +213,8 @@ export function printForgeTrainingComplete(
   totalRulesApplied: number,
   durationMs: number
 ): void {
-  const winrate = totalMatches > 0 ? ((forgeWins / totalMatches) * 100).toFixed(1) : "0.0";
+  const winrate =
+    totalMatches > 0 ? ((forgeWins / totalMatches) * 100).toFixed(1) : "0.0";
   const durSec = (durationMs / 1000).toFixed(1);
 
   console.log("\n" + divider("─"));
@@ -206,7 +224,9 @@ export function printForgeTrainingComplete(
   console.log(`  Vitorias do modelo          : ${forgeWins} (${winrate}%)`);
   console.log(`  Partidas com regras MTG     : ${totalRulesApplied}`);
   console.log(`  Duracao do ciclo            : ${durSec}s`);
-  console.log(`  Dados gravados em           : forge_reality (CardLearningQueue)`);
+  console.log(
+    `  Dados gravados em           : forge_reality (CardLearningQueue)`
+  );
   console.log(divider("─") + "\n");
 }
 
@@ -226,20 +246,32 @@ export function printForgeRulesLearning(): void {
   console.log("    [✓] Limite de 4 copias por carta (exceto terrenos basicos)");
   console.log("    [✓] Minimo de 60 cartas em formatos nao-Commander");
   console.log("    [✓] Exatamente 100 cartas no formato Commander");
-  console.log("    [✓] Legalidade de cartas por formato (Standard, Modern, Legacy)");
+  console.log(
+    "    [✓] Legalidade de cartas por formato (Standard, Modern, Legacy)"
+  );
   console.log("    [✓] Identidade de cor do Comandante (Commander)");
   console.log("");
   console.log("  REGRAS DE PARTIDA SIMULADAS:");
-  console.log("    [✓] Curva de mana — jogabilidade por turno (CMC <= turno atual)");
-  console.log("    [✓] Interacao — remocoes e counterspells reduzem dano recebido");
-  console.log("    [✓] Ameacas — criaturas e finishers causam dano progressivo");
-  console.log("    [✓] Variancia de draws — fator estocastico por turno (0.5-1.5x)");
+  console.log(
+    "    [✓] Curva de mana — jogabilidade por turno (CMC <= turno atual)"
+  );
+  console.log(
+    "    [✓] Interacao — remocoes e counterspells reduzem dano recebido"
+  );
+  console.log(
+    "    [✓] Ameacas — criaturas e finishers causam dano progressivo"
+  );
+  console.log(
+    "    [✓] Variancia de draws — fator estocastico por turno (0.5-1.5x)"
+  );
   console.log("    [✓] Empate — desempate 50/50 apos 20 turnos sem vencedor");
   console.log("");
   console.log("  APRENDIZADO RESULTANTE (forge_reality):");
   console.log("    [✓] Cartas vencedoras recebem +0.05 de peso por partida");
   console.log("    [✓] Cartas perdedoras recebem -0.02 de peso por partida");
   console.log("    [✓] Decay proporcional evita saturacao no teto (50.0)");
-  console.log("    [✓] Pesos persistidos via CardLearningQueue (FIFO, sem race condition)");
+  console.log(
+    "    [✓] Pesos persistidos via CardLearningQueue (FIFO, sem race condition)"
+  );
   console.log(divider("─") + "\n");
 }
