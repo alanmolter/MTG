@@ -23,9 +23,21 @@ on:
         required: false
         default: '50'
         type: string
+      min_complete_pct:
+        description: 'Gate: minimum % of complete decks (60/100 main, side <= 15)'
+        required: false
+        default: ''
+        type: string
 
 env:
   NODE_VERSION: '22.13.0'
+  # Gate threshold: workflow_dispatch input > repo variable > 95.
+  MIN_COMPLETE_DECK_PCT: ${{ github.event.inputs.min_complete_pct || vars.MIN_COMPLETE_DECK_PCT || '95' }}
+  DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+
+concurrency:
+  group: data-pipeline
+  cancel-in-progress: false
 
 jobs:
   data-pipeline:
@@ -34,7 +46,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:14-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD || 'test_password' }}
@@ -60,60 +72,69 @@ jobs:
       - name: 📚 Install dependencies
         run: npm install --legacy-peer-deps
 
+      - name: 🧩 Enable pgvector
+        env:
+          PGPASSWORD: ${{ secrets.DB_PASSWORD || 'test_password' }}
+        run: psql -h localhost -U postgres -d MTG -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+
+      # Called directly: package.json has no "migrate" script, so the old
+      # `npm run migrate --if-present` was a silent no-op.
       - name: 🗄️ Run migrations
-        env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
-        run: npm run migrate --if-present
+        run: npx tsx server/scripts/applyMigration.ts
 
-      - name: ✅ Validate data quality
-        env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
-        run: npm run audit:data-quality --if-present
+      # MTGGoldfish import removed: source dropped (anti-scraper), and the step
+      # was continue-on-error, so it could never fail the run.
 
-      - name: 📥 Import MTGGoldfish
-        env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
-        run: |
-          npm run import:mtggoldfish -- \
-            --format ${{ github.event.inputs.format || 'modern' }} \
-            --limit ${{ github.event.inputs.decks || '50' }} \
-            --if-present
-        continue-on-error: true
-
+      # Fails when the scraper imports zero decks.
       - name: 📥 Import MTGTop8
         env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
+          IMPORT_FORMAT: ${{ github.event.inputs.format || 'modern' }}
+          IMPORT_LIMIT: ${{ github.event.inputs.decks || '50' }}
         run: |
-          npm run import:mtgtop8 -- \
-            --format ${{ github.event.inputs.format || 'modern' }} \
-            --limit ${{ github.event.inputs.decks || '50' }} \
-            --if-present
-        continue-on-error: true
+          npx tsx -e "
+            import('./server/services/mtgtop8Scraper.ts').then(async (m) => {
+              const r = await m.importMTGTop8Decks(process.env.IMPORT_FORMAT, Number(process.env.IMPORT_LIMIT));
+              console.log(JSON.stringify({ imported: r.decksImported, skipped: r.decksSkipped, cards: r.cardsImported, errors: r.errors.length }));
+              if (r.errors.length) console.error(r.errors.slice(0, 10).join('\n'));
+              process.exit(r.decksImported > 0 ? 0 : 1);
+            }).catch((e) => { console.error(e); process.exit(1); });
+          "
 
-      - name: 🧠 Train embeddings
-        env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
-        run: npm run train:embeddings --if-present
-        timeout-minutes: 30
-        continue-on-error: true
+      # Called directly (package.json has no "audit:data-quality" script).
+      # Read-only: no --apply. A crash fails the run.
+      - name: ✅ Validate data quality
+        run: npx tsx server/scripts/sanitizeTrainingData.ts
 
-      - name: 🧠 Train Brain v2
+      - name: 🚦 Gate - complete decks
         env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
-        run: npm run train:brain --if-present
-        timeout-minutes: 30
-        continue-on-error: true
+          PGPASSWORD: ${{ secrets.DB_PASSWORD || 'test_password' }}
+        run: |
+          read -r total complete < <(psql -h localhost -U postgres -d MTG -v ON_ERROR_STOP=1 -At -F ' ' -c "
+            WITH a AS (
+              SELECT deck_id,
+                     COALESCE(SUM(quantity) FILTER (WHERE COALESCE(section,'mainboard')='mainboard'),0) AS m,
+                     COALESCE(SUM(quantity) FILTER (WHERE section='sideboard'),0) AS s
+              FROM competitive_deck_cards GROUP BY deck_id)
+            SELECT COUNT(*),
+                   COUNT(*) FILTER (WHERE NOT COALESCE(d.is_synthetic,false)
+                     AND a.m = CASE WHEN lower(d.format)='commander' THEN 100 ELSE 60 END
+                     AND a.s <= CASE WHEN lower(d.format)='commander' THEN 0 ELSE 15 END)
+            FROM competitive_decks d LEFT JOIN a ON a.deck_id = d.id;")
+          if [ "${total:-0}" -eq 0 ]; then echo "::error::No competitive decks in the database"; exit 1; fi
+          pct=$(awk -v c="$complete" -v t="$total" 'BEGIN { printf "%.1f", 100*c/t }')
+          echo "Complete decks: $complete/$total ($pct%), threshold ${MIN_COMPLETE_DECK_PCT}%"
+          echo "- Complete decks: $complete/$total ($pct%), threshold ${MIN_COMPLETE_DECK_PCT}%" >> "$GITHUB_STEP_SUMMARY"
+          if awk -v p="$pct" -v m="$MIN_COMPLETE_DECK_PCT" 'BEGIN { exit !(p < m) }'; then
+            echo "::error::Complete decks ${pct}% below threshold ${MIN_COMPLETE_DECK_PCT}%"; exit 1
+          fi
 
-      - name: 🎲 Train RL Policy
-        env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
-        run: npm run train:rl --if-present
-        timeout-minutes: 30
-        continue-on-error: true
+      # Training steps removed: train:embeddings, train:brain and train:rl do
+      # not exist in package.json, so with --if-present + continue-on-error they
+      # always passed without doing anything. Real training needs Forge/Java and
+      # a GPU (train:ray*, embed:cards) and runs off CI. Put it back as its own
+      # job, with gates, once there is a runner for it.
 
       - name: 📊 Generate statistics
-        env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.DB_PASSWORD || 'test_password' }}@localhost:5432/MTG
         run: npm run stats:pipeline --if-present
 
       - name: 📋 Create summary
@@ -130,10 +151,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: ignore
           name: pipeline-logs-${{ github.run_id }}
           path: logs/
           retention-days: 7
 
+      # Notifications only: continue-on-error stays so a missing or invalid
+      # SLACK_WEBHOOK can't flip the pipeline result. It hides no data failure.
       - name: 💬 Slack notification
         if: failure()
         uses: slackapi/slack-github-action@v1.24.0
