@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -105,12 +105,29 @@ export default function DeckBuilder() {
   // handleSearch; os resultados derivam direto do cache do React Query, então
   // um refetch em background de uma query stale atualiza a lista.
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const { data: cardSearchData, isFetching: isSearching } =
-    trpc.cards.search.useQuery(
-      { name: submittedQuery },
-      { enabled: !!submittedQuery }
-    );
+  const {
+    data: cardSearchData,
+    isFetching: isSearching,
+    isError: isSearchError,
+    error: searchError,
+    refetch: refetchSearch,
+  } = trpc.cards.search.useQuery(
+    { name: submittedQuery },
+    { enabled: !!submittedQuery }
+  );
   const searchResults: CardRow[] = submittedQuery ? (cardSearchData ?? []) : [];
+  const showNoResults =
+    !!submittedQuery &&
+    !isSearching &&
+    !isSearchError &&
+    cardSearchData !== undefined &&
+    searchResults.length === 0;
+
+  useEffect(() => {
+    if (searchError) {
+      toast.error(`Erro ao buscar cartas: ${searchError.message}`);
+    }
+  }, [searchError]);
 
   // Mutations
   const createDeckMutation = trpc.decks.create.useMutation({
@@ -191,7 +208,10 @@ export default function DeckBuilder() {
 
   const handleSearch = () => {
     const q = searchQuery.trim();
-    if (q) {
+    if (!q) return;
+    if (q === submittedQuery) {
+      void refetchSearch();
+    } else {
       setSubmittedQuery(q);
     }
   };
@@ -391,9 +411,24 @@ export default function DeckBuilder() {
                       onKeyDown={e => e.key === "Enter" && handleSearch()}
                     />
                     <Button onClick={handleSearch} disabled={isSearching}>
-                      Buscar
+                      {isSearching ? "Buscando..." : "Buscar"}
                     </Button>
                   </div>
+                  {isSearching && (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      Buscando cartas...
+                    </p>
+                  )}
+                  {isSearchError && !isSearching && (
+                    <p className="mt-4 text-sm text-destructive">
+                      Erro ao buscar cartas. Tente novamente.
+                    </p>
+                  )}
+                  {showNoResults && (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      Nenhuma carta encontrada
+                    </p>
+                  )}
                   {searchResults.length > 0 && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
                       {searchResults.map(card => (

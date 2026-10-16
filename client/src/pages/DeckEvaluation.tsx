@@ -1,6 +1,6 @@
 // Phase 4 stub: deck evaluation against a fixed opponent panel.
 // Uses mock data until the `deck_evaluations` table and `evaluation.*` tRPC
-// procedures exist (see /workspace/mtg/ui_fase4.md). Not routed yet.
+// procedures exist (see docs/ui_fase4.md). Not routed yet.
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
