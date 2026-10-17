@@ -2,8 +2,8 @@
  * Fill competitive decks that have a header and zero card rows.
  *
  * Decks that already have cards are not in the query, so a re-run does not
- * touch them. Stored raw_json is preferred. When it has no mainboard, goldfish
- * and top8 ids are fetched again. Anything else is skipped and reported.
+ * touch them. Stored raw_json is preferred. Goldfish ids are not fetched.
+ * Top8 ids are fetched again when the stored list has no mainboard.
  */
 import {
   parseDeckExport,
@@ -76,17 +76,12 @@ export interface ReimportOptions {
 
 type CardLine = { cardName: string; quantity: number };
 
-const GOLDFISH = "https://www.mtggoldfish.com";
 const TOP8 = "https://mtgtop8.com";
 
 export function refetchUrls(row: EmptyDeckRow): string[] {
-  const goldfish = /^goldfish-(\d+)$/.exec(row.sourceId);
-  if (goldfish) {
-    const id = goldfish[1];
-    return [
-      `${GOLDFISH}/deck/arena_download/${id}`,
-      `${GOLDFISH}/deck/download/${id}`,
-    ];
+  if (/^goldfish-\d+$/.test(row.sourceId)) {
+    // Goldfish downloads are disabled. Stored raw_json is the only source.
+    return [];
   }
   // MTGTop8 ids come as `top8-e=N&d=N` (current scraper) or bare `e=N&d=N`
   // (March 2026 import). The bare form is only trusted for source=mtgtop8.
