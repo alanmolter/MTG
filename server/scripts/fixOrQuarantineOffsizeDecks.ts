@@ -11,6 +11,8 @@
  * everything else -> quarantine: archive_reason = 'quarantine:offsize_<class>',
  *                    is_training_eligible = false, archived_at stays NULL
  *                    (not archived; the sanitizer keeps rejecting it on size).
+ * within_rule     -> skipped: 61-63 and Yorion 80/81 are eligible (F2 rule);
+ *                    use unquarantineOffsizeDecks.ts for rows quarantined before it.
  * Idempotent: rows already carrying the same reason are not touched.
  */
 import "dotenv/config";
@@ -76,8 +78,8 @@ async function main() {
     const sourceSide = parsed ? parsed.sideboard.reduce((s, c) => s + c.quantity, 0) : null;
     const cls: OffsizeClass = classifyOffsize({ ...base, sourceMain, sourceSide });
     counts[cls] = (counts[cls] ?? 0) + 1;
-    let action = cls === "fixable_reparse" ? "re-save" : "quarantine";
-    if (apply) {
+    let action = cls === "fixable_reparse" ? "re-save" : cls === "within_rule" ? "skip (eligible under F2 rule)" : "quarantine";
+    if (apply && cls !== "within_rule") {
       if (cls === "fixable_reparse" && parsed) {
         if (!resolver) {
           const cat = (await pg.unsafe("SELECT name, oracle_id FROM cards ORDER BY (oracle_id IS NULL), id")) as Array<{ name: string; oracle_id: string | null }>;

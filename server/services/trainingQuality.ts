@@ -29,7 +29,47 @@ export interface TrainingDeckInput {
 export interface TrainingDeckValidation {
   eligible: boolean;
   mainboardCards: number;
+  sideboardCards: number;
+  /** Size class of the mainboard (feature/metadata, see deckSizeClass). */
+  sizeClass: DeckSizeClass;
   reasons: string[];
+}
+
+/**
+ * Mainboard size class (F2 rule, Tech Lead decision 2026-10-16):
+ * - standard60     main == format size (60, or 100 for commander)
+ * - offsize_61_63  real lists a few cards over (60-card formats only)
+ * - yorion_80_81   main 80/81 with Yorion, Sky Nomad in companion or sideboard
+ * - atypical       anything else (64-79, 80/81 without Yorion, 77, 150, < 60...)
+ * Only `atypical` is ineligible on size.
+ */
+export type DeckSizeClass =
+  | "standard60"
+  | "offsize_61_63"
+  | "yorion_80_81"
+  | "atypical";
+
+export const MAX_SIDEBOARD_CARDS = 15;
+
+export function isYorionName(name: string): boolean {
+  return name.trim().toLowerCase().startsWith("yorion");
+}
+
+export function deckSizeClass(
+  format: string,
+  mainboardCards: number,
+  hasYorionCompanionOrSide: boolean
+): DeckSizeClass {
+  const target = format.trim().toLowerCase() === "commander" ? 100 : 60;
+  if (mainboardCards === target) return "standard60";
+  if (target !== 60) return "atypical";
+  if (mainboardCards >= 61 && mainboardCards <= 63) return "offsize_61_63";
+  if (
+    (mainboardCards === 80 || mainboardCards === 81) &&
+    hasYorionCompanionOrSide
+  )
+    return "yorion_80_81";
+  return "atypical";
 }
 
 export interface PromotionMetrics {
@@ -93,6 +133,12 @@ const BASIC_LANDS = new Set([
   "snow-covered wastes",
 ]);
 const MAINBOARD_SECTIONS = new Set(["main", "mainboard", ""]);
+const SIDEBOARD_SECTIONS = new Set(["side", "sideboard"]);
+const COMPANION_SECTIONS = new Set(["companion"]);
+
+function sectionOf(card: TrainingDeckCard): string {
+  return (card.section ?? "mainboard").trim().toLowerCase();
+}
 
 function isMainboard(card: TrainingDeckCard): boolean {
   return MAINBOARD_SECTIONS.has(
@@ -135,9 +181,23 @@ export function validateTrainingDeck(
     reasons.push("unsupported_format");
   }
 
+  const sideCards = input.cards.filter(c => SIDEBOARD_SECTIONS.has(sectionOf(c)));
+  const sideTotal = sideCards.reduce(
+    (sum, card) => sum + Number(card.quantity || 0),
+    0
+  );
+  const hasYorion = input.cards.some(
+    c =>
+      (SIDEBOARD_SECTIONS.has(sectionOf(c)) ||
+        COMPANION_SECTIONS.has(sectionOf(c))) &&
+      isYorionName(c.cardName)
+  );
   const target = format === "commander" ? 100 : 60;
-  if (total !== target)
+  const sizeClass = deckSizeClass(format, total, hasYorion);
+  if (sizeClass === "atypical")
     reasons.push(`mainboard_size_${total}_expected_${target}`);
+  if (sideTotal > MAX_SIDEBOARD_CARDS)
+    reasons.push(`sideboard_size_${sideTotal}_exceeds_${MAX_SIDEBOARD_CARDS}`);
   if (cards.length === 0) reasons.push("missing_mainboard_cards");
 
   const quantities = new Map<string, number>();
@@ -164,7 +224,13 @@ export function validateTrainingDeck(
   );
   if (nonBasics.length < 8) reasons.push("insufficient_nonbasic_diversity");
 
-  return { eligible: reasons.length === 0, mainboardCards: total, reasons };
+  return {
+    eligible: reasons.length === 0,
+    mainboardCards: total,
+    sideboardCards: sideTotal,
+    sizeClass,
+    reasons,
+  };
 }
 
 /** Reject circular / non-evidential synergy writes before they hit Postgres. */

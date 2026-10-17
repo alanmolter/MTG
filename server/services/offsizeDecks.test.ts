@@ -1,15 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { classifyOffsize, OFFSIZE_SQL, QUARANTINE_SQL } from "./offsizeDecks";
+import { classifyOffsize, OFFSIZE_SQL, passesSizeRule, QUARANTINE_SQL, UNQUARANTINE_SQL } from "./offsizeDecks";
 
 const r = (o: Partial<Parameters<typeof classifyOffsize>[0]>) =>
   classifyOffsize({ id: 1, format: "modern", mainQtd: 61, sideQtd: 15, yorionSide: false, ...o });
 
 describe("off-size deck classification", () => {
-  it("real lists matching the source stay real (the 46 seen on the real DB)", () => {
-    expect(r({ mainQtd: 61, sourceMain: 61, sourceSide: 15 })).toBe("real_offsize");
-    expect(r({ mainQtd: 80, yorionSide: true, sourceMain: 80, sourceSide: 15 })).toBe("real_offsize_yorion");
-    expect(r({ mainQtd: 81, yorionSide: true, format: "legacy" })).toBe("real_offsize_yorion");
+  it("F2 rule: 61-63 and Yorion 80/81 are within the rule, never quarantined", () => {
+    expect(r({ mainQtd: 61 })).toBe("within_rule");
+    expect(r({ mainQtd: 63 })).toBe("within_rule");
+    expect(r({ mainQtd: 80, yorionSide: true })).toBe("within_rule");
+    expect(r({ mainQtd: 81, yorionSide: true })).toBe("within_rule");
+    expect(r({ mainQtd: 64 })).toBe("real_offsize");
+    expect(r({ mainQtd: 80 })).toBe("real_offsize");
     expect(r({ mainQtd: 77, yorionSide: true })).toBe("real_offsize");
+    expect(r({ mainQtd: 150 })).toBe("real_offsize_atypical");
+  });
+
+  it("unquarantine only passes the size rule with side <= 15", () => {
+    const b = { format: "modern", sideQtd: 15, yorionSide: false };
+    expect(passesSizeRule({ ...b, mainQtd: 61 })).toBe(true);
+    expect(passesSizeRule({ ...b, mainQtd: 80, yorionSide: true })).toBe(true);
+    expect(passesSizeRule({ ...b, mainQtd: 80 })).toBe(false);
+    expect(passesSizeRule({ ...b, mainQtd: 77, yorionSide: true })).toBe(false);
+    expect(passesSizeRule({ ...b, mainQtd: 150 })).toBe(false);
+    expect(passesSizeRule({ ...b, mainQtd: 61, sideQtd: 16 })).toBe(false);
+    expect(UNQUARANTINE_SQL).not.toMatch(/\bdelete\b|archived_at\s*=/i);
+    expect(UNQUARANTINE_SQL).toContain("archive_reason LIKE 'quarantine:offsize_%'");
+    expect(OFFSIZE_SQL).toContain("'companion'");
+  });
+
+  it("real lists matching the source stay real (fetched source)", () => {
+    expect(r({ mainQtd: 64, sourceMain: 64, sourceSide: 15 })).toBe("real_offsize");
+    expect(r({ mainQtd: 80, yorionSide: true, sourceMain: 80, sourceSide: 15 })).toBe("real_offsize_yorion");
     expect(r({ mainQtd: 150, sourceMain: 150, sourceSide: 15 })).toBe("real_offsize_atypical");
   });
 
