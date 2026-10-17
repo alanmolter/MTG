@@ -298,3 +298,76 @@ COMMIT;
 ```
 
 `created_at` é o `when` da entrada no `drizzle/meta/_journal.json`.
+
+## F2 offsize: regra de tamanho do main, desquarentena e rollback (PR #18)
+
+Sem DDL. A regra vive em `server/services/trainingQuality.ts` (`deckSizeClass`,
+`validateTrainingDeck`), usada pelo `sanitizeTrainingData.ts`:
+
+| Classe (`sizeClass`) | Main | Elegível |
+|---|---|---|
+| `standard60` | 60 (100 em commander) | sim |
+| `offsize_61_63` | 61–63 | sim |
+| `yorion_80_81` | 80/81 com Yorion, Sky Nomad em `companion` ou `sideboard` | sim |
+| `atypical` | resto (64–79, 80/81 sem Yorion, 77, 150, < 60) | não (`mainboard_size_N_expected_60`) |
+
+Side continua ≤ 15 (`sideboard_size_N_exceeds_15`). `competitive_decks` não tem coluna
+jsonb livre, então a classe **não é gravada por deck**: é derivada em código a partir de
+`competitive_deck_cards`, e cada execução grava o histograma em
+`training_runs.gate_report.sizeClasses`. Persistir por deck exigiria uma migração
+(ex.: `size_class text`), fora deste PR. Consulta equivalente, só leitura:
+
+```sql
+WITH a AS (
+  SELECT deck_id,
+    COALESCE(SUM(quantity) FILTER (WHERE COALESCE(section,'mainboard')='mainboard'),0) AS main,
+    COALESCE(bool_or(card_name ILIKE 'Yorion%') FILTER (WHERE section IN ('sideboard','companion')),false) AS yorion
+  FROM competitive_deck_cards GROUP BY deck_id)
+SELECT d.id, CASE
+  WHEN a.main = CASE WHEN lower(d.format)='commander' THEN 100 ELSE 60 END THEN 'standard60'
+  WHEN lower(d.format)<>'commander' AND a.main BETWEEN 61 AND 63 THEN 'offsize_61_63'
+  WHEN lower(d.format)<>'commander' AND a.main IN (80,81) AND a.yorion THEN 'yorion_80_81'
+  ELSE 'atypical' END AS size_class
+FROM competitive_decks d JOIN a ON a.deck_id = d.id;
+```
+
+### Runbook pós-merge
+
+```bash
+# 0. backup (antes de qualquer --apply)
+docker exec mtg-pgvector pg_dump -U postgres -d mtg -Fc -t competitive_decks > backup_competitive_decks_$(date +%Y%m%d_%H%M).dump
+# 1. desquarentena: dry-run, conferir 44 "release" (26 offsize_61_63 + 18 yorion_80_81) e 2 "keep" (77 e 150)
+npx tsx server/scripts/unquarantineOffsizeDecks.ts
+npx tsx server/scripts/unquarantineOffsizeDecks.ts --apply   # grava reports/unquarantine-<ts>.jsonl
+# 2. sanitizador
+npx tsx server/scripts/sanitizeTrainingData.ts --no-record   # dry-run puro
+npx tsx server/scripts/sanitizeTrainingData.ts --apply       # grava reports/sanitize-<ts>.jsonl
+# 3. verificação
+SELECT count(*) FILTER (WHERE is_training_eligible) FROM competitive_decks;
+SELECT archive_reason, count(*) FROM competitive_decks WHERE archive_reason LIKE 'quarantine:offsize_%' GROUP BY 1;  -- só o 77 e o 150
+```
+
+O sanitizador (sem `--no-record`) insere uma linha em `training_runs` mesmo sem `--apply`;
+use `--no-record` para auditoria que não grava nada.
+
+### Rollback
+
+Os dois `--apply` gravam jsonl com o valor anterior de cada linha alterada:
+`unquarantine-*.jsonl` (`deck_id`, `old_archive_reason`, `old_is_training_eligible`,
+`old_training_rejection_reason`) e `sanitize-*.jsonl` (`deck_id`,
+`old_is_training_eligible`, `old_training_rejection_reason`,
+`old_training_quality_checked_at`; só linhas que mudaram). Restaurar na ordem inversa:
+
+```bash
+# gera SQL a partir dos relatórios (sanitize primeiro, depois unquarantine)
+jq -r '"UPDATE competitive_decks SET is_training_eligible=\(.old_is_training_eligible), training_rejection_reason=\(if .old_training_rejection_reason then "\u0027\(.old_training_rejection_reason|gsub("\u0027";"\u0027\u0027"))\u0027" else "NULL" end) WHERE id=\(.deck_id);"' reports/sanitize-<ts>.jsonl > rollback.sql
+jq -r 'select(.action=="released") | "UPDATE competitive_decks SET archive_reason=\u0027\(.old_archive_reason)\u0027 WHERE id=\(.deck_id) AND archive_reason IS NULL;"' reports/unquarantine-<ts>.jsonl >> rollback.sql
+docker exec -i mtg-pgvector psql -U postgres -d mtg -v ON_ERROR_STOP=1 -1 < rollback.sql
+```
+
+Sem relatório, restaure do backup: `pg_restore --data-only` da tabela num banco
+temporário e copie `is_training_eligible`, `training_rejection_reason` e
+`archive_reason` por `id`. A quarentena do estágio 1 gravou `is_training_eligible=false`
+sem guardar o valor anterior; pela regra antiga (main exatamente 60) esses 46 decks já
+eram rejeitados por tamanho, então o valor anterior efetivo era `false`. A partir daqui
+os relatórios jsonl do `--apply` são a fonte autoritativa.

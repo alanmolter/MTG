@@ -129,3 +129,4 @@ bc_smoke/
 
 # Claude Code workspace
 .claude/
+reports/
