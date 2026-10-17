@@ -17,8 +17,8 @@
 - Node.js 22.13.0 (pinned in CI workflows)
 
 **Package Manager:**
-- pnpm 10.4.1 (pinned via `packageManager` field in `package.json`)
-- Lockfile: `pnpm-lock.yaml` (present)
+- npm (CI installs with `npm install --legacy-peer-deps`)
+- Lockfile: `package-lock.json`
 
 ## Frameworks
 
@@ -28,7 +28,7 @@
 - tRPC 11.6.0 - Type-safe API layer between client and server (`server/routers.ts`, `server/_core/trpc.ts`)
 
 **Routing:**
-- wouter 3.3.5 - Client-side routing (`client/src/`) with a patched version at `patches/wouter@3.7.1.patch`
+- wouter 3.3.5 - Client-side routing (`client/src/`)
 
 **State Management:**
 - TanStack Query (React Query) 5.90.2 - Server state/cache (`@tanstack/react-query`)
@@ -111,7 +111,7 @@
 
 **Development:**
 - Node.js 22.13.0
-- pnpm 10.4.1
+- npm
 - PostgreSQL 14+ (local or remote)
 - Python 3.x + PyTorch for ML training scripts only
 

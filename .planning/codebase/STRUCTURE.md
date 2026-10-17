@@ -43,7 +43,7 @@ mtg-deck-mvp/
 ├── dist/                     # Build output (gitignored)
 │   └── public/               # Vite-built client assets
 ├── data/                     # Static data files (model_baseline.json)
-├── patches/                  # pnpm patches (wouter)
+├── patches/                  # historical wouter patch (not applied by npm)
 ├── .planning/                # GSD planning artifacts
 │   └── codebase/             # Codebase analysis documents
 ├── .manus-logs/              # Browser debug logs (dev only, gitignored)
@@ -53,7 +53,7 @@ mtg-deck-mvp/
 ├── vite.config.ts            # Vite config (root = client/, alias @, @shared, @assets)
 ├── vitest.config.ts          # Vitest unit test config
 ├── drizzle.config.ts         # Drizzle Kit config
-└── pnpm-lock.yaml            # Lockfile
+└── package-lock.json         # Lockfile
 ```
 
 ## Directory Purposes
@@ -214,7 +214,7 @@ mtg-deck-mvp/
 **New database table:**
 - Add table definition to `drizzle/schema.ts`
 - Export inferred types (`$inferSelect`, `$inferInsert`)
-- Run `pnpm db:push` to generate and apply migration
+- Run `npm run db:push` to generate and apply migration
 - Types automatically available via `shared/types.ts`
 
 **New page/route:**

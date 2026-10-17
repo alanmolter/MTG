@@ -1303,7 +1303,7 @@ def build_document(output_path: Path) -> None:
         doc,
         "Faz a instalação completa: cria o ambiente Python .venv, instala "
         "todas as bibliotecas Python do requirements.txt, instala as "
-        "dependências Node via pnpm/npm, gera o .env a partir do "
+        "dependências Node via npm, gera o .env a partir do "
         ".env.example, compila a ponte Java rlbridge. Só precisa rodar "
         "uma vez (ou depois de um pull grande).",
     )
