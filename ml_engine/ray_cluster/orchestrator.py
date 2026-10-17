@@ -721,7 +721,7 @@ def run(
         algorithm = load_bc_anchored_impala()
         print(
             "[orchestrator] IMPALA loss includes KL(current || BC) "
-            f"coeff={bc_kl_coeff} for {bc_kl_iters} updates",
+            f"coeff={bc_kl_coeff} for {bc_kl_iters} training iterations",
             file=sys.stderr,
         )
     analysis = tune.run(algorithm, **tune_kwargs)
@@ -905,14 +905,15 @@ def main():
         "--bc-kl-coeff",
         type=float,
         default=0.0,
-        help="KL(current || BC) weight added to the IMPALA loss for the first "
-             "--bc-kl-iters updates, then linearly decayed to 0. Requires --bc-checkpoint.",
+        help="KL(current || BC) weight for the first --bc-kl-iters training "
+             "iterations, then linearly decayed to 0. Counts Tune training "
+             "iterations, not gradient updates. Requires --bc-checkpoint.",
     )
     p.add_argument(
         "--bc-kl-iters",
         type=int,
         default=0,
-        help="iterations that keep the BC KL term; it then drops to 0",
+        help="training iterations that keep the BC KL term; it then drops to 0",
     )
     p.add_argument(
         "--archetypes",

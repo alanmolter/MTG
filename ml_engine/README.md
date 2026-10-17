@@ -88,7 +88,11 @@ python -m ml_engine.ray_cluster.orchestrator --bc-checkpoint bc_smoke/bc.pt --bc
 ```
 
 The KL term is `KL(current || BC)` on the legal mask and decays to 0 after
-`--bc-kl-iters`. IMPALA's `entropy_coeff` stays on. The smoke checkpoint
+`--bc-kl-iters` training iterations. IMPALA's learner thread usually steps
+a batch on the training iteration after the one that collected it, and Tune
+reports `training_iteration` after `step()` returns, so a logged iteration
+`k` was optimized with schedule index `k - 1`. Gradient updates inside one
+iteration share that coefficient. IMPALA's `entropy_coeff` stays on. The smoke checkpoint
 uses a small GNN so the preflight can finish; a checkpoint that initializes
 the training model has to be saved from the default `GNNConfig`. Holdout
 eval reports action accuracy. Win rate versus Forge AI is not measured:

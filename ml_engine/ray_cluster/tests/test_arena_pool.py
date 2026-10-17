@@ -221,7 +221,7 @@ def test_query_arena_pool_returns_empty_when_psycopg2_missing(monkeypatch):
             raise ImportError("simulated missing psycopg2")
         return real_import(name, *args, **kwargs)
 
-    os.environ["DATABASE_URL"] = "postgres://fake/db"
+    monkeypatch.setenv("DATABASE_URL", "postgres://fake/db")
     monkeypatch.setattr(builtins, "__import__", fake_import)
     rows = arena_pool._query_arena_pool("R")
     assert rows == ()
@@ -235,7 +235,7 @@ def test_query_arena_pool_returns_empty_on_connect_failure(monkeypatch):
     def boom(*args, **kwargs):
         raise psycopg2.OperationalError("simulated connection failure")
 
-    os.environ["DATABASE_URL"] = "postgres://nope/db"
+    monkeypatch.setenv("DATABASE_URL", "postgres://nope/db")
     monkeypatch.setattr(psycopg2, "connect", boom)
     rows = arena_pool._query_arena_pool("R")
     assert rows == ()

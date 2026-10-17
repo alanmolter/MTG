@@ -570,3 +570,16 @@ The script removes the stopped container and starts the current service. If
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e-preflight.ps1
 python -m ml_engine.ray_cluster.orchestrator --bc-checkpoint <path-to-bc.pt> --bc-kl-coeff 0.5 --bc-kl-iters 50
 ```
+
+The preflight `matches` stage fails when `forge_matches_dropped > 0` or
+when `forge_matches_written` is not the number of episodes it enqueued.
+
+`--bc-kl-iters` counts Tune training iterations. IMPALA applies the loss one
+training iteration after the samples were collected: the learner thread
+steps a batch on a later `training_step`, and the result's
+`training_iteration` is incremented only after that step returns. A row
+that says `training_iteration=k` used schedule index `k - 1`. Several
+gradient updates inside one step share the same coefficient. Learner stats
+include `bc_kl_iter` and `bc_kl_coeff` (the weight actually added). A
+missing stamp after the first iteration is logged; the coefficient would
+otherwise stay at full weight with no signal.

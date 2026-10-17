@@ -593,6 +593,11 @@ class MtgForgeEnv(gym.Env):
 
     def close(self):
         self._kill_subprocess()
+        try:
+            from ml_engine.ray_cluster.match_record import flush_match_writer
+            flush_match_writer()
+        except Exception:
+            logger.exception("forge_matches flush failed")
 
     def _begin_episode_tracking(self, seed: int) -> None:
         self._episode_seed = int(seed)
@@ -627,6 +632,8 @@ class MtgForgeEnv(gym.Env):
             turn_number = max(1, int(turn or 1))
         except (TypeError, ValueError):
             turn_number = 1
+        from ml_engine.ray_cluster.match_record import match_record_counters
+
         metrics: Dict[str, Any] = {
             "win": None if win is None else float(win),
             "truncated": 1.0 if truncated else 0.0,
@@ -639,6 +646,7 @@ class MtgForgeEnv(gym.Env):
             "opponent_deck_id": self._opponent_deck_id,
             "agent_deck_sha256": self._agent_deck_sha256,
             "opponent_deck_sha256": self._opponent_deck_sha256,
+            **match_record_counters(),
         }
         if infra_error:
             metrics["infra_error"] = infra_error
@@ -646,7 +654,8 @@ class MtgForgeEnv(gym.Env):
             "episode_end win=%s truncated=%s steps=%s passes=%s "
             "lands_played_per_turn=%.4f steps_per_sec=%.3f seed=%s "
             "agent_deck_id=%s opponent_deck_id=%s "
-            "agent_deck_sha256=%s opponent_deck_sha256=%s infra_error=%s",
+            "agent_deck_sha256=%s opponent_deck_sha256=%s infra_error=%s "
+            "forge_matches_enqueued=%s forge_matches_written=%s forge_matches_dropped=%s",
             metrics["win"],
             int(truncated),
             steps,
@@ -659,6 +668,9 @@ class MtgForgeEnv(gym.Env):
             metrics["agent_deck_sha256"],
             metrics["opponent_deck_sha256"],
             infra_error or "",
+            metrics["forge_matches_enqueued"],
+            metrics["forge_matches_written"],
+            metrics["forge_matches_dropped"],
         )
         return metrics
 

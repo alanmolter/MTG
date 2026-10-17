@@ -26,6 +26,9 @@ NUMERIC_EPISODE_METRICS: Tuple[str, ...] = (
     "passes",
     "lands_played_per_turn",
     "steps_per_sec",
+    "forge_matches_enqueued",
+    "forge_matches_written",
+    "forge_matches_dropped",
 )
 
 
