@@ -77,13 +77,19 @@ export class CardNameResolver {
   constructor(catalog: Iterable<CatalogCard>) {
     for (const card of Array.from(catalog)) {
       for (const key of catalogKeys(card.name)) {
-        if (!this.exact.has(key)) this.exact.set(key, card);
+        // Several printings share a name and only some carry oracle_id:
+        // keep the first one with an oracle_id.
+        const prevExact = this.exact.get(key);
+        if (!prevExact || (!prevExact.oracleId && card.oracleId)) this.exact.set(key, card);
         const plainKey = unaccent(key);
-        if (!this.plain.has(plainKey)) {
+        const prevPlain = this.plain.get(plainKey);
+        if (!prevPlain) {
           this.plain.set(plainKey, card);
           const list = this.byLength.get(plainKey.length) ?? [];
           list.push(plainKey);
           this.byLength.set(plainKey.length, list);
+        } else if (!prevPlain.oracleId && card.oracleId) {
+          this.plain.set(plainKey, card);
         }
       }
     }

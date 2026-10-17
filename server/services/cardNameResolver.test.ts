@@ -39,3 +39,23 @@ describe("card name resolution", () => {
     expect(r.canonicalName("  Totally Made Up ")).toBe("Totally Made Up");
   });
 });
+
+describe("printings without oracle_id", () => {
+  it("prefers the Abrupt Decay printing that has an oracle_id, whatever the order", () => {
+    const noOracle = Array.from({ length: 8 }, () => ({ name: "Abrupt Decay", oracleId: null }));
+    const withOracle = { name: "Abrupt Decay", oracleId: "decay-oracle" };
+    for (const catalog of [[...noOracle, withOracle], [withOracle, ...noOracle], [noOracle[0], withOracle, ...noOracle.slice(1)]]) {
+      const r = new CardNameResolver(catalog);
+      expect(r.resolve("Abrupt Decay")).toMatchObject({ method: "exact", oracleId: "decay-oracle" });
+      expect(r.resolve("abrupt decay")?.oracleId).toBe("decay-oracle");
+    }
+  });
+
+  it("applies the same preference to accent-insensitive matches", () => {
+    const r = new CardNameResolver([
+      { name: "Lórien Revealed", oracleId: null },
+      { name: "Lórien Revealed", oracleId: "lorien-oracle" },
+    ]);
+    expect(r.resolve("Lorien Revealed")).toMatchObject({ method: "unaccent", oracleId: "lorien-oracle" });
+  });
+});
