@@ -81,13 +81,17 @@ async function main() {
   const near = assignHoldoutNear(decks, grouping.clusterOf, res.split);
   const holdCtlFormats = Array.from(new Set(decks.filter((d, i) => res.split[i] === "holdout" && d.macro === "control").map(d => d.format))).sort();
   const caveats: string[] = [];
+  const holdCtlByFormat = holdCtlFormats.map(f => `${f} ${decks.filter((d, i) => res.split[i] === "holdout" && d.macro === "control" && d.format === f).length}`).join(", ");
   if (promo.holdoutControlAfter < HOLDOUT_CONTROL_TARGET)
     caveats.push(
-      `control no holdout: ${promo.holdoutControlAfter} decks (formatos: ${holdCtlFormats.join(", ") || "nenhum"})` +
-      `${promo.moved ? `, depois de mover o grupo ${promo.moved.group_id} (${promo.moved.format}, ${promo.moved.decks} decks, ${promo.moved.control} control) do treino` : ", nenhum grupo pequeno de control pôde ser movido sem violar o agrupamento ou os mínimos"}. ` +
-      `Os grupos gigantes de Modern (arquétipo + quase-duplicatas) prendem quase todo o control no treino; o win rate de control no holdout não é confiável.`);
-  else if (promo.moved)
-    caveats.push(`control no holdout: ${promo.holdoutControlBefore} -> ${promo.holdoutControlAfter} decks, movendo o grupo inteiro ${promo.moved.group_id} (${promo.moved.format}, ${promo.moved.decks} decks) do treino; o agrupamento foi mantido. Ainda é uma amostra pequena (formatos: ${holdCtlFormats.join(", ")}); trate o win rate de control no holdout com cautela.`);
+      `control no holdout: ${promo.holdoutControlAfter} decks (${holdCtlByFormat || "nenhum formato"}; na geração anterior eram 4)` +
+      `${promo.moved ? `, depois de mover o grupo inteiro ${promo.moved.group_id} (${promo.moved.format}, ${promo.moved.decks} decks) do treino` : "; nenhum grupo pequeno de control pôde ser movido sem violar o agrupamento ou os mínimos"}. ` +
+      `Os grupos gigantes de Modern (arquétipo + quase-duplicatas) prendem o control de Modern no treino; o win rate de control no holdout não é confiável.`);
+  else
+    caveats.push(
+      `control no holdout: ${promo.holdoutControlAfter} decks (${holdCtlByFormat}; na geração anterior eram 4)` +
+      `${promo.moved ? `, depois de mover o grupo inteiro ${promo.moved.group_id} (${promo.moved.format}, ${promo.moved.decks} decks) do treino sem quebrar o agrupamento` : ", sem mover grupos"}. ` +
+      `Nenhum control de Modern no holdout: os grupos gigantes de Modern (arquétipo + quase-duplicatas) ficam inteiros no treino. Amostra pequena; trate o win rate de control no holdout com cautela.`);
 
   const sets = buildCardSets(decks);
   const setsJson = JSON.stringify(sets);
