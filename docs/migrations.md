@@ -286,6 +286,19 @@ COMMIT;
 
 `created_at` é o `when` da entrada no `drizzle/meta/_journal.json`.
 
+## Rollback: 20261017002547_pool_memberships
+
+Tabela nova, sem dependentes. A fonte da verdade é `data/pools/v3/manifest.json`; a tabela pode ser repopulada a qualquer momento com `server/scripts/populatePoolMemberships.ts --apply`. Rodar à mão, numa transação, depois de `pg_dump`:
+
+```sql
+BEGIN;
+DROP TABLE IF EXISTS pool_memberships;  -- leva junto PK, CHECK, FK e índice
+DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1792196747750;
+COMMIT;
+```
+
+`created_at` é o `when` da entrada no `drizzle/meta/_journal.json`.
+
 ## F2 offsize: regra de tamanho do main, desquarentena e rollback (PR #18)
 
 Sem DDL. A regra vive em `server/services/trainingQuality.ts` (`deckSizeClass`,
