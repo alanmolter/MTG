@@ -774,7 +774,9 @@ public final class ExternalPlayerController extends PlayerControllerAi {
         if (name.length() > 160) name = name.substring(0, 160);
         List<ProtocolV2.Option> options = new ArrayList<>();
         options.add(new ProtocolV2.Option(5, source, -1, "trigger " + name));
-        int slot = ask("play_trigger", options, true, -1);
+        // Slot 1 is "play it". Probing doTrigger for the hint would choose
+        // targets on this controller, which is the path this method replaces.
+        int slot = ask("play_trigger", options, true, 1);
         return slot > 0;
     }
 

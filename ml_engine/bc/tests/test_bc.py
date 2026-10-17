@@ -255,7 +255,10 @@ def test_db_pool_manifest_excludes_holdout_near():
     ]}
     blocked = db_pool_excluded_deck_ids(manifest)
     assert blocked == {"2", "3", "4"}
-    rows = [{"split": "train", "deck_id": str(i)} for i in (1, 2, 3, 4)]
+    rows = [
+        {"split": "train", "deck_id": str(i), "protocol": 2, "label_version": 2}
+        for i in (1, 2, 3, 4)
+    ]
     kept, excluded = training_rows(rows, blocked)
     assert [r["deck_id"] for r in kept] == ["1"] and excluded == 3
 
