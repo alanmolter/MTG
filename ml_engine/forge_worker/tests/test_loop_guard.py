@@ -135,6 +135,16 @@ class TestLoopGuard:
                 break
         assert loop_detected
 
+    def test_mulligan_sequence_is_not_a_loop(self):
+        guard = LoopGuard(LoopGuardConfig(loop_threshold=3))
+        for kind in ("mulligan", "choose_cards", "choose_cards", "declare_attackers"):
+            state = _state(turn=0)
+            state["decision_kind"] = kind
+            guard.record_action({"type": "action", "card_id": 1})
+            looped, _ = guard.observe(state)
+            assert not looped
+        assert not guard.is_flagged()
+
     def test_flag_set_only_once(self):
         guard = LoopGuard(LoopGuardConfig(loop_threshold=2))
         s = _state()

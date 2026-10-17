@@ -97,6 +97,64 @@ jobs:
       - name: 🧪 Java rlbridge protocol tests
         run: bash rlbridge_src/test-protocol.sh
 
+  # Compiles the bridge against Forge 7cc4ff7b and plays a short live match.
+  forge-live:
+    name: ☕ Forge live smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: 📦 Maven
+        run: |
+          if ! command -v mvn >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y maven
+          fi
+          mvn -version
+
+      - name: 📥 Checkout Forge 7cc4ff7b
+        uses: actions/checkout@v4
+        with:
+          repository: Card-Forge/forge
+          ref: 7cc4ff7b17365c7e882cb472537c5ccdda0dbde0
+          path: forge-src
+
+      - name: 🏗️ Build forge-gui-desktop
+        working-directory: forge-src
+        run: mvn -pl forge-gui-desktop -am package -DskipTests
+
+      - name: 🏗️ Compile rlbridge
+        run: |
+          JAR=forge-src/forge-gui-desktop/target/forge-gui-desktop-2.0.12-SNAPSHOT-jar-with-dependencies.jar
+          mkdir -p /tmp/rlbridge-classes
+          javac --release 17 -cp "$JAR" -d /tmp/rlbridge-classes \
+            rlbridge_src/src/main/java/forge/rlbridge/ProtocolV2.java \
+            rlbridge_src/src/main/java/forge/rlbridge/DecisionHandoff.java \
+            rlbridge_src/src/main/java/forge/rlbridge/ExternalPlayerController.java \
+            rlbridge_src/src/main/java/forge/rlbridge/ForgeRLBridge.java
+          jar cf /tmp/rlbridge.jar -C /tmp/rlbridge-classes .
+
+      - name: 🐍 Live smoke
+        env:
+          FORGE_MATCH_RECORD: "0"
+          FORGE_JAR: forge-src/forge-gui-desktop/target/forge-gui-desktop-2.0.12-SNAPSHOT-jar-with-dependencies.jar
+          FORGE_BRIDGE_JAR: /tmp/rlbridge.jar
+          FORGE_ASSETS_DIR: forge-src/forge-gui
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy gymnasium
+          python ml_engine/scripts/live_smoke.py --episodes 1 --resets 3 --bc-games 1 --turn-limit 12
+
   # ============================================================================
   # JOB 2: BUILD E ANÁLISE
   # ============================================================================
@@ -180,7 +238,7 @@ jobs:
   report:
     name: 📋 Relatório Final
     runs-on: ubuntu-latest
-    needs: [validate-and-test, build-and-analyze, ml-engine]
+    needs: [validate-and-test, build-and-analyze, ml-engine, forge-live]
     if: always()
 
     steps:
@@ -194,6 +252,7 @@ jobs:
           echo "## Status" >> $GITHUB_STEP_SUMMARY
           echo "- Validation: ${{ needs.validate-and-test.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- ml_engine: ${{ needs.ml-engine.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- forge-live: ${{ needs.forge-live.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build: ${{ needs.build-and-analyze.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Commit Info" >> $GITHUB_STEP_SUMMARY

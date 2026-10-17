@@ -273,3 +273,56 @@ def test_committed_pool_v3_manifest_blocks_holdout_near():
         if deck.get("holdout_near"):
             assert deck.get("exclude_from_train") is True
             assert str(deck["deck_id"]) in blocked
+
+
+def test_record_match_executes_the_ai_slot_for_attacks():
+    from ml_engine.bc.record import record_match
+
+    calls = []
+    attack = {
+        "terminal": False,
+        "outcome": None,
+        "illegal_action": False,
+        "policy_controlled": True,
+        "policy_action_applied": None,
+        "decision_id": 4,
+        "decision_kind": "declare_attackers",
+        "chosen_action": 3,
+        "turn": 3,
+        "life_you": 20,
+        "life_opp": 20,
+        "hand_you_size": 5,
+        "hand_opp_size": 7,
+        "power_you": 2,
+        "power_opp": 0,
+        "mana_value_played": 0,
+        "you": {"life": 20, "mana_pool_total": 0, "hand_size": 5, "library_size": 40,
+                "graveyard_size": 0, "exile_size": 0, "is_active": True, "max_life_seen": 20},
+        "opp": {"life": 20, "mana_pool_total": 0, "hand_size": 7, "library_size": 40,
+                "graveyard_size": 0, "exile_size": 0, "is_active": False, "max_life_seen": 20},
+        "cards": [{"mana_value": 2, "power": 2, "toughness": 2, "is_creature": True,
+                   "controller": "you", "zone": "battlefield", "name": "Bear"}],
+        "action_mask": [1, 0, 0, 1] + [0] * 508,
+        "action_source_indices": [-1, -1, -1, 0] + [-1] * 508,
+        "action_target_indices": [-1, -1, -1, -3] + [-1] * 508,
+        "action_kinds": [0, 0, 0, 2] + [0] * 508,
+    }
+    done = dict(attack)
+    done.update(terminal=True, outcome=1, decision_kind="none", chosen_action=-1,
+                policy_action_applied=True, action_mask=[0] * 512)
+
+    class Bridge:
+        def command(self, payload):
+            calls.append(dict(payload))
+            return attack if payload["cmd"] == "new_game" else done
+
+    rows, _seen = record_match(
+        Bridge(), agent_deck="1 Bear", opponent_deck="1 Forest", seed=1,
+        deck_id="a", opponent_id="b", split="train",
+    )
+    assert calls[0]["agent_policy"] == "external"
+    assert calls[1]["action"] == 3
+    assert calls[1]["decision_id"] == 4
+    assert rows[0]["decision_kind"] == "declare_attackers"
+    assert rows[0]["action"] == 3
+    assert rows[0]["label_version"] == 2

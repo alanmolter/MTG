@@ -8,10 +8,12 @@ set ``POLICY_CONTROL_EPISODES=200`` for the documented run.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import math
 import os
 import time
+from pathlib import Path
 from typing import Any, Mapping
 
 
@@ -349,3 +351,197 @@ def format_lines(results: Mapping[str, Mapping[str, Any]]) -> list[str]:
 
 def smoke_episode_count() -> int:
     return int(os.environ.get("POLICY_CONTROL_EPISODES", "2"))
+
+
+def _bundled_deck(name: str) -> str:
+    path = Path(__file__).resolve().parents[1] / "ray_cluster" / "data" / "deck_pool" / "v1" / "decks" / name
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    return "20 Grizzly Bears\n40 Forest\n"
+
+
+def evaluate_live(
+    *,
+    forge_jar: str,
+    bridge_jar: str,
+    assets_dir: str | None = None,
+    java_bin: str = "java",
+    episodes: int = 2,
+    illegal: int = 5,
+    turn_limit: int = 30,
+) -> dict[str, dict]:
+    """Play real Forge matches. The in-process mock is not used."""
+
+    import random
+
+    os.environ["FORGE_MATCH_RECORD"] = "0"
+    from ml_engine.ray_cluster.env import MtgForgeEnv
+
+    agent = _bundled_deck("q05_mono_red_aggro.txt")
+    opponent = _bundled_deck("q05_mono_green_stompy.txt")
+    env = MtgForgeEnv({
+        "forge_jar": forge_jar,
+        "bridge_jar": bridge_jar,
+        "forge_assets_dir": assets_dir,
+        "java_bin": java_bin,
+        "agent_deck": agent,
+        "opponent_deck": opponent,
+        "turn_limit": turn_limit,
+        "agent_policy": "external",
+        "require_policy_control": True,
+        "strict_protocol": True,
+        "seed_python_rngs": False,
+    })
+    rng = random.Random(0)
+    reset_ok = 0
+    reset_fail = 0
+    lost = 0
+    applied = 0
+    attempts = 0
+    rejected_legal = 0
+    fallback = 0
+    policy_decisions = 0
+    by_kind: dict[str, int] = {}
+    timeouts = 0
+    early = 0
+    illegal_held = 0
+    illegal_left = illegal
+    wins_random = 0
+    finished = 0
+    protocol_ok = 0
+    stale_replies = 0
+    stale_decisions = 0
+    t0 = time.perf_counter()
+    try:
+        for episode in range(episodes):
+            try:
+                _obs, info = env.reset(seed=1000 + episode)
+            except Exception:
+                reset_fail += 1
+                env.close()
+                continue
+            state = info.get("state") or {}
+            leaked = bool(state.get("terminal")) and not bool(state.get("policy_controlled"))
+            if leaked or not state.get("policy_controlled"):
+                reset_fail += 1
+                lost += 1
+                continue
+            reset_ok += 1
+            if state.get("protocol") == 2:
+                protocol_ok += 1
+            done = False
+            injected_here = False
+            while not done:
+                mask = state.get("action_mask") or []
+                if (illegal_left > 0 and not injected_here
+                        and state.get("decision_id") is not None and not state.get("terminal")):
+                    injected_here = True
+                    illegal_left -= 1
+                    before_id = state.get("decision_id")
+                    before_hash = state.get("state_hash")
+                    _obs, _r, term, trunc, inf = env.step(509)
+                    nxt = inf.get("state") or {}
+                    if (nxt.get("decision_id") == before_id
+                            and nxt.get("state_hash") == before_hash
+                            and nxt.get("policy_action_applied") is False):
+                        illegal_held += 1
+                    state = nxt
+                    done = bool(term or trunc or inf.get("error"))
+                    if inf.get("error"):
+                        lost += 1
+                    continue
+                legal = [i for i, bit in enumerate(mask) if bit == 1]
+                action = rng.choice(legal) if legal else 0
+                attempts += 1
+                _obs, _r, term, trunc, inf = env.step(action)
+                state = inf.get("state") or {}
+                if inf.get("error"):
+                    if "policy_control" in str(inf.get("error")):
+                        lost += 1
+                    if "timeout" in str(inf.get("error")):
+                        timeouts += 1
+                    break
+                if state.get("policy_action_applied") is True:
+                    applied += 1
+                elif state.get("policy_action_applied") is False and not state.get("illegal_action"):
+                    rejected_legal += 1
+                if state.get("truncation_reason") == "step_timeout":
+                    timeouts += 1
+                done = bool(term or trunc)
+            fallback += int(state.get("ai_fallback_decisions") or 0)
+            policy_decisions += int(state.get("policy_decisions") or 0)
+            for kind, count in (state.get("ai_fallback_by_kind") or {}).items():
+                by_kind[str(kind)] = by_kind.get(str(kind), 0) + int(count)
+            if state.get("_loop_detected") or (
+                state.get("terminal") and int(state.get("turn") or 0) == 0 and state.get("outcome") == -1
+            ):
+                early += 1
+            if state.get("outcome") == 1:
+                wins_random += 1
+            finished += 1
+        stale_replies = int(getattr(env, "stale_replies_discarded", 0))
+        stale_decisions = int(getattr(env, "stale_decisions", 0))
+    finally:
+        env.close()
+    elapsed = max(1e-6, time.perf_counter() - t0)
+    decisions = max(1, policy_decisions + fallback)
+    rate = (policy_decisions + fallback) / elapsed
+    fallback_rate = fallback / decisions
+    applied_rate = (applied / attempts) if attempts else 0.0
+    rejected_rate = (rejected_legal / attempts) if attempts else 0.0
+    return {
+        "A1": {"ok": protocol_ok == episodes and reset_fail == 0, "protocol_ok": protocol_ok, "episodes": episodes},
+        "A2": {"ok": lost == 0 and reset_fail == 0, "policy_control_lost": lost, "reset_fail": reset_fail,
+               "reset_ok": reset_ok, "early_loss": early},
+        "A4": {"ok": attempts > 0 and applied_rate >= 0.995, "applied": applied, "attempts": attempts},
+        "A5": {"ok": illegal_held == illegal, "held": illegal_held, "injected": illegal},
+        "A6": {"ok": attempts > 0 and rejected_rate <= 0.005, "rejected_legal": rejected_legal},
+        "A7": {"ok": fallback_rate < 0.05, "fallback": fallback, "policy_decisions": policy_decisions,
+               "fallback_rate": fallback_rate, "by_kind": by_kind},
+        "A8": {"ok": stale_replies == 0 and stale_decisions == 0,
+               "stale_replies_discarded": stale_replies, "STALE_DECISION": stale_decisions},
+        "A9": {"ok": episodes == 0 or timeouts / episodes < 0.01, "timeouts": timeouts},
+        "A10": {"ok": finished >= 20 and (wins_random / finished) > 0.0,
+                "legal_random_wins": wins_random, "finished": finished,
+                "note": "always-pass comparison is the Windows 200-episode job"},
+        "A12": {"ok": rate >= 5.0, "decisions_per_s": rate, "early_loss": early, "reset_ok": reset_ok},
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Phase 1 policy-control acceptance")
+    parser.add_argument("--live", action="store_true", help="play real Forge matches instead of ScriptedV2")
+    parser.add_argument("--episodes", type=int, default=None)
+    parser.add_argument("--forge-jar", default=os.environ.get("FORGE_JAR", ""))
+    parser.add_argument("--bridge-jar", default=os.environ.get("FORGE_BRIDGE_JAR", ""))
+    parser.add_argument("--assets-dir", default=os.environ.get("FORGE_ASSETS_DIR"))
+    parser.add_argument("--java-bin", default=os.environ.get("JAVA_BIN", "java"))
+    args = parser.parse_args(argv)
+    if args.live:
+        if not args.forge_jar or not args.bridge_jar:
+            print("A2: FAIL live mode needs --forge-jar and --bridge-jar")
+            return 1
+        episodes = args.episodes if args.episodes is not None else smoke_episode_count()
+        results = evaluate_live(
+            forge_jar=args.forge_jar,
+            bridge_jar=args.bridge_jar,
+            assets_dir=args.assets_dir,
+            java_bin=args.java_bin,
+            episodes=episodes,
+            illegal=20 if episodes >= 20 else 5,
+        )
+    else:
+        episodes = args.episodes if args.episodes is not None else 200
+        results = evaluate(
+            ScriptedV2(),
+            episodes=episodes,
+            illegal=1000 if episodes >= 200 else max(20, episodes),
+            pairs=20 if episodes >= 200 else max(1, min(20, episodes)),
+        )
+    for line in format_lines(results):
+        print(line)
+    return 0 if all(item.get("ok") for item in results.values()) else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

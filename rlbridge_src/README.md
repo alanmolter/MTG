@@ -60,6 +60,19 @@ is installed. `agent_policy=forge_ai` still plays the match out inside
 An illegal bit returns the same `decision_id` and `state_hash` and does not
 call Forge. A `step_timeout` discards the match so a late state cannot be
 served under the next request id. Replies without `request_id` are rejected.
+`ping` is the v2 `hello` and requires `protocol: 2`. A v1 client receives
+`PROTOCOL_MISMATCH`. `cards_loaded` is the common-card count from the card
+database, not a hardcoded 0.
+
+Each match has an epoch. `new_game` waits for the previous game runnable to
+finish (or five seconds) and then drops any publish that still carries the
+old epoch, so a terminal state cannot satisfy the next reset.
+
+`ai_fallback_decisions` counts decisions the external controller does not
+cover and delegates to Forge AI (modes, scry, sacrifice, X, and the rest of
+`PlayerController`). Mana payment, reveals, and turn bookkeeping are not
+counted. A snapshot exception is `ENGINE_ERROR` (`bridge_errors`), logged
+with a stack trace, and is not handed to the AI.
 
 `chosen_action` is the slot the Forge AI would have taken for that decision
 (`exact_ai_labels`), or `-1` when it could not be mapped. It is not inferred
@@ -84,10 +97,10 @@ CI runs `rlbridge_src/test-protocol.sh` (no Forge jar) and
 
 ## Seed
 
-Before `createGame`, the bridge derives a seed for each RNG source: Java,
+Before `createGame`, the bridge derives one seed per match for Java,
 Forge shuffles (`MyRandom.setRandom`), and Forge AI static `Random` fields.
-Python seeds `random`, `PYTHONHASHSEED`, NumPy, and PyTorch from the same
-match seed in `MtgForgeEnv.reset`.
+Python reseeds NumPy and PyTorch only when `seed_python_rngs` is set, so a
+training worker does not restart its policy RNG on every episode.
 
 `MyRandom` is process-global. Run one game per JVM. Wall-clock timeouts can
 still diverge; phase 1 asks for identical hashes on at least 95% of paired

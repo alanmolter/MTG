@@ -167,6 +167,9 @@ def record_match(
         "agent_deck": agent_deck,
         "opponent_deck": opponent_deck,
         "seed": seed,
+        # The external controller blocks per decision and fills chosen_action
+        # with the Forge AI slot, including attacks, blocks, and targets.
+        "agent_policy": "external",
     })
     seen: list[dict] = []
     rows: list[dict] = []
@@ -186,6 +189,7 @@ def record_match(
                 "split": split,
                 "action": action,
                 "decision_id": state.get("decision_id"),
+                "decision_kind": state.get("decision_kind"),
                 "chosen_action": state.get("chosen_action"),
                 "protocol": 2,
                 "label_version": 2,
@@ -193,9 +197,13 @@ def record_match(
             })
         if state.get("terminal"):
             break
+        # An unmappable decision is not a pass label. Step the hinted slot
+        # when it is legal; otherwise pass so the match can continue, and
+        # leave the row out of the shard.
+        step_action = 0 if action is None else action
         state = bridge.command({
             "cmd": "step",
-            "action": 0 if action is None else action,
+            "action": step_action,
             "decision_id": state.get("decision_id", 0),
         })
     outcome = 0

@@ -231,39 +231,69 @@ def stage_eval(work: Path) -> dict:
 
 
 def stage_policy_control() -> dict:
-    """Print A1-A11. Without Forge jars this fails, it does not skip.
+    """Print A1-A12. ScriptedV2 is labeled logic/mock and cannot pass the stage.
 
-    Full sample sizes run in CI against the in-process bridge. On a machine
-    with jars, set POLICY_CONTROL_EPISODES=200 for the documented job. The
-    default smoke count is 2 and still has to show zero policy-control loss.
+    When the Forge and rlbridge jars exist, the stage plays real matches and
+    passes only on that live result. Set POLICY_CONTROL_EPISODES=200 for the
+    full job. The default smoke count is 2.
     """
 
-    from ml_engine.scripts.policy_control import ScriptedV2, evaluate, format_lines, smoke_episode_count
+    from ml_engine.scripts.policy_control import (
+        ScriptedV2,
+        evaluate,
+        evaluate_live,
+        format_lines,
+        smoke_episode_count,
+    )
 
     forge, bridge_jar = _forge_jars()
-    # The numeric gate is the in-process bridge at the smoke or full size.
-    # A missing Forge checkout still fails the stage: live control was not run.
     episodes = smoke_episode_count()
     full = episodes >= 200
-    results = evaluate(
+    mock = evaluate(
         ScriptedV2(),
         episodes=episodes if not full else 200,
         illegal=1000 if full else max(20, episodes),
         pairs=20 if full else max(1, min(20, episodes)),
     )
-    for line in format_lines(results):
-        print(line, flush=True)
-    logic_ok = all(item["ok"] for key, item in results.items() if key != "A12" or full or item["ok"])
+    print("logic/mock", flush=True)
+    for line in format_lines(mock):
+        print("logic/mock " + line, flush=True)
+    logic_ok = all(item["ok"] for key, item in mock.items() if key != "A12" or full or item["ok"])
     jars_ok = forge.is_file() and bridge_jar.is_file()
     if not jars_ok:
         return _line(
             "policy_control",
             False,
-            error="forge or rlbridge jar missing; rebuild rlbridge against Forge first",
+            error="forge or rlbridge jar missing; live Forge was not started",
             episodes=episodes,
             logic="PASS" if logic_ok else "FAIL",
         )
-    return _line("policy_control", logic_ok, episodes=episodes, target_episodes=200)
+    assets = os.environ.get("FORGE_ASSETS_DIR")
+    live = evaluate_live(
+        forge_jar=str(forge),
+        bridge_jar=str(bridge_jar),
+        assets_dir=assets,
+        java_bin=os.environ.get("JAVA_BIN", "java"),
+        episodes=episodes,
+        illegal=20 if episodes >= 20 else 5,
+        turn_limit=30 if episodes < 200 else 50,
+    )
+    print("live", flush=True)
+    for line in format_lines(live):
+        print("live " + line, flush=True)
+    required = ("A1", "A2", "A4", "A5", "A8", "A9")
+    live_ok = all(live[key]["ok"] for key in required)
+    return _line(
+        "policy_control",
+        live_ok,
+        mode="live",
+        episodes=episodes,
+        logic="PASS" if logic_ok else "FAIL",
+        reset_ok=live["A2"].get("reset_ok"),
+        early_loss=live["A2"].get("early_loss"),
+        fallback=live["A7"].get("fallback"),
+        policy_decisions=live["A7"].get("policy_decisions"),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

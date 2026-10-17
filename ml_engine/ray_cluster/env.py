@@ -94,17 +94,18 @@ class ProtocolError(RuntimeError):
 
 
 def seed_everything(seed: int) -> None:
-    """Seed the Python RNGs that share a match seed with the Forge JVM.
+    """Seed NumPy and PyTorch for an evaluation replay.
 
-    Java, Forge shuffles, and Forge AI are seeded in the bridge. This covers
-    ``random``, ``PYTHONHASHSEED``, NumPy, and PyTorch (CPU and CUDA).
+    The Forge JVM applies the match seed once, inside ``new_game``. Calling
+    this on every training ``reset`` would restart the policy's own RNG.
+    ``PYTHONHASHSEED`` is read only at interpreter startup, so it is not set
+    here.
     """
 
     import random
 
     value = int(seed)
     random.seed(value)
-    os.environ["PYTHONHASHSEED"] = str(value)
     try:
         import numpy as np
         np.random.seed(value & 0xFFFFFFFF)
@@ -353,6 +354,8 @@ class MtgForgeEnv(gym.Env):
         self.stale_replies_discarded: int = 0
         self.stale_decisions: int = 0
         self.strict_protocol: bool = bool(config.get("strict_protocol", True))
+        # Off during training. Evaluation and determinism replays opt in.
+        self.seed_python_rngs: bool = bool(config.get("seed_python_rngs", False))
         self._decision_id: int = 0
         self._last_state: Optional[Dict[str, Any]] = None
         # Never train against an observational bridge. The first snapshot must
@@ -472,7 +475,8 @@ class MtgForgeEnv(gym.Env):
             seed = int.from_bytes(os.urandom(4), "little")
         super().reset(seed=seed)
         self._ensure_subprocess()
-        seed_everything(int(seed))
+        if self.seed_python_rngs:
+            seed_everything(int(seed))
         self._handshake()
 
         # Per-episode deck rotation when Arena mode is on. Each reset() draws
@@ -519,6 +523,9 @@ class MtgForgeEnv(gym.Env):
             self._kill_subprocess()
             raise
         self._remember_state(first_state)
+        if first_state.get("truncation_reason") == "engine_error" or int(first_state.get("bridge_errors") or 0) > 0:
+            self._kill_subprocess()
+            raise RuntimeError("Forge bridge engine error: " + str(first_state.get("truncation_reason")))
         if self.agent_policy == "forge_ai":
             if not first_state.get("terminal") or first_state.get("policy_contract_violation"):
                 self._kill_subprocess()
@@ -589,6 +596,9 @@ class MtgForgeEnv(gym.Env):
         self._remember_state(state)
         if state.get("truncation_reason") == "step_timeout":
             return self._infra_stop("forge_step_timeout")
+        if state.get("truncation_reason") == "engine_error" or int(state.get("bridge_errors") or 0) > 0:
+            self._kill_subprocess()
+            return self._infra_stop("forge_engine_error")
 
         is_terminal = bool(state.get("terminal", False))
         outcome = state.get("outcome")

@@ -63,20 +63,52 @@ public final class DecisionHandoff {
     private long waiterRequest = -1;
     private int policyDecisions;
     private int droppedMismatches;
+    private int epoch;
     private final List<String> trajectory = new ArrayList<>();
 
+    public int epoch() {
+        synchronized (lock) {
+            return epoch;
+        }
+    }
+
+    /**
+     * Open a fresh generation. A publish that still carries the previous
+     * epoch is dropped, including one that arrives after this returns.
+     */
     public void reset() {
         synchronized (lock) {
-            pending = null;
-            actionAccepted = false;
-            acceptedAction = -1;
-            discard = false;
-            nextDecisionId = 0;
-            waiterRequest = -1;
-            policyDecisions = 0;
-            trajectory.clear();
-            lock.notifyAll();
+            epoch++;
+            clearLocked(false);
         }
+    }
+
+    /** Close the current match. The old game thread must not publish into the next one. */
+    public void endMatch() {
+        synchronized (lock) {
+            epoch++;
+            clearLocked(true);
+        }
+    }
+
+    /** Re-open the handoff after {@link #endMatch()}. Does not move the epoch. */
+    public int beginMatch() {
+        synchronized (lock) {
+            clearLocked(false);
+            return epoch;
+        }
+    }
+
+    private void clearLocked(boolean discarded) {
+        pending = null;
+        actionAccepted = false;
+        acceptedAction = -1;
+        discard = discarded;
+        nextDecisionId = 0;
+        waiterRequest = -1;
+        policyDecisions = 0;
+        trajectory.clear();
+        lock.notifyAll();
     }
 
     public boolean isDiscarded() {
@@ -124,18 +156,27 @@ public final class DecisionHandoff {
      * discard (the late state is not stored).
      */
     public int publishAndAwaitAction(Offer offer) throws InterruptedException {
+        return publishAndAwaitAction(offer, epoch());
+    }
+
+    /**
+     * Game thread. {@code offerEpoch} is the match that produced this state.
+     * A publish from an older match returns -1 and is not stored, even when
+     * it arrives after {@link #reset()} or {@link #beginMatch()}.
+     */
+    public int publishAndAwaitAction(Offer offer, int offerEpoch) throws InterruptedException {
         synchronized (lock) {
-            if (discard) {
+            if (discard || offerEpoch != epoch) {
                 droppedMismatches++;
                 return -1;
             }
             assign(offer, waiterRequest);
             pending = offer;
             lock.notifyAll();
-            while (!actionAccepted && !discard) {
+            while (!actionAccepted && !discard && offerEpoch == epoch) {
                 lock.wait();
             }
-            if (discard || !actionAccepted) {
+            if (discard || offerEpoch != epoch || !actionAccepted) {
                 if (pending == offer) pending = null;
                 droppedMismatches++;
                 return -1;
@@ -153,8 +194,12 @@ public final class DecisionHandoff {
 
     /** Unblocks a waiter with a terminal snapshot and does not expect an action. */
     public void publishTerminal(Offer offer) {
+        publishTerminal(offer, epoch());
+    }
+
+    public void publishTerminal(Offer offer, int offerEpoch) {
         synchronized (lock) {
-            if (discard) {
+            if (discard || offerEpoch != epoch) {
                 droppedMismatches++;
                 return;
             }
@@ -164,9 +209,37 @@ public final class DecisionHandoff {
         }
     }
 
+    /**
+     * Unblock the waiter with a schema-valid engine failure and discard the
+     * match. A bridge bug must not be played by the Forge AI.
+     */
+    public void failEngine(int offerEpoch) {
+        synchronized (lock) {
+            if (offerEpoch != epoch) {
+                droppedMismatches++;
+                return;
+            }
+            String json = "{\"type\":\"state\",\"decision_id\":-1,\"state_hash\":\"PENDING\""
+                + ",\"protocol\":2,\"bridge_version\":\"" + ProtocolV2.BRIDGE_VERSION + "\""
+                + ",\"decision_kind\":\"none\""
+                + ",\"policy_controlled\":true,\"policy_action_applied\":null"
+                + ",\"terminal\":true,\"truncated\":true,\"truncation_reason\":\"engine_error\""
+                + ",\"outcome\":null,\"illegal_action\":false,\"turn\":0,\"phase\":\"\""
+                + ",\"action_mask\":[" + zeros(0) + "]"
+                + ",\"action_source_indices\":[" + zeros(-1) + "]"
+                + ",\"action_target_indices\":[" + zeros(-1) + "]"
+                + ",\"action_kinds\":[" + zeros(0) + "]}";
+            Offer offer = new Offer("none", json, new int[ProtocolV2.NUM_ACTIONS], true);
+            assign(offer, waiterRequest);
+            pending = offer;
+            discard = true;
+            actionAccepted = false;
+            lock.notifyAll();
+        }
+    }
+
     public Reply awaitFirst(long requestId, long timeoutMs) throws InterruptedException {
         synchronized (lock) {
-            discard = false;
             waiterRequest = requestId;
             lock.notifyAll();
             if (!waitForOwned(requestId, timeoutMs)) {
@@ -238,7 +311,7 @@ public final class DecisionHandoff {
 
     private boolean waitForOwned(long requestId, long timeoutMs) throws InterruptedException {
         long deadline = timeoutMs < 0 ? Long.MAX_VALUE : System.nanoTime() + timeoutMs * 1_000_000L;
-        while (!discard) {
+        while (true) {
             if (pending != null) {
                 if (pending.boundRequest != -1 && pending.boundRequest != requestId) {
                     dropPending();
@@ -247,6 +320,7 @@ public final class DecisionHandoff {
                 pending.boundRequest = requestId;
                 return true;
             }
+            if (discard) return false;
             long remaining = deadline - System.nanoTime();
             if (timeoutMs >= 0 && remaining <= 0) {
                 discardMatch();
@@ -255,7 +329,6 @@ public final class DecisionHandoff {
             if (timeoutMs < 0) lock.wait();
             else lock.wait(Math.max(1L, remaining / 1_000_000L));
         }
-        return false;
     }
 
     private void dropPending() {

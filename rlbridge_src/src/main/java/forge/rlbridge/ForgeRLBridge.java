@@ -123,11 +123,14 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
     private volatile ProtocolV2.Layout currentLayout;
     private volatile int chosenActionLabel = -1;
     private volatile int aiFallbackDecisions;
+    private volatile int bridgeErrors;
+    private final java.util.Map<String, Integer> fallbackByKind = new java.util.LinkedHashMap<>();
     private volatile long matchSeed;
+    private volatile int matchEpoch;
     private volatile int turnLimit = 50;
     private volatile boolean turnLimitSent;
     private volatile String truncationReason;
-    private Thread gameThread = null;
+    private final java.util.concurrent.atomic.AtomicBoolean gameRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
     private Game currentGame = null;
     private Player agentPlayer = null;
     private Player opponentPlayer = null;
@@ -292,7 +295,7 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
                 "bridge protocol is " + ProtocolV2.PROTOCOL_VERSION, null, null));
             return;
         }
-        writeResponse(out, j, ProtocolV2.helloResponse(requestId, 0));
+        writeResponse(out, j, ProtocolV2.helloResponse(requestId, cardsLoaded()));
     }
 
     /**
@@ -368,8 +371,10 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
 
     private void startNewGame(Json j, PrintStream out, long requestId) throws Exception {
         killExistingGame();
-        handoff.reset();
+        this.matchEpoch = handoff.beginMatch();
         aiFallbackDecisions = 0;
+        bridgeErrors = 0;
+        synchronized (fallbackByKind) { fallbackByKind.clear(); }
         chosenActionLabel = -1;
         currentLayout = null;
         pendingKind = "none";
@@ -446,20 +451,27 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
 
         // No turn-event subscription. Step responses come only from the
         // decision the game thread publishes after the command that is waiting.
+        final int gameEpoch = this.matchEpoch;
+        gameRunning.set(true);
         game.getAction().invoke(() -> {
             try {
+                if (handoff.epoch() != gameEpoch) return;
                 match.startGame(game);
             } catch (Throwable t) {
                 System.err.println("[forge-rlbridge] game thread crashed: " + t);
                 t.printStackTrace(System.err);
-                handoff.discardMatch();
+                if (handoff.epoch() == gameEpoch) handoff.failEngine(gameEpoch);
             } finally {
-                gameFinished.set(true);
-                if (!handoff.isDiscarded()) {
-                    pendingKind = "none";
-                    currentLayout = null;
-                    handoff.publishTerminal(new DecisionHandoff.Offer(
-                        "none", buildSnapshot(true, false, false), passMask(), true));
+                try {
+                    gameFinished.set(true);
+                    if (handoff.epoch() == gameEpoch && !handoff.isDiscarded()) {
+                        pendingKind = "none";
+                        currentLayout = null;
+                        handoff.publishTerminal(new DecisionHandoff.Offer(
+                            "none", buildSnapshot(true, false, false), passMask(), true), gameEpoch);
+                    }
+                } finally {
+                    gameRunning.set(false);
                 }
             }
         });
@@ -596,6 +608,8 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
         sb.append("\"policy_action_applied\":null,");
         sb.append("\"seed\":").append(matchSeed).append(',');
         sb.append("\"ai_fallback_decisions\":").append(aiFallbackDecisions).append(',');
+        sb.append("\"bridge_errors\":").append(bridgeErrors).append(',');
+        sb.append("\"ai_fallback_by_kind\":").append(fallbackByKindJson()).append(',');
         sb.append("\"policy_decisions\":").append(handoff.policyDecisions()).append(',');
         sb.append("\"full_magic_training_ready\":false,");
 
@@ -911,7 +925,7 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
             }
         } catch (Throwable ignored) { }
         field(sb, "oracle_text", oracle); sb.append(',');
-        field(sb, "is_attacking", c.isAttacking());
+        field(sb, "is_attacking", isAttacking(c));
         sb.append('}');
     }
 
@@ -936,7 +950,8 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
 
     @Override
     public int decide(String decisionKind, ProtocolV2.Layout layout, int aiChosenSlot) {
-        if (handoff.isDiscarded()) return -1;
+        int epoch = this.matchEpoch;
+        if (handoff.epoch() != epoch || handoff.isDiscarded()) return -1;
         this.pendingKind = decisionKind;
         this.currentLayout = layout;
         this.chosenActionLabel = aiChosenSlot;
@@ -947,12 +962,12 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
                 truncationReason = "turn_limit";
                 pendingKind = "none";
                 handoff.publishTerminal(new DecisionHandoff.Offer(
-                    "none", buildSnapshot(false, false, true), layout.mask, true));
+                    "none", buildSnapshot(false, false, true), layout.mask, true), epoch);
                 return -1;
             }
             if (turnLimitSent) return -1;
             return handoff.publishAndAwaitAction(new DecisionHandoff.Offer(
-                decisionKind, buildSnapshot(false, false, false), layout.mask, false));
+                decisionKind, buildSnapshot(false, false, false), layout.mask, false), epoch);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             handoff.discardMatch();
@@ -964,8 +979,22 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
 
     @Override
     public void noteFallback(String decisionKind, String why) {
+        String kind = decisionKind == null || decisionKind.isEmpty() ? "unknown" : decisionKind;
         aiFallbackDecisions++;
-        System.err.println("[forge-rlbridge] ai_fallback " + decisionKind + " " + why);
+        synchronized (fallbackByKind) {
+            fallbackByKind.merge(kind, 1, Integer::sum);
+        }
+        System.err.println("[forge-rlbridge] ai_fallback " + kind + " " + why);
+    }
+
+    @Override
+    public void noteBridgeError(String decisionKind, Throwable error) {
+        bridgeErrors++;
+        String message = error == null ? "null" : error.toString();
+        System.err.println("[forge-rlbridge] ENGINE_ERROR " + decisionKind + " " + message);
+        if (error != null) error.printStackTrace(System.err);
+        truncationReason = "engine_error";
+        handoff.failEngine(matchEpoch);
     }
 
     @Override
@@ -1153,17 +1182,22 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
     // ── Housekeeping ───────────────────────────────────────────────────────
 
     private void killExistingGame() {
-        handoff.discardMatch();
-        // We no longer own the game thread directly (it runs on Forge's pool).
-        // Best-effort: mark the game over so the internal main loop exits.
+        // Bump the epoch before the old pool thread can publish again. Join
+        // is not enough: Forge runs the match on a cached pool thread that
+        // stays alive after the runnable returns.
+        handoff.endMatch();
         try {
             if (currentGame != null && !currentGame.isGameOver()) {
                 currentGame.setAge(forge.game.GameStage.GameOver);
             }
         } catch (Throwable ignored) {}
-        // Give Forge a beat to observe the state change.
-        try { Thread.sleep(50); } catch (InterruptedException ignored) {}
-        gameThread = null;
+        long deadline = System.currentTimeMillis() + 5000L;
+        while (gameRunning.get() && System.currentTimeMillis() < deadline) {
+            try { Thread.sleep(20); } catch (InterruptedException ignored) { break; }
+        }
+        if (gameRunning.get()) {
+            System.err.println("[forge-rlbridge] previous game still running; its states are dropped by the epoch fence");
+        }
         currentGame = null;
         agentPlayer = null;
         opponentPlayer = null;
@@ -1171,6 +1205,37 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
         snapshotQueue.clear();
         previousAgentHand.clear();
         previousStack.clear();
+    }
+
+    /** {@code Card.isAttacking()} NPEs when {@code Game.getCombat()} is null. */
+    private static boolean isAttacking(Card card) {
+        if (card == null || card.getGame() == null || card.getGame().getCombat() == null) return false;
+        return card.getGame().getCombat().isAttacking(card);
+    }
+
+    private static int cardsLoaded() {
+        try {
+            if (StaticData.instance() == null || StaticData.instance().getCommonCards() == null) return 0;
+            return (int) StaticData.instance().getCommonCards().streamAllCards().count();
+        } catch (Throwable ex) {
+            System.err.println("[forge-rlbridge] cards_loaded unavailable: " + ex);
+            return 0;
+        }
+    }
+
+    private String fallbackByKindJson() {
+        StringBuilder sb = new StringBuilder();
+        sb.append('{');
+        synchronized (fallbackByKind) {
+            boolean first = true;
+            for (java.util.Map.Entry<String, Integer> entry : fallbackByKind.entrySet()) {
+                if (!first) sb.append(',');
+                first = false;
+                sb.append('"').append(escape(entry.getKey())).append("\":").append(entry.getValue());
+            }
+        }
+        sb.append('}');
+        return sb.toString();
     }
 
     // ── Tiny JSON helpers ──────────────────────────────────────────────────

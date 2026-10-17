@@ -24,6 +24,7 @@ public class ForgeRLBridgeProtocolTest {
         testStaleDecisionDoesNotApply();
         testMissingBindingDropsPlantedState();
         testTimeoutDropsLatePublish();
+        testOldEpochAfterResetIsDropped();
         testDeterministicTrajectory();
         System.out.println("[rlbridge-protocol] passed=" + passed + " failed=" + failed);
         if (failed > 0) System.exit(1);
@@ -159,6 +160,32 @@ public class ForgeRLBridgeProtocolTest {
         DecisionHandoff.Reply reply = handoff.step(4, 0, 0, 50);
         assertTrue("timeout after discard", reply.timedOut);
         assertTrue("late body absent", !reply.json.contains("\"marker\":8"));
+    }
+
+    private static void testOldEpochAfterResetIsDropped() throws Exception {
+        DecisionHandoff handoff = new DecisionHandoff();
+        handoff.reset();
+        int oldEpoch = handoff.epoch();
+        Holder<Integer> late = new Holder<>();
+        Thread oldGame = new Thread(() -> {
+            try {
+                while (handoff.epoch() == oldEpoch) Thread.sleep(5);
+                late.value = handoff.publishAndAwaitAction(offer("priority", 8, 8), oldEpoch);
+                handoff.publishTerminal(offer("none", 8, 9), oldEpoch);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                late.value = -2;
+            }
+        });
+        oldGame.start();
+        Thread.sleep(20);
+        handoff.reset();
+        assertTrue("epoch moved", handoff.epoch() != oldEpoch);
+        oldGame.join(2000);
+        assertEq("old match publish dropped", late.value == null ? -99 : late.value, -1);
+        DecisionHandoff.Reply reply = handoff.awaitFirst(2, 40);
+        assertTrue("new match did not receive the old state", reply.timedOut);
+        assertTrue("old marker absent", !reply.json.contains("\"marker\":8"));
     }
 
     private static void testDeterministicTrajectory() throws Exception {
