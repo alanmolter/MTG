@@ -14,6 +14,7 @@ import pytest
 from ml_engine.ray_cluster.env import (
     MtgForgeEnv,
     ProtocolError,
+    _recorded_policy_controlled,
     java_step_timeout_seconds,
     seed_everything,
 )
@@ -688,3 +689,9 @@ def test_seed_everything_replays_numpy_and_torch():
     u = torch.randint(0, 10_000, (4,))
     assert np.array_equal(a, b)
     assert torch.equal(t, u)
+
+
+def test_divided_targets_are_not_a_policy_controlled_match():
+    assert _recorded_policy_controlled({"policy_controlled": True}) is True
+    assert _recorded_policy_controlled({"policy_controlled": True, "divided_targets": True}) is False
+    assert _recorded_policy_controlled({"policy_controlled": False, "divided_targets": False}) is False

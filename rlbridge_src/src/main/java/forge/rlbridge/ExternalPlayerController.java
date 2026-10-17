@@ -713,7 +713,10 @@ public final class ExternalPlayerController extends PlayerControllerAi {
         for (SpellAbility sa : ordered) {
             try {
                 if (sa.isTrigger() && !sa.isCopied()) {
-                    if (!preparePolicyTrigger(sa, true)) continue;
+                    // Mode and targets are chosen once, as the trigger is put
+                    // on the stack. confirmTrigger asks the optional "you may"
+                    // at resolution and does not pick a new target.
+                    if (!preparePolicyTrigger(sa, false)) continue;
                     ComputerUtil.playStack(sa, player, getGame());
                     continue;
                 }
@@ -748,9 +751,12 @@ public final class ExternalPlayerController extends PlayerControllerAi {
     }
 
     /**
-     * Optional triggers ask {@code play_trigger}. Any targeted trigger or
-     * replacement then asks {@code choose_targets}. The AI does not keep the
-     * targets it found while ordering or probing the trigger.
+     * When {@code askOptional} is set, an optional trigger asks
+     * {@code play_trigger} before anything else. Stack triggers pass false:
+     * mode and targets are chosen here, and the "you may" waits for
+     * {@link #confirmTrigger}. A targeted ability then asks
+     * {@code choose_targets}. The AI does not keep targets it found while
+     * ordering the trigger.
      */
     private boolean preparePolicyTrigger(SpellAbility sa, boolean askOptional) {
         if (sa == null) return false;
@@ -894,7 +900,8 @@ public final class ExternalPlayerController extends PlayerControllerAi {
         if (host.discarded()) return false;
         try {
             if (sa.isMandatory()) return true;
-            return preparePolicyTrigger(sa, true);
+            // Targets were chosen when this trigger was put on the stack.
+            return acceptOptionalTrigger(sa);
         } catch (RuntimeException ex) {
             host.noteBridgeError("play_trigger", ex, epoch);
             return false;

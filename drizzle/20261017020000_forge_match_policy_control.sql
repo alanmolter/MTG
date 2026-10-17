@@ -4,7 +4,8 @@
 -- policy_controlled = true.
 
 ALTER TABLE forge_matches ADD COLUMN IF NOT EXISTS policy_controlled boolean;
+--> statement-breakpoint
 ALTER TABLE forge_matches ADD COLUMN IF NOT EXISTS protocol_version integer;
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS forge_matches_policy_controlled_idx
     ON forge_matches (policy_controlled);

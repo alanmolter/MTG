@@ -305,12 +305,8 @@ export async function importMTGGoldfishDecks(
     decksImported: 0,
     cardsImported: 0,
     decksSkipped: 0,
-    errors: [
-      "MTGGoldfish import is disabled (scraper protection). Use MTGTop8 or a local deck list.",
-    ],
+    errors: [],
   };
-  console.warn(`  [MTGGoldfish/${format}] disabled — not fetching (${decksPerFormat} requested).`);
-  return result;
 
   const url = `${MTGGOLDFISH_BASE_URL}/metagame/${format}/full`;
   console.log(`  [MTGGoldfish/${format.toUpperCase()}] Conectando: ${url}`);
@@ -467,8 +463,43 @@ export async function importAllGoldfishFormats(
     errors: [],
   };
 
-  void decksPerFormat;
-  totals.errors.push("MTGGoldfish import is disabled (scraper protection).");
-  console.warn("  [MTGGoldfish] disabled — not fetching any format.");
+  console.log(
+    `\n  [MTGGoldfish] Importando ${decksPerFormat} decks de cada formato:`
+  );
+  console.log(`  [MTGGoldfish] Formatos: ${GOLDFISH_FORMATS.join(", ")}`);
+  console.log(
+    `  [MTGGoldfish] Total máximo: ${GOLDFISH_FORMATS.length * decksPerFormat} decks\n`
+  );
+
+  // Pre-flight: probe Cloudflare. If `/deck/download/{id}` is gated by the JS
+  // challenge, downloading 60 decks is a 40s no-op. Bail with one clear line
+  // explaining what to do (use MTGTop8 + manual import) so the operator isn't
+  // misled by "60 pulados" looking like a transient error.
+  if (await isCloudflareBlockingDownloads()) {
+    console.warn(
+      `  [MTGGoldfish] BLOQUEADO: /deck/download/{id} esta atras do desafio JS\n` +
+        `              do Cloudflare ("Just a moment..."). Esse endpoint nao e\n` +
+        `              acessivel via fetch direto.\n` +
+        `              Solucao: use MTGTop8 (funciona) ou rode o scraper via\n` +
+        `              Puppeteer/Playwright. Pulando MTGGoldfish nesta sessao.`
+    );
+    return totals;
+  }
+
+  for (const format of GOLDFISH_FORMATS) {
+    const r = await importMTGGoldfishDecks(format, decksPerFormat);
+    totals.decksImported += r.decksImported;
+    totals.cardsImported += r.cardsImported;
+    totals.decksSkipped += r.decksSkipped;
+    totals.errors.push(...r.errors);
+    // Delay entre formatos para não sobrecarregar o servidor
+    await new Promise(res => setTimeout(res, 1000));
+  }
+
+  console.log(`\n  [MTGGoldfish] TOTAL GERAL:`);
+  console.log(`    Decks importados : ${totals.decksImported}`);
+  console.log(`    Decks pulados    : ${totals.decksSkipped}`);
+  console.log(`    Cartas salvas    : ${totals.cardsImported}`);
+
   return totals;
 }

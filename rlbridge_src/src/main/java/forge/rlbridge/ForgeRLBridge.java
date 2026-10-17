@@ -124,6 +124,8 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
     private volatile int chosenActionLabel = -1;
     private volatile int aiFallbackDecisions;
     private volatile int bridgeErrors;
+    /** A divided-damage target was chosen by the AI. The match is not policy-controlled. */
+    private volatile boolean dividedTargets;
     private final java.util.Map<String, Integer> fallbackByKind = new java.util.LinkedHashMap<>();
     private volatile long matchSeed;
     private volatile int matchEpoch;
@@ -377,6 +379,7 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
         this.matchEpoch = handoff.beginMatch();
         aiFallbackDecisions = 0;
         bridgeErrors = 0;
+        dividedTargets = false;
         synchronized (fallbackByKind) { fallbackByKind.clear(); }
         chosenActionLabel = -1;
         currentLayout = null;
@@ -616,6 +619,7 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
         }
         sb.append("\"seed\":").append(matchSeed).append(',');
         sb.append("\"ai_fallback_decisions\":").append(aiFallbackDecisions).append(',');
+        sb.append("\"divided_targets\":").append(dividedTargets).append(',');
         sb.append("\"bridge_errors\":").append(bridgeErrors).append(',');
         sb.append("\"ai_fallback_by_kind\":").append(fallbackByKindJson()).append(',');
         sb.append("\"policy_decisions\":").append(handoff.policyDecisions()).append(',');
@@ -997,6 +1001,9 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
         aiFallbackDecisions++;
         synchronized (fallbackByKind) {
             fallbackByKind.merge(kind, 1, Integer::sum);
+        }
+        if ("choose_targets".equals(kind) && "divided".equals(why)) {
+            dividedTargets = true;
         }
         System.err.println("[forge-rlbridge] ai_fallback " + kind + " " + why);
     }

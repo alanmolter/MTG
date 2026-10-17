@@ -2,7 +2,7 @@ About
 Name Abzan Siege
 
 Deck
-2 Disowned Ancestor
+4 Disowned Ancestor
 3 Ainok Bond-Kin
 1 Sungrace Pegasus
 2 Child of Night
@@ -14,13 +14,11 @@ Deck
 2 Salt Road Patrol
 1 Mer-Ek Nightblade
 2 Longshot Squad
-1 Armament Corps
 1 Ivorytusk Fortress
 1 Carnivorous Moss-Beast
 1 Hunt the Weak
 1 Incremental Growth
 2 Kill Shot
-1 Abzan Charm
 1 Dragonscale Boon
 1 Flesh to Dust
 2 Abzan Banner

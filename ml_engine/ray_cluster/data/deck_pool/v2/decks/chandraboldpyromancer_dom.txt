@@ -2,7 +2,7 @@ About
 Name Chandra, Bold Pyromancer
 
 Deck
-1 Marwyn, the Nurturer
+2 Marwyn, the Nurturer
 2 Llanowar Elves
 1 Ghitu Chronicler
 3 Elfhame Druid
@@ -15,7 +15,6 @@ Deck
 1 Grunn, the Lonely King
 1 Primordial Wurm
 2 Chandra's Outburst
-1 Fight with Fire
 1 Fiery Intervention
 2 Shivan Fire
 2 Gift of Growth

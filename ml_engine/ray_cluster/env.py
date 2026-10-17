@@ -219,6 +219,16 @@ def _scale_features(values, scales) -> list:
     return scaled
 
 
+def _recorded_policy_controlled(state: Optional[Dict[str, Any]]) -> bool:
+    """A divided-damage target is chosen by the AI, so the match is not a Phase 1 label."""
+
+    if not isinstance(state, dict):
+        return False
+    if state.get("divided_targets"):
+        return False
+    return bool(state.get("policy_controlled"))
+
+
 def _state_int(state: Optional[Dict[str, Any]], key: str) -> int:
     if not isinstance(state, dict):
         return 0
@@ -829,7 +839,7 @@ class MtgForgeEnv(gym.Env):
                 bridge_version=self.bridge_version or None,
                 winner=outcome,
                 turns=turns,
-                policy_controlled=bool((self._last_state or {}).get("policy_controlled")),
+                policy_controlled=_recorded_policy_controlled(self._last_state),
                 protocol_version=(self._last_state or {}).get("protocol", PROTOCOL_VERSION),
                 ai_fallback_decisions=_state_int(self._last_state, "ai_fallback_decisions"),
                 policy_decisions=_state_int(self._last_state, "policy_decisions"),

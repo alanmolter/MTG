@@ -147,6 +147,7 @@ jobs:
 
       - name: 🐍 Live smoke
         env:
+          PYTHONPATH: ${{ github.workspace }}
           FORGE_MATCH_RECORD: "0"
           FORGE_JAR: forge-src/forge-gui-desktop/target/forge-gui-desktop-2.0.12-SNAPSHOT-jar-with-dependencies.jar
           FORGE_BRIDGE_JAR: /tmp/rlbridge.jar

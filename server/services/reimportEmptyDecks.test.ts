@@ -51,18 +51,22 @@ describe("reimport empty competitive decks", () => {
     expect(report.failed).toEqual([]);
   });
 
-  it("does not refetch a goldfish deck", async () => {
-    const fetchText = vi.fn(async () => "4 Lightning Bolt\n20 Mountain");
+  it("refetches a goldfish deck that has no stored list", async () => {
+    const fetchText = vi.fn(async (url: string) => {
+      if (url.endsWith("/arena_download/42"))
+        return "4 Lightning Bolt\n20 Mountain";
+      return null;
+    });
     const save = vi.fn(async () => ({ imported: true, cards: 2 }));
     const report = await reimportEmptyDecks({
       listEmpty: async () => [row()],
       fetchText,
       save,
     });
-    expect(fetchText).not.toHaveBeenCalled();
-    expect(refetchUrls(row())).toEqual([]);
-    expect(report.reimported).toBe(0);
-    expect(report.skipped).toHaveLength(1);
+    expect(fetchText).toHaveBeenCalledWith(
+      "https://www.mtggoldfish.com/deck/arena_download/42"
+    );
+    expect(report.reimported).toBe(1);
   });
 
   it("builds a top8 download url and reads deck text out of raw_json", () => {

@@ -109,18 +109,11 @@ async function main(): Promise<void> {
     .from(competitiveDecks)
     .where(eq(competitiveDecks.isTrainingEligible, true));
   const matchEvidence = await db
-    .select({
-      rawJson: forgeMatches.rawJson,
-      policyControlled: forgeMatches.policyControlled,
-    })
+    .select({ rawJson: forgeMatches.rawJson })
     .from(forgeMatches);
   const candidatePath = normalizeCheckpoint(report.checkpoint);
-  const candidateMatches = matchEvidence.filter(match =>
+  const realMatchCount = matchEvidence.filter(match =>
     isCandidateEvaluation(match.rawJson, candidatePath)
-  );
-  const realMatchCount = candidateMatches.length;
-  const policyControlledMatchCount = candidateMatches.filter(
-    match => match.policyControlled === true
   ).length;
   const [{ value: invalidSynergyCount }] = await db
     .select({ value: count() })
@@ -131,7 +124,6 @@ async function main(): Promise<void> {
     validDecks: Number(validDecks),
     rejectedDecks: 0,
     realMatchCount,
-    policyControlledMatchCount,
     invalidSynergyCount: Number(invalidSynergyCount),
     baselineMetric: report.baseline_reward,
     candidateMetric: observedReward,

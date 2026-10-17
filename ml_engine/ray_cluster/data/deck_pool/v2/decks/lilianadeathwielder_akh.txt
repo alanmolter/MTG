@@ -2,7 +2,7 @@ About
 Name Liliana, Death Wielder
 
 Deck
-1 Liliana, Death Wielder
+3 Liliana, Death Wielder
 1 Festering Mummy
 2 Dune Beetle
 4 Tattered Mummy
@@ -14,7 +14,6 @@ Deck
 2 Giant Spider
 2 Decimator Beetle
 2 Liliana's Influence
-2 Splendid Agony
 1 Edifice of Authority
 1 Luxa River Shrine
 1 Oracle's Vault

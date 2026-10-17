@@ -28,6 +28,23 @@ from ml_engine.ray_cluster.deck_quality import canonical_deck_hash, card_index_f
 logger = logging.getLogger(__name__)
 
 POOL_ROOT = Path(__file__).resolve().parent / "data" / "deck_pool" / "v1"
+
+# DividedAsYouChoose targets are still chosen by the Forge AI. Phase 1
+# training lists must not contain these cards. Phase 2 will expose the split.
+PHASE1_DIVIDED_CARDS = (
+    "Abzan Charm",
+    "Armament Corps",
+    "Chandra's Pyrohelix",
+    "Elusive Otter",
+    "Fight with Fire",
+    "Magic Missile",
+    "Quirion Beastcaller",
+    "Shatterskull Smashing",
+    "Splendid Agony",
+    "Spreading Flames",
+    "Storm the Seedcore",
+    "Twin Bolt",
+)
 POOL_VERSION = "1"
 POOL_VERSION_ENV = "DECK_POOL_VERSION"
 _V1_SPLITS = {"train", "holdout"}
@@ -96,6 +113,15 @@ def arena_mainboard(arena_export: str) -> str:
     return "\n".join(f"{counts[name]} {name}" for name in order)
 
 
+def _divided_card(forge_list: str) -> str | None:
+    for line in forge_list.splitlines():
+        name = line.split(" ", 1)[1] if " " in line else line
+        for card in PHASE1_DIVIDED_CARDS:
+            if name == card or name.startswith(card + " //") or name.startswith(card + " "):
+                return name
+    return None
+
+
 def accept_deck(deck_id: str, decklist: str, *, extra_index=None) -> bool:
     """False when the list fails the quality gate. The reason is logged."""
 
@@ -136,6 +162,11 @@ def _load_deck(entry: dict, root: Path, *, version: str) -> PoolDeck:
     relative = str(entry["file"])
     path = root / relative
     forge_list = arena_mainboard(path.read_text(encoding="utf-8"))
+    divided = _divided_card(forge_list)
+    if divided:
+        raise RuntimeError(
+            f"deck pool {deck_id} contains {divided}; Phase 1 does not train on divided-damage cards"
+        )
     deck = PoolDeck(
         deck_id=deck_id,
         name=str(entry["name"]),
