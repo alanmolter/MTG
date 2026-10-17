@@ -123,6 +123,7 @@ function promotionInput() {
     validDecks: 20,
     rejectedDecks: 0,
     realMatchCount: 30,
+    policyControlledMatchCount: 30,
     invalidSynergyCount: 0,
     baselineMetric: 100,
     candidateMetric: -100,
@@ -174,6 +175,13 @@ describe("training quality contract", () => {
       passed: true,
       failures: [],
     });
+  });
+
+  it("does not count forge matches that were not policy controlled", () => {
+    const input = promotionInput();
+    input.policyControlledMatchCount = 0;
+    input.realMatchCount = 30;
+    expect(evaluatePromotionGates(input).failures).toContain("need_at_least_10_recorded_forge_matches");
   });
 
   it("fails closed without independent evaluation reports", () => {

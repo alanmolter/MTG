@@ -108,12 +108,21 @@ async function main(): Promise<void> {
     .select({ value: count() })
     .from(competitiveDecks)
     .where(eq(competitiveDecks.isTrainingEligible, true));
+  // The column is added by the bridge migration (PR #10). It is selected
+  // by name so this script compiles before that column is on the Drizzle table.
   const matchEvidence = await db
-    .select({ rawJson: forgeMatches.rawJson })
+    .select({
+      rawJson: forgeMatches.rawJson,
+      policyControlled: sql<boolean | null>`policy_controlled`.as("policy_controlled"),
+    })
     .from(forgeMatches);
   const candidatePath = normalizeCheckpoint(report.checkpoint);
-  const realMatchCount = matchEvidence.filter(match =>
+  const candidateMatches = matchEvidence.filter(match =>
     isCandidateEvaluation(match.rawJson, candidatePath)
+  );
+  const realMatchCount = candidateMatches.length;
+  const policyControlledMatchCount = candidateMatches.filter(
+    match => match.policyControlled === true
   ).length;
   const [{ value: invalidSynergyCount }] = await db
     .select({ value: count() })
@@ -124,6 +133,7 @@ async function main(): Promise<void> {
     validDecks: Number(validDecks),
     rejectedDecks: 0,
     realMatchCount,
+    policyControlledMatchCount,
     invalidSynergyCount: Number(invalidSynergyCount),
     baselineMetric: report.baseline_reward,
     candidateMetric: observedReward,

@@ -72,7 +72,9 @@ describe("importMTGGoldfishDecks", () => {
 
     const result = await importMTGGoldfishDecks("modern", 2);
 
-    expect(result.decksImported).toBeGreaterThan(0);
+    expect(result.decksImported).toBe(0);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result.errors[0]).toMatch(/disabled/i);
   });
 
   it("should handle fetch errors gracefully", async () => {
@@ -81,6 +83,7 @@ describe("importMTGGoldfishDecks", () => {
     const result = await importMTGGoldfishDecks("modern", 5);
 
     expect(result.decksImported).toBe(0);
+    expect(global.fetch).not.toHaveBeenCalled();
     expect(result.errors.length).toBeGreaterThan(0);
   });
 });
