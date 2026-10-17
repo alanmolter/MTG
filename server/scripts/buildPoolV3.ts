@@ -17,7 +17,7 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   LSH_BANDS, MINHASH_PERMS, MINIMUMS, NEAR_DUP_JACCARD, POOL_SEED, POOL_VERSION, SEARCH_TRIALS, SPLIT_RATIOS,
-  HOLDOUT_NEAR_RATIO, archetypeLabel, assignHoldoutNear, assignSplits, buildCardSets, buildGroups, leakReport,
+  HOLDOUT_NEAR_RATIO, HOLDOUT_CONTROL_TARGET, archetypeLabel, assignHoldoutNear, checkConstraints, promoteControlToHoldout, assignSplits, buildCardSets, buildGroups, leakReport,
   manifestHash, toPoolDeck, type ManifestDeck, type PoolDeckInput, type PoolManifest,
 } from "../services/poolV3";
 
@@ -30,7 +30,11 @@ SELECT d.id, d.format, d.archetype,
       SELECT min(colors) AS colors, min(type) AS type FROM cards WHERE cards.oracle_id = c.oracle_id
     ) k ON true
     WHERE c.deck_id = d.id AND c.section = 'mainboard' AND c.oracle_id IS NOT NULL
-  ), '[]'::json) AS main
+  ), '[]'::json) AS main,
+  (SELECT COALESCE(SUM(c.quantity), 0)::int FROM competitive_deck_cards c
+    WHERE c.deck_id = d.id AND COALESCE(c.section, 'mainboard') = 'mainboard') AS main_cards,
+  EXISTS (SELECT 1 FROM competitive_deck_cards c
+    WHERE c.deck_id = d.id AND c.section IN ('sideboard', 'companion') AND c.card_name ILIKE 'Yorion%') AS yorion
 FROM competitive_decks d
 WHERE d.is_training_eligible AND d.archived_at IS NULL AND NOT d.is_synthetic
 ORDER BY d.id`;
@@ -71,12 +75,25 @@ async function main() {
 
   const grouping = buildGroups(decks);
   const res = assignSplits(decks, grouping.groupOf);
+  const promo = promoteControlToHoldout(decks, grouping.groupOf, res.split);
+  res.split = promo.split;
+  res.constraints = checkConstraints(decks, grouping.groupOf, res.split);
   const near = assignHoldoutNear(decks, grouping.clusterOf, res.split);
+  const holdCtlFormats = Array.from(new Set(decks.filter((d, i) => res.split[i] === "holdout" && d.macro === "control").map(d => d.format))).sort();
+  const caveats: string[] = [];
+  if (promo.holdoutControlAfter < HOLDOUT_CONTROL_TARGET)
+    caveats.push(
+      `control no holdout: ${promo.holdoutControlAfter} decks (formatos: ${holdCtlFormats.join(", ") || "nenhum"})` +
+      `${promo.moved ? `, depois de mover o grupo ${promo.moved.group_id} (${promo.moved.format}, ${promo.moved.decks} decks, ${promo.moved.control} control) do treino` : ", nenhum grupo pequeno de control pôde ser movido sem violar o agrupamento ou os mínimos"}. ` +
+      `Os grupos gigantes de Modern (arquétipo + quase-duplicatas) prendem quase todo o control no treino; o win rate de control no holdout não é confiável.`);
+  else if (promo.moved)
+    caveats.push(`control no holdout: ${promo.holdoutControlBefore} -> ${promo.holdoutControlAfter} decks, movendo o grupo inteiro ${promo.moved.group_id} (${promo.moved.format}, ${promo.moved.decks} decks) do treino; o agrupamento foi mantido. Ainda é uma amostra pequena (formatos: ${holdCtlFormats.join(", ")}); trate o win rate de control no holdout com cautela.`);
 
   const sets = buildCardSets(decks);
   const setsJson = JSON.stringify(sets);
   const manifestDecks: ManifestDeck[] = decks.map((d, i) => ({
-    deck_id: d.id, split: res.split[i], holdout_near: near[i], group_id: grouping.groupOf[i],
+    deck_id: d.id, split: res.split[i], holdout_near: near[i], exclude_from_train: near[i] || res.split[i] !== "train",
+    size_class: d.sizeClass ?? null, group_id: grouping.groupOf[i],
     near_cluster_id: grouping.clusterOf[i], archetype: d.archetypeRaw, archetype_key: d.archetypeKey,
     macro: d.macro, colors: d.colors, format: d.format, deck_hash: d.deckHash,
   }));
@@ -89,7 +106,10 @@ async function main() {
       search_trials: SEARCH_TRIALS, minimums: MINIMUMS, deck_hash: "sha256(sorted distinct mainboard oracle_ids joined by \\n)",
       archetype_key: "format::normalized archetype; decks without archetype use their near-duplicate cluster",
       eligible_filter: "is_training_eligible AND archived_at IS NULL AND NOT is_synthetic",
+      holdout_near: "taken out of train: exclude_from_train=true; pool_memberships keeps two rows (train + holdout_near); loaders train only on split=train AND NOT exclude_from_train",
+      control_promotion: `if holdout control < ${HOLDOUT_CONTROL_TARGET}, move one small control-majority train group (whole group) to holdout`,
     },
+    caveats,
     card_sets: { file: "card_sets.json", sha256: createHash("sha256").update(setsJson).digest("hex") },
     decks: manifestDecks,
   };
@@ -131,6 +151,9 @@ async function main() {
     ...Object.entries(leak.maxJaccard).map(([k, v]) => `- ${k}: ${v.jaccard.toFixed(4)} (decks ${v.a} x ${v.b})`),
     `- deck_hash em mais de um split: ${leak.duplicatedDeckHash.length}; group_id em mais de um split: ${leak.duplicatedGroup.length}; cluster em train_near e holdout_near: ${leak.duplicatedNearCluster.length}`,
     ``,
+    `- caveats: ${caveats.length ? caveats.join(" | ") : "nenhuma"}`,
+    `- holdout_near: ${manifestDecks.filter(m => m.holdout_near).length} decks com exclude_from_train=true (saem do treino; treino efetivo ${manifestDecks.filter(m => m.split === "train" && !m.exclude_from_train).length})`,
+    ``,
     `## Por split`,
     ``,
     table(totals, ["key", ...splits, "holdout_near", "total"]),
@@ -148,6 +171,10 @@ async function main() {
     `## Por cor (número de cores das mágicas não-terreno)`,
     ``,
     table(count(m => (m.colors.length === 0 ? "c" : m.colors.length >= 3 ? "3+" : String(m.colors.length))), ["key", ...splits, "holdout_near", "total"]),
+    ``,
+    `## Por classe de tamanho`,
+    ``,
+    table(count(m => m.size_class ?? "?"), ["key", ...splits, "holdout_near", "total"]),
     ``,
     `## Por formato x macro`,
     ``,

@@ -33,8 +33,30 @@ def load_rows(root: Path, *, split: str | None = None) -> list[dict]:
     return [row for row in rows if row.get("split") == split]
 
 
+DB_POOLS_ROOT = Path(__file__).resolve().parents[2] / "data" / "pools"
+
+
+def db_pool_excluded_deck_ids(manifest: dict) -> set[str]:
+    """Deck ids of a DB-backed pool manifest (data/pools/v3+) that are not train.
+
+    Blocks holdout, benchmark and every entry with ``exclude_from_train`` or
+    ``holdout_near`` (holdout_near decks keep ``split == "train"`` but are
+    taken out of training).
+    """
+
+    blocked: set[str] = set()
+    for deck in manifest.get("decks", []):
+        if (
+            deck.get("split") != "train"
+            or deck.get("exclude_from_train")
+            or deck.get("holdout_near")
+        ):
+            blocked.add(str(deck["deck_id"]))
+    return blocked
+
+
 def manifest_blocked_deck_ids(version: str | None = None) -> set[str]:
-    """Deck ids the pool manifest marks holdout or benchmark.
+    """Deck ids the pool manifest marks holdout, benchmark or exclude_from_train.
 
     A behavior-cloning row that names one of these decks is not a training
     row, even if its ``split`` field says ``train``.
@@ -43,6 +65,9 @@ def manifest_blocked_deck_ids(version: str | None = None) -> set[str]:
     from ml_engine.ray_cluster.deck_pool import active_pool_version, decks_for_split
 
     resolved = version or active_pool_version()
+    db_manifest = DB_POOLS_ROOT / f"v{resolved}" / "manifest.json"
+    if db_manifest.is_file():
+        return db_pool_excluded_deck_ids(json.loads(db_manifest.read_text(encoding="utf-8")))
     blocked: set[str] = set()
     for split in ("holdout", "benchmark"):
         for deck in decks_for_split(split, resolved):

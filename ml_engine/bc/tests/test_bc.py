@@ -241,3 +241,34 @@ def test_record_bridge_discards_stale_replies_and_times_out(monkeypatch, tmp_pat
         raise AssertionError("readline returned without a timeout")
     except TimeoutError:
         pass
+
+
+def test_db_pool_manifest_excludes_holdout_near():
+    from ml_engine.bc.dataset import db_pool_excluded_deck_ids, training_rows
+
+    manifest = {"decks": [
+        {"deck_id": 1, "split": "train", "holdout_near": False, "exclude_from_train": False},
+        {"deck_id": 2, "split": "train", "holdout_near": True, "exclude_from_train": True},
+        {"deck_id": 3, "split": "holdout", "holdout_near": False, "exclude_from_train": True},
+        {"deck_id": 4, "split": "benchmark", "holdout_near": False, "exclude_from_train": True},
+    ]}
+    blocked = db_pool_excluded_deck_ids(manifest)
+    assert blocked == {"2", "3", "4"}
+    rows = [{"split": "train", "deck_id": str(i)} for i in (1, 2, 3, 4)]
+    kept, excluded = training_rows(rows, blocked)
+    assert [r["deck_id"] for r in kept] == ["1"] and excluded == 3
+
+
+def test_committed_pool_v3_manifest_blocks_holdout_near():
+    import json
+    from ml_engine.bc.dataset import DB_POOLS_ROOT, manifest_blocked_deck_ids
+
+    path = DB_POOLS_ROOT / "v3" / "manifest.json"
+    if not path.is_file():
+        return
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    blocked = manifest_blocked_deck_ids("3")
+    for deck in manifest["decks"]:
+        if deck.get("holdout_near"):
+            assert deck.get("exclude_from_train") is True
+            assert str(deck["deck_id"]) in blocked

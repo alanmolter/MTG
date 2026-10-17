@@ -8,7 +8,7 @@ import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
-import { MINIMUMS, NEAR_DUP_JACCARD, deckHash, leakReport, manifestHash, type CardSets, type PoolManifest } from "./poolV3";
+import { MINIMUMS, NEAR_DUP_JACCARD, deckHash, leakReport, manifestHash, trainDeckIds, type CardSets, type PoolManifest } from "./poolV3";
 
 const dir = path.resolve(__dirname, "../../data/pools/v3");
 const manifestRaw = fs.readFileSync(path.join(dir, "manifest.json"), "utf8");
@@ -30,6 +30,15 @@ describe("pool v3 leakage", () => {
     expect(report.duplicatedGroup).toEqual([]);
     expect(report.duplicatedNearCluster).toEqual([]);
     expect(manifest.decks.every(d => !d.holdout_near || d.split === "train")).toBe(true);
+  });
+  it("holdout_near decks are excluded from train and every entry has a size class", () => {
+    for (const d of manifest.decks) {
+      expect(d.exclude_from_train).toBe(d.holdout_near || d.split !== "train");
+      expect(d.size_class).toMatch(/^(standard60|offsize_61_63|yorion_80_81)$/);
+    }
+    const train = new Set(trainDeckIds(manifest));
+    expect(manifest.decks.filter(d => d.holdout_near).some(d => train.has(d.deck_id))).toBe(false);
+    expect(Array.isArray(manifest.caveats)).toBe(true);
   });
   it.each(Object.keys(report.maxJaccard))("max Jaccard %s < 0.8", key => {
     expect(report.maxJaccard[key].jaccard).toBeLessThan(NEAR_DUP_JACCARD);

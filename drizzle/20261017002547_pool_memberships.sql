@@ -22,4 +22,5 @@ DO $$ BEGIN
   ALTER TABLE "pool_memberships" ADD CONSTRAINT "pool_memberships_deck_id_competitive_decks_id_fk" FOREIGN KEY ("deck_id") REFERENCES "public"."competitive_decks"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "pool_memberships_version_split_idx" ON "pool_memberships" USING btree ("pool_version","split");
+CREATE INDEX IF NOT EXISTS "pool_memberships_version_split_idx" ON "pool_memberships" USING btree ("pool_version","split");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "pool_memberships_deck_id_idx" ON "pool_memberships" USING btree ("deck_id");

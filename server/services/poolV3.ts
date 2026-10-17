@@ -14,6 +14,7 @@
  *   cluster only (archetypes are shared with train on purpose).
  */
 import { createHash } from "crypto";
+import { deckSizeClass, type DeckSizeClass } from "./trainingQuality";
 
 export const POOL_VERSION = 3;
 export const POOL_SEED = 20261016;
@@ -37,6 +38,9 @@ export interface PoolDeckInput {
   archetype: string | null;
   /** Mainboard rows: oracle_id, quantity, card colors ("UR", ""), type line. */
   main: Array<[string, number, string | null, string | null]>;
+  /** Mainboard card count and Yorion in companion/side, for the size class (optional for old exports). */
+  main_cards?: number;
+  yorion?: boolean;
 }
 
 export interface PoolDeck {
@@ -50,6 +54,7 @@ export interface PoolDeck {
   colorBucket: string; // "c" | "1" | "2" | "3+"
   oracleIds: string[]; // sorted, distinct
   deckHash: string;
+  sizeClass?: DeckSizeClass;
 }
 
 // ---------- normalization ----------
@@ -141,6 +146,7 @@ export function toPoolDeck(d: PoolDeckInput): PoolDeck {
     colorBucket: colorBucket(colors),
     oracleIds,
     deckHash: deckHash(oracleIds),
+    sizeClass: d.main_cards === undefined ? undefined : deckSizeClass(d.format, Number(d.main_cards), Boolean(d.yorion)),
   };
 }
 
@@ -430,6 +436,43 @@ export function assignSplits(decks: readonly PoolDeck[], groupOf: readonly strin
   return best!;
 }
 
+export const HOLDOUT_CONTROL_TARGET = 10;
+const PROMOTE_MAX_GROUP = 15;
+
+export interface ControlPromotion {
+  split: Split[];
+  moved: { group_id: string; format: string; decks: number; control: number } | null;
+  holdoutControlBefore: number;
+  holdoutControlAfter: number;
+}
+
+/**
+ * Best effort: if the holdout has fewer than HOLDOUT_CONTROL_TARGET control decks,
+ * move ONE small, single-format, control-majority train group (whole group, so the
+ * grouping is not broken) to the holdout. Smallest group first, ties by group id;
+ * skipped if it would break a minimum or leave its format without train decks.
+ */
+export function promoteControlToHoldout(decks: readonly PoolDeck[], groupOf: readonly string[], split: readonly Split[]): ControlPromotion {
+  const ctl = (s: readonly Split[]) => decks.filter((d, i) => s[i] === "holdout" && d.macro === "control").length;
+  const before = ctl(split);
+  const out = split.slice();
+  if (before >= HOLDOUT_CONTROL_TARGET) return { split: out, moved: null, holdoutControlBefore: before, holdoutControlAfter: before };
+  const train = decks.map((_, i) => i).filter(i => split[i] === "train");
+  const holdFormats = new Set(decks.filter((d, i) => split[i] === "holdout" && d.macro === "control").map(d => d.format));
+  const cands = groupsOf(decks, groupOf, train)
+    .map(g => ({ g, control: g.members.filter(i => decks[i].macro === "control").length }))
+    .filter(({ g, control }) => g.format !== "__mixed__" && g.members.length <= PROMOTE_MAX_GROUP && control * 2 >= g.members.length)
+    .sort((a, b) => Number(holdFormats.has(a.g.format)) - Number(holdFormats.has(b.g.format)) || a.g.members.length - b.g.members.length || (a.g.id < b.g.id ? -1 : 1));
+  for (const { g, control } of cands) {
+    const trial = out.slice();
+    for (const i of g.members) trial[i] = "holdout";
+    const leftInFormat = decks.some((d, i) => trial[i] === "train" && d.format === g.format);
+    if (!leftInFormat || checkConstraints(decks, groupOf, trial).violations.length) continue;
+    return { split: trial, moved: { group_id: g.id, format: g.format, decks: g.members.length, control }, holdoutControlBefore: before, holdoutControlAfter: ctl(trial) };
+  }
+  return { split: out, moved: null, holdoutControlBefore: before, holdoutControlAfter: before };
+}
+
 /** holdout_near: whole near-duplicate clusters taken out of the train decks, stratified by format. */
 export function assignHoldoutNear(decks: readonly PoolDeck[], clusterOf: readonly string[], split: readonly Split[], seed = POOL_SEED + 1): boolean[] {
   const trainIdx = decks.map((_, i) => i).filter(i => split[i] === "train");
@@ -462,6 +505,10 @@ export interface ManifestDeck {
   deck_id: number;
   split: Split;
   holdout_near: boolean;
+  /** true for holdout_near (and any non-train split): BC/RL loaders must not train on this deck. */
+  exclude_from_train: boolean;
+  /** standard60 | offsize_61_63 | yorion_80_81 | atypical (trainingQuality.deckSizeClass). */
+  size_class: string | null;
   group_id: string;
   near_cluster_id: string;
   archetype: string | null;
@@ -478,7 +525,13 @@ export interface PoolManifest {
   created_from: string;
   params: Record<string, unknown>;
   card_sets: { file: string; sha256: string };
+  caveats?: string[];
   decks: ManifestDeck[];
+}
+
+/** Deck ids a BC/RL loader may train on: split train and not excluded (holdout_near). */
+export function trainDeckIds(manifest: Pick<PoolManifest, "decks">): number[] {
+  return manifest.decks.filter(d => d.split === "train" && !d.exclude_from_train && !d.holdout_near).map(d => d.deck_id);
 }
 
 export function canonicalJson(v: unknown): string {

@@ -299,6 +299,7 @@ export const poolMemberships = pgTable(
   table => ({
     pk: primaryKey({ columns: [table.poolVersion, table.deckId, table.split] }),
     splitIdx: index("pool_memberships_version_split_idx").on(table.poolVersion, table.split),
+    deckIdx: index("pool_memberships_deck_id_idx").on(table.deckId),
     splitCheck: check(
       "pool_memberships_split_check",
       sql`${table.split} IN ('train', 'holdout', 'benchmark', 'holdout_near')`

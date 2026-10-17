@@ -1844,6 +1844,21 @@
         }
       },
       "indexes": {
+        "pool_memberships_deck_id_idx": {
+          "name": "pool_memberships_deck_id_idx",
+          "columns": [
+            {
+              "expression": "deck_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "pool_memberships_version_split_idx": {
           "name": "pool_memberships_version_split_idx",
           "columns": [
