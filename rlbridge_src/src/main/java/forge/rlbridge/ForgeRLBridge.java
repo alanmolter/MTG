@@ -22,21 +22,38 @@ import forge.game.event.GameEventTurnEnded;
 import forge.game.player.Player;
 import forge.game.player.RegisteredPlayer;
 import forge.game.zone.ZoneType;
+import forge.gamemodes.match.HostedMatch;
 import forge.gui.GuiBase;
+import forge.gui.download.GuiDownloadService;
+import forge.gui.interfaces.IGuiBase;
+import forge.gui.interfaces.IGuiGame;
 import forge.item.PaperCard;
 import forge.localinstance.properties.ForgePreferences.FPref;
+import forge.localinstance.skin.FSkinProp;
+import forge.localinstance.skin.ISkinImage;
 import forge.model.FModel;
+import forge.sound.IAudioClip;
+import forge.sound.IAudioMusic;
+import forge.util.FSerializableFunction;
+import forge.util.ImageFetcher;
 import forge.util.MyRandom;
+
+import org.jupnp.UpnpServiceConfiguration;
 
 import com.google.common.eventbus.Subscribe;
 
+import java.awt.GraphicsEnvironment;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Consumer;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -195,7 +212,15 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
         if (initialized) return;
         String assets = resolveAssetsDir();
         System.err.println("[forge-rlbridge] assetsDir=" + assets);
-        GuiBase.setInterface(new BridgeGuiDesktop(assets));
+        // GuiDesktop's static initializer reads the default screen device.
+        // GitHub-hosted runners have no display, so that throws HeadlessException
+        // and the JVM exits before a deck is parsed.
+        if (GraphicsEnvironment.isHeadless()) {
+            System.err.println("[forge-rlbridge] headless; skipping GuiDesktop");
+            GuiBase.setInterface(new HeadlessBridgeGui(assets));
+        } else {
+            GuiBase.setInterface(new BridgeGuiDesktop(assets));
+        }
         FModel.initialize(null, preferences -> {
             preferences.setPref(FPref.LOAD_CARD_SCRIPTS_LAZILY, true);
             preferences.setPref(FPref.UI_LANGUAGE, "en-US");
@@ -253,6 +278,77 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
         private final String assetsDir;
         public BridgeGuiDesktop(String assetsDir) { this.assetsDir = assetsDir; }
         @Override public String getAssetsDir() { return assetsDir; }
+    }
+
+    /**
+     * Desktop GUI substitute for a machine with no display. Match decisions
+     * go through ExternalPlayerController, so these dialogs are not used.
+     */
+    static final class HeadlessBridgeGui implements IGuiBase {
+        private final String assetsDir;
+        HeadlessBridgeGui(String assetsDir) { this.assetsDir = assetsDir; }
+
+        @Override public boolean isRunningOnDesktop() { return true; }
+        @Override public boolean isLibgdxPort() { return false; }
+        @Override public String getCurrentVersion() { return "rlbridge"; }
+        @Override public String getAssetsDir() { return assetsDir; }
+        @Override public ImageFetcher getImageFetcher() { return null; }
+        @Override public void invokeInEdtNow(Runnable runnable) { if (runnable != null) runnable.run(); }
+        @Override public void invokeInEdtLater(Runnable runnable) { if (runnable != null) runnable.run(); }
+        @Override public void invokeInEdtAndWait(Runnable proc) { if (proc != null) proc.run(); }
+        @Override public boolean isGuiThread() { return true; }
+        @Override public ISkinImage getSkinIcon(FSkinProp skinProp) { return null; }
+        @Override public ISkinImage getUnskinnedIcon(String path) { return null; }
+        @Override public ISkinImage getCardArt(PaperCard card) { return null; }
+        @Override public ISkinImage getCardArt(PaperCard card, boolean backFace) { return null; }
+        @Override public ISkinImage createLayeredImage(PaperCard card, FSkinProp background, String overlayFilename, float opacity) { return null; }
+        @Override public void showBugReportDialog(String title, String text, boolean showExitAppBtn) {}
+        @Override public void showImageDialog(ISkinImage image, String message, String title) {}
+        @Override public int showOptionDialog(String message, String title, FSkinProp icon, List<String> options, int defaultOption) { return defaultOption; }
+        @Override public String showInputDialog(String message, String title, FSkinProp icon, String initialInput, List<String> inputOptions, boolean isNumeric) { return initialInput; }
+        @Override public <T> List<T> getChoices(String message, int min, int max, Collection<T> choices, Collection<T> selected, FSerializableFunction<T, String> display) {
+            List<T> picked = new ArrayList<>();
+            if (selected != null) picked.addAll(selected);
+            if (choices != null) {
+                for (T choice : choices) {
+                    if (picked.size() >= min) break;
+                    if (!picked.contains(choice)) picked.add(choice);
+                }
+            }
+            return picked;
+        }
+        @Override public <T> List<T> order(String title, String top, int remainingObjectsMin, int remainingObjectsMax, List<T> sourceChoices, List<T> destChoices) {
+            List<T> ordered = new ArrayList<>();
+            if (destChoices != null) ordered.addAll(destChoices);
+            if (sourceChoices != null) ordered.addAll(sourceChoices);
+            return ordered;
+        }
+        @Override public String showFileDialog(String title, String defaultDir) { return null; }
+        @Override public File getSaveFile(File defaultFile) { return null; }
+        @Override public void download(GuiDownloadService service, Consumer<Boolean> callback) { if (callback != null) callback.accept(false); }
+        @Override public void refreshSkin() {}
+        @Override public void showCardList(String title, String message, List<PaperCard> list) {}
+        @Override public boolean showBoxedProduct(String title, String message, List<PaperCard> list) { return false; }
+        @Override public PaperCard chooseCard(String title, String message, List<PaperCard> list) { return list == null || list.isEmpty() ? null : list.get(0); }
+        @Override public int getAvatarCount() { return 0; }
+        @Override public int getSleevesCount() { return 0; }
+        @Override public void copyToClipboard(String text) {}
+        @Override public void browseToUrl(String url) throws IOException, URISyntaxException {}
+        @Override public boolean isSupportedAudioFormat(File file) { return false; }
+        @Override public IAudioClip createAudioClip(String filename) { return null; }
+        @Override public IAudioMusic createAudioMusic(String filename) { return null; }
+        @Override public void startAltSoundSystem(String filename, boolean isSynchronized) {}
+        @Override public void clearImageCache() {}
+        @Override public void showSpellShop() {}
+        @Override public void showBazaar() {}
+        @Override public IGuiGame getNewGuiGame() { return null; }
+        @Override public HostedMatch hostMatch() { return new HostedMatch(); }
+        @Override public void runBackgroundTask(String message, Runnable task) { if (task != null) task.run(); }
+        @Override public String encodeSymbols(String str, boolean formatReminderText) { return str; }
+        @Override public void preventSystemSleep(boolean preventSleep) {}
+        @Override public float getScreenScale() { return 1f; }
+        @Override public UpnpServiceConfiguration getUpnpPlatformService() { return null; }
+        @Override public boolean hasNetGame() { return false; }
     }
 
     // ── Command dispatch ───────────────────────────────────────────────────
