@@ -13,6 +13,7 @@ step and reset only enqueue, so they do not wait on Postgres.
 from __future__ import annotations
 
 import atexit
+import json
 import logging
 import os
 import queue
@@ -33,8 +34,10 @@ MAX_QUEUED = 4096
 INSERT_FORGE_MATCH = """
 INSERT INTO forge_matches (
     winner, turns, agent_deck_id, opponent_deck_id, seed,
-    policy_version, pool_version, bridge_version
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    policy_version, pool_version, bridge_version,
+    policy_controlled, protocol_version,
+    ai_fallback_decisions, policy_decisions, ai_fallback_by_kind
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
 """
 
 
@@ -48,6 +51,11 @@ def forge_match_params(
     bridge_version: Optional[str],
     winner: Any = None,
     turns: Any = None,
+    policy_controlled: Any = None,
+    protocol_version: Any = None,
+    ai_fallback_decisions: Any = None,
+    policy_decisions: Any = None,
+    ai_fallback_by_kind: Any = None,
 ) -> tuple:
     def _text(value: Any) -> Optional[str]:
         if value is None:
@@ -72,6 +80,11 @@ def forge_match_params(
         _text(policy_version),
         _text(pool_version),
         _text(bridge_version),
+        None if policy_controlled is None else bool(policy_controlled),
+        _int(protocol_version),
+        _int(ai_fallback_decisions),
+        _int(policy_decisions),
+        None if ai_fallback_by_kind is None else json.dumps(ai_fallback_by_kind),
     )
 
 

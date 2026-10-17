@@ -92,16 +92,8 @@ step "Seed inicial de cartas (se necessário)"
 run "npm run seed:scryfall" && ok "Seed concluído" || warn "Seed falhou ou já foi executado"
 
 # ── Importação de dados competitivos ──────────────────────────────────────────
-step "Importando decks competitivos (MTGGoldfish + MTGTop8)"
-echo -e "  ${YELLOW}📥 MTGGoldfish — formato: $FORMAT, limite: $DECKS decks...${NC}"
-run "npx tsx -e \"
-  import('dotenv/config');
-  import('./server/services/mtggoldfishScraper.ts').then(m =>
-    m.importMTGGoldfishDecks('$FORMAT', $DECKS)
-      .then(r => console.log('  ✅ Goldfish:', r.decksImported, 'importados,', r.decksSkipped, 'pulados'))
-      .catch(e => console.warn('  ⚠️  Goldfish:', e.message))
-  );
-\"" || warn "MTGGoldfish falhou — continuando"
+step "Importando decks competitivos (MTGTop8; MTGGoldfish disabled)"
+echo -e "  ${YELLOW}MTGGoldfish import is disabled (scraper protection).${NC}"
 
 echo -e "  ${YELLOW}📥 MTGTop8 — formato: $FORMAT, limite: $DECKS decks...${NC}"
 run "npx tsx -e \"

@@ -11,7 +11,13 @@ from typing import Any, Dict, List
 import numpy as np
 import pytest
 
-from ml_engine.ray_cluster.env import MtgForgeEnv, java_step_timeout_seconds
+from ml_engine.ray_cluster.env import (
+    MtgForgeEnv,
+    ProtocolError,
+    _recorded_policy_controlled,
+    java_step_timeout_seconds,
+    seed_everything,
+)
 
 
 # ── Fakes ────────────────────────────────────────────────────────────────────
@@ -23,17 +29,69 @@ class _FakeStdin:
     def flush(self) -> None: pass
 
 
+def _hello_response(request_id: Any) -> Dict[str, Any]:
+    return {
+        "type": "hello",
+        "request_id": request_id,
+        "protocol": 2,
+        "bridge_version": "rlbridge-v2.0.0",
+        "forge_commit": "7cc4ff7b",
+        "capabilities": ["policy_control", "seed", "legal_mask", "decision_points"],
+    }
+
+
 class _FakeStdout:
-    def __init__(self, responses: List[Dict[str, Any]]) -> None:
+    """One reply per command.
+
+    The env pumps stdout on a daemon thread, so a reply must not be produced
+    until the command it belongs to has been written. Otherwise the pump
+    pulls the next game state while ``hello`` is still the last command and
+    the state is tagged with the wrong request id.
+    """
+
+    def __init__(self, responses: List[Dict[str, Any]], stdin: _FakeStdin | None = None,
+                 inject_request_id: bool = True) -> None:
         self.queue: List[str] = [json.dumps(r) + "\n" for r in responses]
+        self.stdin = stdin
+        self.inject_request_id = inject_request_id
+        self._answered = 0
+
     def readline(self) -> str:
-        return self.queue.pop(0) if self.queue else ""
+        import time
+
+        if self.stdin is not None and self.stdin.written:
+            deadline = time.monotonic() + 2.0
+            while len(self.stdin.written) <= self._answered:
+                if time.monotonic() > deadline:
+                    return ""
+                time.sleep(0.001)
+            command = json.loads(self.stdin.written[self._answered])
+            self._answered += 1
+            if command.get("cmd") == "hello":
+                return json.dumps(_hello_response(command.get("request_id"))) + "\n"
+            return self._pop(command if self.inject_request_id else None)
+        return self._pop(None)
+
+    def _pop(self, command: Dict[str, Any] | None) -> str:
+        if not self.queue:
+            return ""
+        raw = self.queue.pop(0)
+        if command is None or "request_id" not in command:
+            return raw
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
+        if isinstance(payload, dict) and "request_id" not in payload:
+            payload["request_id"] = command["request_id"]
+            return json.dumps(payload) + "\n"
+        return raw
 
 
 class _FakeProc:
-    def __init__(self, responses: List[Dict[str, Any]]) -> None:
+    def __init__(self, responses: List[Dict[str, Any]], inject_request_id: bool = True) -> None:
         self.stdin = _FakeStdin()
-        self.stdout = _FakeStdout(responses)
+        self.stdout = _FakeStdout(responses, self.stdin, inject_request_id)
     def poll(self) -> Any: return None  # alive
 
 
@@ -72,6 +130,7 @@ def _make_env(*, autoregressive: bool = False) -> MtgForgeEnv:
         # (that only runs inside _ensure_subprocess which we bypass).
         "forge_jar":  "stub",
         "bridge_jar": "stub",
+        "strict_protocol": False,
     })
     # Pre-populate last_snapshot so shape() delta maths doesn't crash
     env._last_snapshot = env._state_to_snapshot(_minimal_state())
@@ -131,6 +190,26 @@ def test_policy_control_loss_truncates_without_a_loss_penalty():
     assert reward == 0.0
     assert info["error"] == "forge_policy_control_lost"
     assert info["episode_metrics"]["win"] is None
+
+
+def test_repeated_illegal_action_ends_the_episode():
+    env = _make_env()
+    stuck = _minimal_state(
+        decision_id=0,
+        illegal_action=True,
+        policy_action_applied=False,
+    )
+    env._proc = _FakeProc([stuck] * 8)
+    terminated = False
+    for _ in range(8):
+        _, _, terminated, _, info = env.step(0)
+    assert terminated is True
+    assert info["state"]["_illegal_cap"] is True
+    written = len(env._proc.stdin.written)
+    _, _, terminated_again, _, info_again = env.step(0)
+    assert terminated_again is True
+    assert info_again["error"] == "illegal_action_cap"
+    assert len(env._proc.stdin.written) == written
 
 
 def test_unapplied_policy_action_is_penalized():
@@ -567,3 +646,52 @@ def test_malformed_active_response_kills_forge_worker():
     with pytest.raises(ValueError, match="action_mask"):
         env.step(0)
     assert env._proc is None
+
+
+def test_response_without_request_id_is_a_protocol_error():
+    env = _make_env()
+    env._proc = _FakeProc([_minimal_state(turn=2)], inject_request_id=False)
+    env._pending_request_id = 1
+    with pytest.raises(ProtocolError, match="request_id"):
+        env._read_state(timeout_override=1.0)
+
+
+def test_reset_handshake_and_decision_id_are_sent(monkeypatch):
+    env = _make_env()
+    env.agent_deck = "4 Lightning Bolt\n56 Mountain"
+    env.opponent_deck = "4 Counterspell\n56 Island"
+    env._proc = _FakeProc([
+        _minimal_state(decision_id=0, turn=1),
+        _minimal_state(decision_id=1, turn=1),
+    ])
+    monkeypatch.setattr(env, "_ensure_subprocess", lambda: None)
+    env.reset(seed=11)
+    commands = [json.loads(line) for line in env._proc.stdin.written]
+    assert commands[0]["cmd"] == "hello"
+    assert commands[0]["protocol"] == 2
+    assert commands[1]["cmd"] == "new_game"
+    assert commands[1]["seed"] == 11
+    env.step(0)
+    step = json.loads(env._proc.stdin.written[-1])
+    assert step["decision_id"] == 0
+    assert step["action"] == 0
+
+
+def test_seed_everything_replays_numpy_and_torch():
+    import numpy as np
+    import torch
+
+    seed_everything(123456)
+    a = np.random.randint(0, 10_000, size=4)
+    t = torch.randint(0, 10_000, (4,))
+    seed_everything(123456)
+    b = np.random.randint(0, 10_000, size=4)
+    u = torch.randint(0, 10_000, (4,))
+    assert np.array_equal(a, b)
+    assert torch.equal(t, u)
+
+
+def test_divided_targets_are_not_a_policy_controlled_match():
+    assert _recorded_policy_controlled({"policy_controlled": True}) is True
+    assert _recorded_policy_controlled({"policy_controlled": True, "divided_targets": True}) is False
+    assert _recorded_policy_controlled({"policy_controlled": False, "divided_targets": False}) is False

@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mtg.local/schemas/bridge_v2/state.schema.json",
+  "title": "state (resposta a new_game/step)",
+  "type": "object",
+  "required": [
+    "type",
+    "request_id",
+    "protocol",
+    "bridge_version",
+    "decision_id",
+    "decision_kind",
+    "policy_controlled",
+    "policy_action_applied",
+    "terminal",
+    "truncated",
+    "outcome",
+    "illegal_action",
+    "turn",
+    "phase",
+    "action_mask",
+    "action_source_indices",
+    "action_target_indices",
+    "action_kinds"
+  ],
+  "properties": {
+    "type": {
+      "const": "state"
+    },
+    "request_id": {
+      "$ref": "common.schema.json#/$defs/request_id"
+    },
+    "protocol": {
+      "$ref": "common.schema.json#/$defs/protocol"
+    },
+    "bridge_version": {
+      "type": "string"
+    },
+    "seed": {
+      "$ref": "common.schema.json#/$defs/seed"
+    },
+    "decision_id": {
+      "$ref": "common.schema.json#/$defs/decision_id"
+    },
+    "decision_kind": {
+      "$ref": "common.schema.json#/$defs/decision_kind"
+    },
+    "policy_controlled": {
+      "type": "boolean"
+    },
+    "policy_action_applied": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "null na resposta a new_game; bool em step."
+    },
+    "ai_fallback_decisions": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "terminal": {
+      "type": "boolean"
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "truncation_reason": {
+      "$ref": "common.schema.json#/$defs/truncation_reason"
+    },
+    "outcome": {
+      "enum": [
+        1,
+        -1,
+        0,
+        null
+      ]
+    },
+    "illegal_action": {
+      "type": "boolean"
+    },
+    "turn": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "phase": {
+      "type": "string"
+    },
+    "turn_phase": {
+      "type": [
+        "integer",
+        "string"
+      ]
+    },
+    "life_you": {
+      "type": "integer"
+    },
+    "life_opp": {
+      "type": "integer"
+    },
+    "hand_you_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "hand_opp_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "library_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "mana_pool_you": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "action_mask": {
+      "$ref": "common.schema.json#/$defs/mask512"
+    },
+    "action_source_indices": {
+      "$ref": "common.schema.json#/$defs/idx512"
+    },
+    "action_target_indices": {
+      "$ref": "common.schema.json#/$defs/idx512"
+    },
+    "action_kinds": {
+      "$ref": "common.schema.json#/$defs/idx512"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/action"
+      },
+      "maxItems": 512
+    },
+    "chosen_action": {
+      "type": "integer",
+      "minimum": -1,
+      "maximum": 511
+    },
+    "cards": {
+      "type": "array"
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "truncated": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "truncation_reason"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "terminal": {
+            "const": false
+          },
+          "truncated": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "action_mask": {
+            "contains": {
+              "const": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "terminal": {
+            "const": true
+          }
+        },
+        "required": [
+          "terminal"
+        ]
+      },
+      "then": {
+        "properties": {
+          "decision_kind": {
+            "const": "none"
+          }
+        }
+      }
+    }
+  ]
+}

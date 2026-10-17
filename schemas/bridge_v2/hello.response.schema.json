@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mtg.local/schemas/bridge_v2/hello.response.schema.json",
+  "title": "hello (bridge→cliente)",
+  "type": "object",
+  "required": [
+    "type",
+    "request_id",
+    "protocol",
+    "bridge_version",
+    "forge_commit",
+    "capabilities"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "const": "hello"
+    },
+    "request_id": {
+      "$ref": "common.schema.json#/$defs/request_id"
+    },
+    "protocol": {
+      "$ref": "common.schema.json#/$defs/protocol"
+    },
+    "bridge_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "forge_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "cards_loaded": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "policy_control",
+          "seed",
+          "legal_mask",
+          "decision_points",
+          "paging",
+          "exact_ai_labels",
+          "autoregressive"
+        ]
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "num_actions": {
+          "const": 512
+        },
+        "max_cards": {
+          "type": "integer"
+        },
+        "max_decision_timeout_ms": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

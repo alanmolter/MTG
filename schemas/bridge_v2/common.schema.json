@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mtg.local/schemas/bridge_v2/common.schema.json",
+  "title": "Bridge v2 — definições comuns",
+  "$defs": {
+    "request_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotônico por processo Python; ecoado em toda resposta."
+    },
+    "decision_id": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotônico por partida; identifica o ponto de decisão a que um step responde."
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "protocol": {
+      "const": 2
+    },
+    "mask512": {
+      "type": "array",
+      "items": {
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "minItems": 512,
+      "maxItems": 512
+    },
+    "idx512": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": -3,
+        "description": "-1 vazio; -2 o agente; -3 o oponente. Índices de carta são >= 0."
+      },
+      "minItems": 512,
+      "maxItems": 512
+    },
+    "error_code": {
+      "enum": [
+        "BAD_REQUEST",
+        "UNKNOWN_CMD",
+        "PROTOCOL_MISMATCH",
+        "NO_GAME",
+        "DECK_PARSE_ERROR",
+        "STALE_DECISION",
+        "ILLEGAL_ACTION",
+        "DECISION_TIMEOUT",
+        "ENGINE_ERROR",
+        "INTERNAL"
+      ]
+    },
+    "truncation_reason": {
+      "enum": [
+        "step_timeout",
+        "decision_timeout",
+        "turn_limit",
+        "engine_error"
+      ]
+    },
+    "decision_kind": {
+      "enum": [
+        "priority",
+        "mulligan",
+        "declare_attackers",
+        "declare_blockers",
+        "choose_targets",
+        "choose_cards",
+        "choose_mode",
+        "play_trigger",
+        "none"
+      ]
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "slot",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "slot": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 511
+        },
+        "kind": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15,
+          "description": "0=pass,1=play/cast,2=activate,3=attack,4=block,5=target,6=mulligan_keep,7=mulligan_mull,8=page"
+        },
+        "sa_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source_index": {
+          "type": "integer",
+          "minimum": -3
+        },
+        "target_index": {
+          "type": "integer",
+          "minimum": -3
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    }
+  }
+}

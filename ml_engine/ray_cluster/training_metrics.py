@@ -29,6 +29,8 @@ NUMERIC_EPISODE_METRICS: Tuple[str, ...] = (
     "forge_matches_enqueued",
     "forge_matches_written",
     "forge_matches_dropped",
+    "ai_fallback_decisions",
+    "policy_decisions",
 )
 
 
@@ -69,6 +71,13 @@ def numeric_custom_metrics(info: Optional[Mapping]) -> dict:
         if value is None:
             continue
         copied[key] = float(value)
+    by_kind = metrics.get("ai_fallback_by_kind")
+    if isinstance(by_kind, Mapping):
+        for key, value in by_kind.items():
+            try:
+                copied[f"ai_fallback_{key}"] = float(value)
+            except (TypeError, ValueError):
+                continue
     return copied
 
 

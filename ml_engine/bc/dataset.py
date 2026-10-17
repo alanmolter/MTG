@@ -81,13 +81,26 @@ def row_uses_blocked_deck(row: dict, blocked_deck_ids: set[str]) -> bool:
     return bool(named & blocked_deck_ids)
 
 
+def row_is_v1(row: dict) -> bool:
+    """Historical shards have no protocol, protocol 1, or label_version v1.
+
+    Phase 1 trains only on rows the v2 bridge marked with protocol 2.
+    """
+
+    protocol = row.get("protocol", row.get("protocol_version"))
+    label = row.get("label_version")
+    if protocol in (1, "1", "v1") or label in (1, "1", "v1"):
+        return True
+    return protocol is None and label is None
+
+
 def training_rows(rows: list[dict], blocked_deck_ids: set[str]) -> tuple[list[dict], int]:
-    """Keep ``split == train`` rows whose decks are not held out by the manifest."""
+    """Keep protocol-v2 ``split == train`` rows whose decks are not held out."""
 
     kept: list[dict] = []
     excluded = 0
     for row in rows:
-        if row.get("split") != "train" or row_uses_blocked_deck(row, blocked_deck_ids):
+        if row.get("split") != "train" or row_uses_blocked_deck(row, blocked_deck_ids) or row_is_v1(row):
             excluded += 1
             continue
         kept.append(row)

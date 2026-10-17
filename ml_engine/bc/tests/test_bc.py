@@ -150,14 +150,15 @@ def test_train_and_holdout_game_ids_stay_disjoint_and_manifest_holdout_is_droppe
     assert "azoriuscontrol_q05" in blocked
     kept, excluded = training_rows(
         [
-            {"split": "train", "deck_id": "not-in-pool", "opponent_id": "also-not", "game_id": "keep"},
-            {"split": "train", "deck_id": "azoriuscontrol_q05", "opponent_id": "not-in-pool", "game_id": "leak"},
-            {"split": "holdout", "deck_id": "not-in-pool", "opponent_id": "not-in-pool", "game_id": "held"},
+            {"split": "train", "deck_id": "not-in-pool", "opponent_id": "also-not", "game_id": "keep", "protocol": 2},
+            {"split": "train", "deck_id": "azoriuscontrol_q05", "opponent_id": "not-in-pool", "game_id": "leak", "protocol": 2},
+            {"split": "holdout", "deck_id": "not-in-pool", "opponent_id": "not-in-pool", "game_id": "held", "protocol": 2},
+            {"split": "train", "deck_id": "not-in-pool", "opponent_id": "also-not", "game_id": "v1", "protocol": 1},
         ],
         blocked,
     )
     assert [row["game_id"] for row in kept] == ["keep"]
-    assert excluded == 2
+    assert excluded == 3
     assert {row["game_id"] for row in kept}.isdisjoint({"leak", "held"})
 
 
@@ -254,7 +255,10 @@ def test_db_pool_manifest_excludes_holdout_near():
     ]}
     blocked = db_pool_excluded_deck_ids(manifest)
     assert blocked == {"2", "3", "4"}
-    rows = [{"split": "train", "deck_id": str(i)} for i in (1, 2, 3, 4)]
+    rows = [
+        {"split": "train", "deck_id": str(i), "protocol": 2, "label_version": 2}
+        for i in (1, 2, 3, 4)
+    ]
     kept, excluded = training_rows(rows, blocked)
     assert [r["deck_id"] for r in kept] == ["1"] and excluded == 3
 
@@ -272,3 +276,62 @@ def test_committed_pool_v3_manifest_blocks_holdout_near():
         if deck.get("holdout_near"):
             assert deck.get("exclude_from_train") is True
             assert str(deck["deck_id"]) in blocked
+
+
+def test_record_match_executes_the_ai_slot_for_attacks():
+    from ml_engine.bc.record import record_match
+
+    calls = []
+    attack = {
+        "terminal": False,
+        "outcome": None,
+        "illegal_action": False,
+        "policy_controlled": True,
+        "policy_action_applied": None,
+        "decision_id": 4,
+        "decision_kind": "declare_attackers",
+        "chosen_action": 3,
+        "turn": 3,
+        "life_you": 20,
+        "life_opp": 20,
+        "hand_you_size": 5,
+        "hand_opp_size": 7,
+        "power_you": 2,
+        "power_opp": 0,
+        "mana_value_played": 0,
+        "you": {"life": 20, "mana_pool_total": 0, "hand_size": 5, "library_size": 40,
+                "graveyard_size": 0, "exile_size": 0, "is_active": True, "max_life_seen": 20},
+        "opp": {"life": 20, "mana_pool_total": 0, "hand_size": 7, "library_size": 40,
+                "graveyard_size": 0, "exile_size": 0, "is_active": False, "max_life_seen": 20},
+        "cards": [{"mana_value": 2, "power": 2, "toughness": 2, "is_creature": True,
+                   "controller": "you", "zone": "battlefield", "name": "Bear"}],
+        "action_mask": [1, 0, 0, 1] + [0] * 508,
+        "action_source_indices": [-1, -1, -1, 0] + [-1] * 508,
+        "action_target_indices": [-1, -1, -1, -3] + [-1] * 508,
+        "action_kinds": [0, 0, 0, 2] + [0] * 508,
+        "ai_fallback_decisions": 2,
+        "ai_fallback_by_kind": {"assignCombatDamage": 2},
+        "policy_decisions": 4,
+    }
+    done = dict(attack)
+    done.update(terminal=True, outcome=1, decision_kind="none", chosen_action=-1,
+                policy_action_applied=True, action_mask=[0] * 512)
+
+    class Bridge:
+        def command(self, payload):
+            calls.append(dict(payload))
+            return attack if payload["cmd"] == "new_game" else done
+
+    rows, _seen = record_match(
+        Bridge(), agent_deck="1 Bear", opponent_deck="1 Forest", seed=1,
+        deck_id="a", opponent_id="b", split="train",
+    )
+    assert calls[0]["agent_policy"] == "external"
+    assert calls[1]["action"] == 3
+    assert calls[1]["decision_id"] == 4
+    assert rows[0]["decision_kind"] == "declare_attackers"
+    assert rows[0]["action"] == 3
+    assert rows[0]["label_version"] == 2
+    assert rows[0]["ai_fallback_decisions"] == 2
+    assert rows[0]["ai_fallback_by_kind"] == {"assignCombatDamage": 2}
+    assert rows[0]["policy_decisions"] == 4

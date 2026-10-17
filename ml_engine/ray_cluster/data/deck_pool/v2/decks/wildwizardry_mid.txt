@@ -2,7 +2,7 @@ About
 Name Wild Wizardry
 
 Deck
-1 Magmatic Channeler
+2 Magmatic Channeler
 1 Efreet Flamepainter
 3 Prismari Apprentice
 2 Spectacle Mage
@@ -17,7 +17,6 @@ Deck
 3 Silundi Vision // Silundi Isle
 1 Alrund's Epiphany
 3 Roil Eruption
-1 Magic Missile
 2 Pigment Storm
 3 Sleep
 3 Song-Mad Treachery // Song-Mad Ruins

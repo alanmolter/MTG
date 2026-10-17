@@ -216,6 +216,12 @@ class LoopGuard:
         latest_action = tracker.action_history[-1]
         if latest_action.get("type") in ("pass", "priority", "noop"):
             return False, None
+        # Mulligan, tuck, discard, and combat declaration are several
+        # decisions over one board. Their canonical hash does not move, so
+        # counting them flags a loop at turn 0. Only priority is evidence.
+        kind = state.get("decision_kind") or state.get("decision_type")
+        if kind not in (None, "", "priority"):
+            return False, None
 
         state_hash = canonical_state_hash(state)
 

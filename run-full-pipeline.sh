@@ -133,8 +133,7 @@ if [ "$SKIP_IMPORT" = false ]; then
   echo -e "${BLUE}FASE 2: IMPORTAÇÃO DE DADOS${NC}"
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-  echo -e "\n${YELLOW}📥 Importando decks de MTGGoldfish (${FORMAT}, ${DECKS} decks)...${NC}"
-  npm run import:mtggoldfish -- --format "$FORMAT" --limit "$DECKS" 2>&1 | tail -20
+  echo -e "\n${YELLOW}MTGGoldfish import is disabled (scraper protection).${NC}"
 
   echo -e "\n${YELLOW}📥 Importando decks de MTGTop8 (${FORMAT}, ${DECKS} decks)...${NC}"
   npm run import:mtgtop8 -- --format "$FORMAT" --limit "$DECKS" 2>&1 | tail -20

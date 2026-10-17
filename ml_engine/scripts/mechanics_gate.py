@@ -50,7 +50,14 @@ def _scripted_action(
     state: Mapping[str, Any], observation: Mapping[str, Any],
     *, preferred_card: str,
 ) -> int:
-    decision = str(state.get("decision_type", ""))
+    decision = str(state.get("decision_kind") or state.get("decision_type") or "")
+    if decision == "mulligan":
+        return 0
+    if decision == "choose_cards":
+        for action in _visible_choices(observation):
+            if int(observation["action_mask"][action]) == 1:
+                return action
+        return 0
     if decision == "choose_targets":
         for action in _visible_choices(observation):
             if int(observation["action_kinds"][action]) == KIND_TARGET and \
@@ -142,7 +149,8 @@ def run_mask_rejection() -> dict[str, Any]:
             if terminated or not rejected.get("illegal_action") or rejected.get("policy_action_applied"):
                 violations.append("invalid_slot_not_rejected")
             if rejected.get("turn") != state.get("turn") or \
-                    rejected.get("decision_type") != state.get("decision_type"):
+                    (rejected.get("decision_kind") or rejected.get("decision_type")) != \
+                    (state.get("decision_kind") or state.get("decision_type")):
                 violations.append("invalid_slot_advanced_game")
             _, _, _, _, recovery_info = env.step(0)
             recovered = recovery_info["state"]

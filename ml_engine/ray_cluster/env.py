@@ -85,19 +85,57 @@ def java_step_timeout_seconds(python_timeout: float, requested: Optional[int] = 
     return chosen
 
 
+PROTOCOL_VERSION = 2
+REQUIRED_CAPABILITIES = ("policy_control", "seed", "legal_mask", "decision_points")
+
+
+class ProtocolError(RuntimeError):
+    """A bridge reply violated protocol v2. Missing request_id is one of these."""
+
+
+def seed_everything(seed: int) -> None:
+    """Seed NumPy and PyTorch for an evaluation replay.
+
+    The Forge JVM applies the match seed once, inside ``new_game``. Calling
+    this on every training ``reset`` would restart the policy's own RNG.
+    ``PYTHONHASHSEED`` is read only at interpreter startup, so it is not set
+    here.
+    """
+
+    import random
+
+    value = int(seed)
+    random.seed(value)
+    try:
+        import numpy as np
+        np.random.seed(value & 0xFFFFFFFF)
+    except Exception:
+        logger.debug("numpy seed skipped", exc_info=True)
+    try:
+        import torch
+        torch.manual_seed(value)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(value)
+    except Exception:
+        logger.debug("torch seed skipped", exc_info=True)
+
+
 def response_matches(payload: Dict[str, Any], expected_request_id: Optional[int]) -> bool:
     """True when a JSON reply belongs to the command currently in flight.
 
-    Replies with no ``request_id`` are kept so older bridges and test fakes
-    still work. A present id that does not match is stale and must be dropped.
+    Protocol v2 rejects a reply that omits ``request_id``. A present id that
+    does not match is stale and must be dropped, not treated as this command's
+    state.
     """
 
-    if expected_request_id is None or payload.get("request_id") is None:
+    if expected_request_id is None:
         return True
+    if "request_id" not in payload or payload.get("request_id") is None:
+        raise ProtocolError("response missing request_id")
     try:
         return int(payload["request_id"]) == int(expected_request_id)
-    except (TypeError, ValueError):
-        return False
+    except (TypeError, ValueError) as exc:
+        raise ProtocolError("response request_id is not an integer") from exc
 
 # Memory-budget notes
 # ───────────────────
@@ -179,6 +217,38 @@ def _scale_features(values, scales) -> list:
         number = float(value or 0.0)
         scaled.append(number if not scale else number / float(scale))
     return scaled
+
+
+def _recorded_policy_controlled(state: Optional[Dict[str, Any]]) -> bool:
+    """A divided-damage target is chosen by the AI, so the match is not a Phase 1 label."""
+
+    if not isinstance(state, dict):
+        return False
+    if state.get("divided_targets"):
+        return False
+    return bool(state.get("policy_controlled"))
+
+
+def _state_int(state: Optional[Dict[str, Any]], key: str) -> int:
+    if not isinstance(state, dict):
+        return 0
+    try:
+        return int(state.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _fallback_by_kind(state: Optional[Dict[str, Any]]) -> Dict[str, int]:
+    raw = state.get("ai_fallback_by_kind") if isinstance(state, dict) else None
+    if not isinstance(raw, dict):
+        return {}
+    counts: Dict[str, int] = {}
+    for key, value in raw.items():
+        try:
+            counts[str(key)] = int(value)
+        except (TypeError, ValueError):
+            continue
+    return counts
 
 
 def _sha256_text(text: Optional[str]) -> str:
@@ -314,6 +384,14 @@ class MtgForgeEnv(gym.Env):
         self._request_seq: int = 0
         self._pending_request_id: Optional[int] = None
         self.stale_replies_discarded: int = 0
+        self.stale_decisions: int = 0
+        self.strict_protocol: bool = bool(config.get("strict_protocol", True))
+        # Off during training. Evaluation and determinism replays opt in.
+        self.seed_python_rngs: bool = bool(config.get("seed_python_rngs", False))
+        self._decision_id: int = 0
+        self._last_state: Optional[Dict[str, Any]] = None
+        self._illegal_repeats: int = 0
+        self._illegal_capped: bool = False
         # Never train against an observational bridge. The first snapshot must
         # prove that the agent-side PlayerController was installed in Forge.
         self.require_policy_control: bool = bool(config.get("require_policy_control", True))
@@ -431,6 +509,9 @@ class MtgForgeEnv(gym.Env):
             seed = int.from_bytes(os.urandom(4), "little")
         super().reset(seed=seed)
         self._ensure_subprocess()
+        if self.seed_python_rngs:
+            seed_everything(int(seed))
+        self._handshake()
 
         # Per-episode deck rotation when Arena mode is on. Each reset() draws
         # two lists from the train split of the versioned deck pool, so the
@@ -462,12 +543,23 @@ class MtgForgeEnv(gym.Env):
         self._begin_episode_tracking(int(seed))
 
         self._send_command({"cmd": "new_game", "agent_deck": self.agent_deck,
-                            "opponent_deck": self.opponent_deck, "seed": seed,
+                            "opponent_deck": self.opponent_deck, "seed": int(seed),
                             "agent_policy": self.agent_policy,
+                            "agent_side": 0,
+                            "opponent": "forge_ai",
+                            "turn_limit": self.turn_limit,
                             "step_timeout_seconds": self.java_step_timeout_seconds})
         # Forge's cold-start (card DB load) takes ~5s. Give new_game a generous
         # one-time budget so the first reset survives the warm-up.
-        first_state = self._read_state(timeout_override=max(self.step_timeout, 60.0))
+        try:
+            first_state = self._read_state(timeout_override=max(self.step_timeout, 60.0))
+        except ProtocolError:
+            self._kill_subprocess()
+            raise
+        self._remember_state(first_state)
+        if first_state.get("truncation_reason") == "engine_error" or int(first_state.get("bridge_errors") or 0) > 0:
+            self._kill_subprocess()
+            raise RuntimeError("Forge bridge engine error: " + str(first_state.get("truncation_reason")))
         if self.agent_policy == "forge_ai":
             if not first_state.get("terminal") or first_state.get("policy_contract_violation"):
                 self._kill_subprocess()
@@ -502,7 +594,14 @@ class MtgForgeEnv(gym.Env):
             # not a loss the policy should learn from.
             return self._infra_stop("forge_subprocess_dead")
 
+        if self._illegal_capped:
+            return self._dummy_obs(), 0.0, True, False, {
+                "error": "illegal_action_cap",
+                "state": self._last_state or {},
+            }
+
         flat_action = int(action)
+        sent_decision = int(self._decision_id)
         self._episode_steps += 1
         if flat_action == 0:
             self._episode_passes += 1
@@ -515,15 +614,32 @@ class MtgForgeEnv(gym.Env):
             "type": action_type,
             "action_id": flat_action,
         })
-        self._send_command({"cmd": "step", "action": flat_action})
+        self._send_command({
+            "cmd": "step",
+            "action": flat_action,
+            "decision_id": int(self._decision_id),
+        })
         try:
             state = self._read_state()
+        except ProtocolError:
+            self._kill_subprocess()
+            return self._infra_stop("protocol_error")
         except subprocess.TimeoutExpired:
             return self._infra_stop("forge_step_timeout")
         except EOFError:
             return self._infra_stop("forge_subprocess_dead")
+        if state.get("type") == "error":
+            code = str(state.get("code") or "protocol_error")
+            if code == "STALE_DECISION":
+                self.stale_decisions += 1
+            self._kill_subprocess()
+            return self._infra_stop(code)
+        self._remember_state(state)
         if state.get("truncation_reason") == "step_timeout":
             return self._infra_stop("forge_step_timeout")
+        if state.get("truncation_reason") == "engine_error" or int(state.get("bridge_errors") or 0) > 0:
+            self._kill_subprocess()
+            return self._infra_stop("forge_engine_error")
 
         is_terminal = bool(state.get("terminal", False))
         outcome = state.get("outcome")
@@ -547,6 +663,22 @@ class MtgForgeEnv(gym.Env):
         if "policy_action_applied" in state and not bool(state["policy_action_applied"]):
             illegal = True
             state["illegal_action"] = True
+
+        # A policy that repeats a masked-illegal action never advances the
+        # decision and would hang the episode. Stop after a few repeats.
+        try:
+            same_decision = int(state.get("decision_id")) == sent_decision
+        except (TypeError, ValueError):
+            same_decision = False
+        if illegal and same_decision and not is_terminal:
+            self._illegal_repeats += 1
+        else:
+            self._illegal_repeats = 0
+        if self._illegal_repeats >= 8:
+            self._illegal_capped = True
+            is_terminal = True
+            outcome = -1
+            state["_illegal_cap"] = True
 
         # Loop detection — may force terminate with toxic penalty
         looped, toxic = self.loop_guard.observe(state)
@@ -603,6 +735,8 @@ class MtgForgeEnv(gym.Env):
         self._episode_seed = int(seed)
         self._episode_steps = 0
         self._episode_passes = 0
+        self._illegal_repeats = 0
+        self._illegal_capped = False
         self._lands_played = 0
         self._lands_you_seen = None
         self._episode_started = time.monotonic()
@@ -647,6 +781,9 @@ class MtgForgeEnv(gym.Env):
             "agent_deck_sha256": self._agent_deck_sha256,
             "opponent_deck_sha256": self._opponent_deck_sha256,
             **match_record_counters(),
+            "ai_fallback_decisions": float(_state_int(self._last_state, "ai_fallback_decisions")),
+            "policy_decisions": float(_state_int(self._last_state, "policy_decisions")),
+            "ai_fallback_by_kind": _fallback_by_kind(self._last_state),
         }
         if infra_error:
             metrics["infra_error"] = infra_error
@@ -702,6 +839,11 @@ class MtgForgeEnv(gym.Env):
                 bridge_version=self.bridge_version or None,
                 winner=outcome,
                 turns=turns,
+                policy_controlled=_recorded_policy_controlled(self._last_state),
+                protocol_version=(self._last_state or {}).get("protocol", PROTOCOL_VERSION),
+                ai_fallback_decisions=_state_int(self._last_state, "ai_fallback_decisions"),
+                policy_decisions=_state_int(self._last_state, "policy_decisions"),
+                ai_fallback_by_kind=_fallback_by_kind(self._last_state),
             )
         except Exception:
             logger.exception("forge_matches write failed")
@@ -817,7 +959,12 @@ class MtgForgeEnv(gym.Env):
                 continue
             if not isinstance(parsed, dict):
                 continue
-            if not response_matches(parsed, self._pending_request_id):
+            try:
+                matched = response_matches(parsed, self._pending_request_id)
+            except ProtocolError:
+                self._kill_subprocess()
+                raise
+            if not matched:
                 self.stale_replies_discarded += 1
                 logger.warning(
                     "discarding stale forge reply request_id=%s expected=%s",
@@ -825,7 +972,66 @@ class MtgForgeEnv(gym.Env):
                     self._pending_request_id,
                 )
                 continue
+            if self.strict_protocol and parsed.get("type") == "state":
+                self._validate_state(parsed)
             return parsed
+
+    def _remember_state(self, state: Dict[str, Any]) -> None:
+        self._last_state = state
+        if "decision_id" in state and state.get("decision_id") is not None:
+            try:
+                self._decision_id = int(state["decision_id"])
+            except (TypeError, ValueError):
+                pass
+
+    def _handshake(self) -> None:
+        self._send_command({
+            "cmd": "hello",
+            "protocol": PROTOCOL_VERSION,
+            "client": "ml_engine/env.py",
+            "required_capabilities": list(REQUIRED_CAPABILITIES),
+        })
+        try:
+            reply = self._read_state(timeout_override=max(self.step_timeout, 30.0))
+        except ProtocolError:
+            self._kill_subprocess()
+            raise
+        code = str(reply.get("code") or "")
+        message = str(reply.get("message") or reply.get("error") or "")
+        if reply.get("type") == "error" or code == "PROTOCOL_MISMATCH" or "unknown cmd" in message.lower():
+            self._kill_subprocess()
+            raise ProtocolError(message or code or "PROTOCOL_MISMATCH")
+        try:
+            protocol = int(reply.get("protocol", 0))
+        except (TypeError, ValueError):
+            protocol = 0
+        capabilities = set(reply.get("capabilities") or [])
+        missing = [name for name in REQUIRED_CAPABILITIES if name not in capabilities]
+        if protocol != PROTOCOL_VERSION or missing:
+            self._kill_subprocess()
+            raise ProtocolError(
+                f"handshake failed protocol={protocol} missing={missing}"
+            )
+        if reply.get("bridge_version"):
+            self.bridge_version = str(reply["bridge_version"])
+
+    def _validate_state(self, state: Dict[str, Any]) -> None:
+        required = (
+            "type", "request_id", "protocol", "bridge_version", "decision_id",
+            "decision_kind", "policy_controlled", "policy_action_applied",
+            "terminal", "truncated", "outcome", "illegal_action", "turn", "phase",
+            "action_mask", "action_source_indices", "action_target_indices", "action_kinds",
+        )
+        missing = [key for key in required if key not in state]
+        if missing:
+            raise ProtocolError("state missing " + ",".join(missing))
+        try:
+            from ml_engine.ray_cluster.protocol_schema import validate_message
+            validate_message(state)
+        except ModuleNotFoundError:
+            return
+        except ImportError:
+            return
 
     # ── Encoding helpers ────────────────────────────────────────────────────
 

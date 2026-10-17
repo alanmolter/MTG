@@ -2,7 +2,7 @@ About
 Name Untamed Wild
 
 Deck
-2 Bold Impaler
+4 Bold Impaler
 2 Furyblade Vampire
 1 Noose Constrictor
 2 Primal Druid
@@ -21,7 +21,6 @@ Deck
 1 Clip Wings
 1 Uncaged Fury
 1 Clear Shot
-2 Spreading Flames
 2 Blood Mist
 3 Wolfkin Bond
 5 Mountain

@@ -1,0 +1,11 @@
+{
+ "cmd": "new_game",
+ "request_id": 2,
+ "agent_deck": "20 Mountain\n40 Lightning Bolt",
+ "opponent_deck": "20 Forest\n40 Llanowar Elves",
+ "seed": 123456,
+ "agent_policy": "external",
+ "agent_side": 0,
+ "opponent": "forge_ai",
+ "step_timeout_seconds": 8
+}

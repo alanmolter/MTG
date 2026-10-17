@@ -2,7 +2,7 @@ About
 Name Growing Hope
 
 Deck
-1 Clay Champion
+4 Clay Champion
 4 Plains
 4 Plains
 1 Dusk Legion Duelist
@@ -11,7 +11,6 @@ Deck
 1 Ozolith, the Shattered Spire
 4 Forest
 4 Forest
-1 Quirion Beastcaller
 1 Titania's Command
 2 Botanical Brawler
 4 Blossoming Sands
@@ -19,7 +18,6 @@ Deck
 2 Shalai's Acolyte
 2 Kami of Whispered Hopes
 2 Bushwhack
-2 Storm the Seedcore
 3 Juniper Order Rootweaver
 2 Strength of the Coalition
 3 Citizen's Arrest

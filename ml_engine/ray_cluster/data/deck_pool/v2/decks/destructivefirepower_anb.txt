@@ -2,7 +2,7 @@ About
 Name Destructive Firepower
 
 Deck
-2 Scorch Spitter
+3 Scorch Spitter
 1 Dreadhorde Arcanist
 3 Ember Hauler
 1 Fire Urchin
@@ -14,7 +14,6 @@ Deck
 2 Drakuseth, Maw of Flames
 3 Infuriate
 4 Shock
-1 Chandra's Pyrohelix
 3 Chandra's Outrage
 2 Inescapable Blaze
 25 Mountain

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mtg.local/schemas/bridge_v2/reset.request.schema.json",
+  "title": "reset (cmd new_game, compatível com env.py)",
+  "type": "object",
+  "required": [
+    "cmd",
+    "request_id",
+    "agent_deck",
+    "opponent_deck",
+    "seed",
+    "agent_policy",
+    "step_timeout_seconds"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "cmd": {
+      "const": "new_game"
+    },
+    "request_id": {
+      "$ref": "common.schema.json#/$defs/request_id"
+    },
+    "agent_deck": {
+      "type": "string",
+      "minLength": 1
+    },
+    "opponent_deck": {
+      "type": "string",
+      "minLength": 1
+    },
+    "seed": {
+      "$ref": "common.schema.json#/$defs/seed"
+    },
+    "agent_policy": {
+      "enum": [
+        "external",
+        "forge_ai"
+      ]
+    },
+    "agent_side": {
+      "enum": [
+        0,
+        1
+      ],
+      "default": 0
+    },
+    "opponent": {
+      "enum": [
+        "forge_ai"
+      ],
+      "default": "forge_ai"
+    },
+    "step_timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Timeout Java por step; o env garante < step_timeout Python (8 < 12)."
+    },
+    "decision_timeout_ms": {
+      "type": "integer",
+      "minimum": 100
+    },
+    "turn_limit": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

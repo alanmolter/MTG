@@ -150,8 +150,15 @@ Report "db" $dbOk $dbDetail.Trim()
 & $python -m ml_engine.scripts.e2e_preflight --stage matches --episodes 2
 Report "matches" ($LASTEXITCODE -eq 0) "written == episodes and dropped == 0"
 
+# --- policy control (A1-A11). 200 episodes is the acceptance job. ----------
+if (Test-Path "bc_smoke") { Remove-Item -Recurse -Force "bc_smoke" }
+if (-not $env:POLICY_CONTROL_EPISODES) { $env:POLICY_CONTROL_EPISODES = "2" }
+& $python -m ml_engine.scripts.e2e_preflight --stage policy_control
+Report "policy_control" ($LASTEXITCODE -eq 0) "A1-A11 (set POLICY_CONTROL_EPISODES=200 for the full job)"
+
 # --- record, train, one regularized step, eval, rllib config --------------
 $work = Join-Path (Get-Location) "bc_smoke"
+if (Test-Path $work) { Remove-Item -Recurse -Force $work }
 & $python -m ml_engine.scripts.e2e_preflight --stage bc --work $work
 Report "bc" ($LASTEXITCODE -eq 0) "record + train + KL step"
 & $python -m ml_engine.scripts.e2e_preflight --stage rllib --work $work

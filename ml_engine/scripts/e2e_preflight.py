@@ -61,6 +61,8 @@ def _forge_jars() -> tuple[Path, Path]:
 def stage_bc(work: Path, *, epochs: int = 1, max_steps: int = 12) -> dict:
     """Record one AI-vs-AI game, train, take one KL-regularized step, eval."""
 
+    import shutil
+
     from ml_engine.bc.dataset import load_rows
     from ml_engine.bc.eval import evaluate_checkpoint
     from ml_engine.bc.record import SubprocessBridge, record_games
@@ -68,6 +70,8 @@ def stage_bc(work: Path, *, epochs: int = 1, max_steps: int = 12) -> dict:
     from ml_engine.bc.train import train_behavior_clone
     from ml_engine.ray_cluster.deck_pool import active_pool_version, decks_for_split
 
+    if work.exists():
+        shutil.rmtree(work)
     forge, bridge_jar = _forge_jars()
     if not forge.is_file() or not bridge_jar.is_file():
         return _line(
@@ -226,11 +230,77 @@ def stage_eval(work: Path) -> dict:
         return _line("eval", False, error=str(exc))
 
 
+def stage_policy_control() -> dict:
+    """Print A1-A12. ScriptedV2 is labeled logic/mock and cannot pass the stage.
+
+    When the Forge and rlbridge jars exist, the stage plays real matches and
+    passes only on that live result. Set POLICY_CONTROL_EPISODES=200 for the
+    full job. The default smoke count is 2.
+    """
+
+    from ml_engine.scripts.policy_control import (
+        ScriptedV2,
+        evaluate,
+        evaluate_live,
+        format_lines,
+        smoke_episode_count,
+    )
+
+    forge, bridge_jar = _forge_jars()
+    episodes = smoke_episode_count()
+    full = episodes >= 200
+    mock = evaluate(
+        ScriptedV2(),
+        episodes=episodes if not full else 200,
+        illegal=1000 if full else max(20, episodes),
+        pairs=20 if full else max(1, min(20, episodes)),
+    )
+    print("logic/mock", flush=True)
+    for line in format_lines(mock):
+        print("logic/mock " + line, flush=True)
+    logic_ok = all(item["ok"] for key, item in mock.items() if key != "A12" or full or item["ok"])
+    jars_ok = forge.is_file() and bridge_jar.is_file()
+    if not jars_ok:
+        return _line(
+            "policy_control",
+            False,
+            error="forge or rlbridge jar missing; live Forge was not started",
+            episodes=episodes,
+            logic="PASS" if logic_ok else "FAIL",
+        )
+    assets = os.environ.get("FORGE_ASSETS_DIR")
+    live = evaluate_live(
+        forge_jar=str(forge),
+        bridge_jar=str(bridge_jar),
+        assets_dir=assets,
+        java_bin=os.environ.get("JAVA_BIN", "java"),
+        episodes=episodes,
+        illegal=20 if episodes >= 20 else 5,
+        turn_limit=30 if episodes < 200 else 50,
+    )
+    print("live", flush=True)
+    for line in format_lines(live):
+        print("live " + line, flush=True)
+    required = ("A1", "A2", "A4", "A5", "A8", "A9")
+    live_ok = all(live[key]["ok"] for key in required)
+    return _line(
+        "policy_control",
+        live_ok,
+        mode="live",
+        episodes=episodes,
+        logic="PASS" if logic_ok else "FAIL",
+        reset_ok=live["A2"].get("reset_ok"),
+        early_loss=live["A2"].get("early_loss"),
+        fallback=live["A7"].get("fallback"),
+        policy_decisions=live["A7"].get("policy_decisions"),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--stage",
-        choices=("decks", "bc", "rllib", "eval", "matches", "all"),
+        choices=("decks", "bc", "rllib", "eval", "matches", "policy_control", "all"),
         default="all",
     )
     parser.add_argument("--episodes", type=int, default=2)
@@ -249,6 +319,8 @@ def main(argv: list[str] | None = None) -> int:
         results.append(stage_matches(args.episodes))
     if args.stage in ("eval", "all"):
         results.append(stage_eval(args.work))
+    if args.stage == "policy_control":
+        results.append(stage_policy_control())
     return 0 if all(item["status"] == "PASS" for item in results) else 1
 
 

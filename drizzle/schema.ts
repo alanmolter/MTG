@@ -356,26 +356,44 @@ export const trainingRuns = pgTable("training_runs", {
 export type TrainingRun = typeof trainingRuns.$inferSelect;
 
 /** Recorded Forge outcomes are the only trusted online labels. */
-export const forgeMatches = pgTable("forge_matches", {
-  id: serial("id").primaryKey(),
-  winner: integer("winner"),
-  turns: integer("turns"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  rawJson: text("raw_json"),
-  comboSummaryJson: text("combo_summary_json"),
-  /** Pool or competitive-deck id that sat in the agent seat. */
-  agentDeckId: text("agent_deck_id"),
-  /** Pool or competitive-deck id that sat in the opponent seat. */
-  opponentDeckId: text("opponent_deck_id"),
-  /** Seed passed to Forge's MyRandom before the libraries were shuffled. */
-  seed: bigint("seed", { mode: "number" }),
-  /** Checkpoint path or policy label that chose the actions, when one did. */
-  policyVersion: text("policy_version"),
-  /** Deck-pool manifest version (DECK_POOL_VERSION), when the match used one. */
-  poolVersion: text("pool_version"),
-  /** rlbridge build that produced the match. */
-  bridgeVersion: text("bridge_version"),
-});
+export const forgeMatches = pgTable(
+  "forge_matches",
+  {
+    id: serial("id").primaryKey(),
+    winner: integer("winner"),
+    turns: integer("turns"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    rawJson: text("raw_json"),
+    comboSummaryJson: text("combo_summary_json"),
+    /** Pool or competitive-deck id that sat in the agent seat. */
+    agentDeckId: text("agent_deck_id"),
+    /** Pool or competitive-deck id that sat in the opponent seat. */
+    opponentDeckId: text("opponent_deck_id"),
+    /** Seed passed to Forge's MyRandom before the libraries were shuffled. */
+    seed: bigint("seed", { mode: "number" }),
+    /** Checkpoint path or policy label that chose the actions, when one did. */
+    policyVersion: text("policy_version"),
+    /** Deck-pool manifest version (DECK_POOL_VERSION), when the match used one. */
+    poolVersion: text("pool_version"),
+    /** rlbridge build that produced the match. */
+    bridgeVersion: text("bridge_version"),
+    /** True when the agent seat was the external controller for this match. */
+    policyControlled: boolean("policy_controlled"),
+    /** Bridge protocol. Phase 1 writes 2. */
+    protocolVersion: integer("protocol_version"),
+    /** Uncovered controller decisions delegated to the Forge AI during the match. */
+    aiFallbackDecisions: integer("ai_fallback_decisions"),
+    /** Decisions the external policy answered. */
+    policyDecisions: integer("policy_decisions"),
+    /** Same fallback total, split by controller method. */
+    aiFallbackByKind: jsonb("ai_fallback_by_kind"),
+  },
+  table => ({
+    policyControlledIdx: index("forge_matches_policy_controlled_idx").on(
+      table.policyControlled
+    ),
+  })
+);
 
 export type ForgeMatch = typeof forgeMatches.$inferSelect;
 

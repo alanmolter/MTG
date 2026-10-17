@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mtg.local/schemas/bridge_v2/step.request.schema.json",
+  "title": "step",
+  "type": "object",
+  "required": [
+    "cmd",
+    "request_id",
+    "decision_id",
+    "action"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "cmd": {
+      "const": "step"
+    },
+    "request_id": {
+      "$ref": "common.schema.json#/$defs/request_id"
+    },
+    "decision_id": {
+      "$ref": "common.schema.json#/$defs/decision_id"
+    },
+    "action": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 511
+    }
+  }
+}

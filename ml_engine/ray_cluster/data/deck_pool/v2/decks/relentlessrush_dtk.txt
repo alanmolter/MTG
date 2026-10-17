@@ -2,7 +2,7 @@ About
 Name Relentless Rush
 
 Deck
-2 Lightning Berserker
+4 Lightning Berserker
 2 Kolaghan Aspirant
 3 Kolaghan Skirmisher
 2 Kolaghan Forerunners
@@ -16,7 +16,6 @@ Deck
 2 Tormenting Voice
 1 Defeat
 1 Foul-Tongue Shriek
-2 Twin Bolt
 1 Foul-Tongue Invocation
 2 Flatten
 1 Foul Renewal
