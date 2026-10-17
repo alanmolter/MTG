@@ -55,7 +55,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-      - run: npm install --legacy-peer-deps
+      - run: npm ci --legacy-peer-deps
       - name: Testes unitários de migração
         run: npx vitest run server/scripts/migrationBaseline.test.ts
       - name: Integração (vazio, af0ece20, registro falso, concorrência, arquivo editado)

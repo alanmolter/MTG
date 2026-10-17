@@ -43,7 +43,6 @@ mtg-deck-mvp/
 ├── dist/                     # Build output (gitignored)
 │   └── public/               # Vite-built client assets
 ├── data/                     # Static data files (model_baseline.json)
-├── patches/                  # historical wouter patch (not applied by npm)
 ├── .planning/                # GSD planning artifacts
 │   └── codebase/             # Codebase analysis documents
 ├── .manus-logs/              # Browser debug logs (dev only, gitignored)
