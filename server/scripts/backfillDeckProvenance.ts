@@ -36,7 +36,8 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const catalog = await query("SELECT name, oracle_id FROM cards");
+  // Printings with oracle_id first (the resolver also prefers them).
+  const catalog = await query("SELECT name, oracle_id FROM cards ORDER BY (oracle_id IS NULL), id");
   const resolver = new CardNameResolver(
     catalog.map((c) => ({ name: String(c.name), oracleId: (c.oracle_id as string | null) ?? null })),
   );
