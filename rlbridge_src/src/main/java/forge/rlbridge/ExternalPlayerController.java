@@ -24,6 +24,8 @@ import forge.card.mana.ManaCost;
 import forge.card.mana.ManaCostShard;
 import forge.deck.Deck;
 import forge.deck.DeckSection;
+import forge.game.ability.ApiType;
+import forge.game.ability.effects.CharmEffect;
 import forge.game.ability.effects.RollDiceEffect;
 import forge.game.card.CardState;
 import forge.game.card.CounterType;
@@ -512,7 +514,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
     private void clearPresetTargets() {
         ZoneType[] zones = {
             ZoneType.Hand, ZoneType.Battlefield, ZoneType.Graveyard,
-            ZoneType.Exile, ZoneType.Command, ZoneType.Stack
+            ZoneType.Exile, ZoneType.Command
         };
         for (ZoneType zone : zones) {
             CardCollectionView cards;
@@ -685,34 +687,104 @@ public final class ExternalPlayerController extends PlayerControllerAi {
 
     @Override
     public void playSpellAbilityNoStack(SpellAbility effectSA, boolean mayChoseNewTargets) {
-        delegatedVoid("playSpellAbilityNoStack", () -> super.playSpellAbilityNoStack(effectSA, mayChoseNewTargets));
+        if (host.discarded()) return;
+        try {
+            // false is execution of a trigger whose targets were already chosen.
+            // true is a replacement or effect that would otherwise let doTrigger pick them.
+            if (mayChoseNewTargets && !preparePolicyTrigger(effectSA, true)) return;
+            ComputerUtil.playNoStack(player, effectSA, getGame(), true);
+        } catch (RuntimeException ex) {
+            host.noteBridgeError("play_trigger", ex, epoch);
+        }
     }
 
     @Override
     public void orderAndPlaySimultaneousSa(List<SpellAbility> activePlayerSAs) {
-        // orderSimultaneousSa is only reached from here, so counting both
-        // records one stack event twice. Count the play, not the sort.
-        delegatedVoid("orderAndPlaySimultaneousSa", () -> super.orderAndPlaySimultaneousSa(activePlayerSAs));
+        if (host.discarded() || activePlayerSAs == null || activePlayerSAs.isEmpty()) return;
+        // Ordering simultaneous triggers is not a target. Targets are chosen below.
+        if (!host.discarded()) host.noteFallback("orderAndPlaySimultaneousSa", "order");
+        List<SpellAbility> ordered = activePlayerSAs;
+        try {
+            List<SpellAbility> aiOrder = super.orderSimultaneousSa(new ArrayList<>(activePlayerSAs));
+            if (aiOrder != null && !aiOrder.isEmpty()) ordered = aiOrder;
+        } catch (RuntimeException ex) {
+            System.err.println("[forge-rlbridge] trigger order " + ex);
+        }
+        for (SpellAbility sa : ordered) {
+            try {
+                if (sa.isTrigger() && !sa.isCopied()) {
+                    if (!preparePolicyTrigger(sa, true)) continue;
+                    ComputerUtil.playStack(sa, player, getGame());
+                    continue;
+                }
+                if (sa.isCopied()) {
+                    if (sa.isSpell() && sa.getHostCard() != null && !sa.getHostCard().isInZone(ZoneType.Stack)) {
+                        sa.setHostCard(getGame().getAction().moveToStack(sa.getHostCard(), sa));
+                    } else if (sa.isSpell()) {
+                        getGame().getStackZone().add(sa.getHostCard());
+                    }
+                    if (sa.isMayChooseNewTargets()) {
+                        clearChainTargets(sa);
+                        chooseChainTargets(sa);
+                    }
+                }
+                getGame().getStack().add(sa);
+            } catch (RuntimeException ex) {
+                host.noteBridgeError("play_trigger", ex, epoch);
+            }
+        }
     }
 
     @Override
     public boolean playTrigger(Card card, WrappedAbility wrapperAbility, boolean isMandatory) {
         if (host.discarded()) return false;
-        if (isMandatory) {
-            return super.playTrigger(card, wrapperAbility, true);
-        }
         try {
-            int source = host.visibleIndex(card);
-            if (source < 0) source = 0;
-            List<ProtocolV2.Option> options = new ArrayList<>();
-            options.add(new ProtocolV2.Option(5, source, -1, "play trigger"));
-            int slot = ask("play_trigger", options, true, -1);
-            if (slot <= 0) return false;
-            return super.playTrigger(card, wrapperAbility, true);
+            if (!preparePolicyTrigger(wrapperAbility, !isMandatory)) return false;
+            return ComputerUtil.playNoStack(player, wrapperAbility, getGame(), true);
         } catch (RuntimeException ex) {
             host.noteBridgeError("play_trigger", ex, epoch);
             return false;
         }
+    }
+
+    /**
+     * Optional triggers ask {@code play_trigger}. Any targeted trigger or
+     * replacement then asks {@code choose_targets}. The AI does not keep the
+     * targets it found while ordering or probing the trigger.
+     */
+    private boolean preparePolicyTrigger(SpellAbility sa, boolean askOptional) {
+        if (sa == null) return false;
+        if (askOptional && sa.isOptionalTrigger() && !acceptOptionalTrigger(sa)) return false;
+        if (sa.getApi() == ApiType.Charm && !CharmEffect.makeChoices(sa)) return false;
+        boolean targeted = chainUsesTargeting(sa);
+        clearChainTargets(sa);
+        boolean ok = !targeted || chooseChainTargets(sa);
+        if (targeted) {
+            String name = sa.getHostCard() == null ? "?" : sa.getHostCard().getName();
+            System.err.println("[forge-rlbridge] etb_target " + name + " "
+                + (ok ? "choose_targets" : "no_legal_target"));
+        }
+        return ok;
+    }
+
+    private boolean acceptOptionalTrigger(SpellAbility sa) {
+        int source = sa.getHostCard() == null ? 0 : host.visibleIndex(sa.getHostCard());
+        if (source < 0) source = 0;
+        String name = sa.getHostCard() == null ? "trigger" : sa.getHostCard().getName();
+        if (name.length() > 160) name = name.substring(0, 160);
+        List<ProtocolV2.Option> options = new ArrayList<>();
+        options.add(new ProtocolV2.Option(5, source, -1, "trigger " + name));
+        int slot = ask("play_trigger", options, true, -1);
+        return slot > 0;
+    }
+
+    private static boolean chainUsesTargeting(SpellAbility sa) {
+        SpellAbility cur = sa;
+        while (cur != null) {
+            if (cur.usesTargeting()) return true;
+            cur = cur.getSubAbility();
+        }
+        return false;
     }
 
     @Override
@@ -817,7 +889,14 @@ public final class ExternalPlayerController extends PlayerControllerAi {
 
     @Override
     public boolean confirmTrigger(WrappedAbility sa) {
-        return delegated("confirmTrigger", () -> super.confirmTrigger(sa));
+        if (host.discarded()) return false;
+        try {
+            if (sa.isMandatory()) return true;
+            return preparePolicyTrigger(sa, true);
+        } catch (RuntimeException ex) {
+            host.noteBridgeError("play_trigger", ex, epoch);
+            return false;
+        }
     }
 
     @Override
