@@ -53,7 +53,7 @@ def test_forge_match_params_keep_provenance_and_drop_bad_numbers():
     )
     assert params == (
         1, 40, "burn", "control", 11, "checkpoints/bc.pt", "2", "rlbridge-fase0",
-        None, None,
+        None, None, None, None, None,
     )
     blank = forge_match_params(
         agent_deck_id="  ",
@@ -65,11 +65,26 @@ def test_forge_match_params_keep_provenance_and_drop_bad_numbers():
         winner="draw",
         turns=None,
     )
-    assert blank == (None, None, None, None, None, None, None, None, None, None)
+    assert blank == (None, None, None, None, None, None, None, None, None, None, None, None, None)
+    counted = forge_match_params(
+        agent_deck_id="burn",
+        opponent_deck_id="stompy",
+        seed=3,
+        policy_version=None,
+        pool_version=None,
+        bridge_version=None,
+        ai_fallback_decisions=4,
+        policy_decisions=20,
+        ai_fallback_by_kind={"assignCombatDamage": 4},
+    )
+    assert counted[10] == 4
+    assert counted[11] == 20
+    assert counted[12] == '{"assignCombatDamage": 4}'
     for column in (
         "agent_deck_id", "opponent_deck_id", "seed",
         "policy_version", "pool_version", "bridge_version",
         "policy_controlled", "protocol_version",
+        "ai_fallback_decisions", "policy_decisions", "ai_fallback_by_kind",
     ):
         assert column in INSERT_FORGE_MATCH
 

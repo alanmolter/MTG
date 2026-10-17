@@ -127,6 +127,9 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
     private final java.util.Map<String, Integer> fallbackByKind = new java.util.LinkedHashMap<>();
     private volatile long matchSeed;
     private volatile int matchEpoch;
+    /** Set by the controller when a cast returns. Consumed by the next state. */
+    private volatile Boolean spellApplied;
+    private volatile String spellFailure;
     private volatile int turnLimit = 50;
     private volatile boolean turnLimitSent;
     private volatile String truncationReason;
@@ -467,8 +470,8 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
                     if (handoff.epoch() == gameEpoch && !handoff.isDiscarded()) {
                         pendingKind = "none";
                         currentLayout = null;
-                        handoff.publishTerminal(new DecisionHandoff.Offer(
-                            "none", buildSnapshot(true, false, false), passMask(), true), gameEpoch);
+                        handoff.publishTerminal(consumeSpell(new DecisionHandoff.Offer(
+                            "none", buildSnapshot(true, false, false), passMask(), true)), gameEpoch);
                     }
                 } finally {
                     gameRunning.set(false);
@@ -606,6 +609,11 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
         sb.append("\"decision_type\":\"").append(kind).append("\",");
         sb.append("\"state_hash\":\"PENDING\",");
         sb.append("\"policy_action_applied\":null,");
+        if (spellFailure != null && !spellFailure.isEmpty()) {
+            sb.append("\"play_failure\":\"").append(escape(spellFailure)).append("\",");
+        } else {
+            sb.append("\"play_failure\":null,");
+        }
         sb.append("\"seed\":").append(matchSeed).append(',');
         sb.append("\"ai_fallback_decisions\":").append(aiFallbackDecisions).append(',');
         sb.append("\"bridge_errors\":").append(bridgeErrors).append(',');
@@ -949,8 +957,14 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
     }
 
     @Override
-    public int decide(String decisionKind, ProtocolV2.Layout layout, int aiChosenSlot) {
-        int epoch = this.matchEpoch;
+    public int epoch() {
+        return handoff.epoch();
+    }
+
+    @Override
+    public int decide(String decisionKind, ProtocolV2.Layout layout, int aiChosenSlot, int epoch) {
+        // epoch is the one captured when this seat's controller was created.
+        // Reading matchEpoch here would let a late game thread publish into the next match.
         if (handoff.epoch() != epoch || handoff.isDiscarded()) return -1;
         this.pendingKind = decisionKind;
         this.currentLayout = layout;
@@ -961,13 +975,13 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
                 turnLimitSent = true;
                 truncationReason = "turn_limit";
                 pendingKind = "none";
-                handoff.publishTerminal(new DecisionHandoff.Offer(
-                    "none", buildSnapshot(false, false, true), layout.mask, true), epoch);
+                handoff.publishTerminal(consumeSpell(new DecisionHandoff.Offer(
+                    "none", buildSnapshot(false, false, true), layout.mask, true)), epoch);
                 return -1;
             }
             if (turnLimitSent) return -1;
-            return handoff.publishAndAwaitAction(new DecisionHandoff.Offer(
-                decisionKind, buildSnapshot(false, false, false), layout.mask, false), epoch);
+            return handoff.publishAndAwaitAction(consumeSpell(new DecisionHandoff.Offer(
+                decisionKind, buildSnapshot(false, false, false), layout.mask, false)), epoch);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             handoff.discardMatch();
@@ -988,13 +1002,26 @@ public class ForgeRLBridge implements ExternalPlayerController.Host {
     }
 
     @Override
-    public void noteBridgeError(String decisionKind, Throwable error) {
+    public void noteSpellPlayed(boolean applied, String failure) {
+        this.spellApplied = applied;
+        this.spellFailure = applied ? null : failure;
+    }
+
+    @Override
+    public void noteBridgeError(String decisionKind, Throwable error, int epoch) {
         bridgeErrors++;
         String message = error == null ? "null" : error.toString();
         System.err.println("[forge-rlbridge] ENGINE_ERROR " + decisionKind + " " + message);
         if (error != null) error.printStackTrace(System.err);
         truncationReason = "engine_error";
-        handoff.failEngine(matchEpoch);
+        handoff.failEngine(epoch);
+    }
+
+    private DecisionHandoff.Offer consumeSpell(DecisionHandoff.Offer offer) {
+        offer.executionApplied = spellApplied;
+        spellApplied = null;
+        spellFailure = null;
+        return offer;
     }
 
     @Override

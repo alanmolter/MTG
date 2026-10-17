@@ -139,6 +139,22 @@ class RecordReport:
         }
 
 
+def _fallback_totals(state: Mapping[str, Any]) -> tuple[int, dict[str, int]]:
+    try:
+        total = int(state.get("ai_fallback_decisions") or 0)
+    except (TypeError, ValueError):
+        total = 0
+    raw = state.get("ai_fallback_by_kind")
+    by_kind: dict[str, int] = {}
+    if isinstance(raw, Mapping):
+        for key, value in raw.items():
+            try:
+                by_kind[str(key)] = int(value)
+            except (TypeError, ValueError):
+                continue
+    return total, by_kind
+
+
 def _encode(state: Mapping[str, Any]) -> dict:
     from ml_engine.ray_cluster.env import MtgForgeEnv
 
@@ -173,12 +189,23 @@ def record_match(
     })
     seen: list[dict] = []
     rows: list[dict] = []
+    previous_fallback = 0
+    previous_by_kind: dict[str, int] = {}
     for _ in range(max_steps):
         if not isinstance(state, dict):
             break
         if state.get("error"):
             break
         seen.append(state)
+        fallback_now, by_kind_now = _fallback_totals(state)
+        fallback_delta = max(0, fallback_now - previous_fallback)
+        by_kind_delta = {
+            kind: count - previous_by_kind.get(kind, 0)
+            for kind, count in by_kind_now.items()
+            if count - previous_by_kind.get(kind, 0)
+        }
+        previous_fallback = fallback_now
+        previous_by_kind = by_kind_now
         action = mapped_action(state)
         if action is not None and not state.get("terminal"):
             rows.append({
@@ -191,6 +218,9 @@ def record_match(
                 "decision_id": state.get("decision_id"),
                 "decision_kind": state.get("decision_kind"),
                 "chosen_action": state.get("chosen_action"),
+                "ai_fallback_decisions": fallback_delta,
+                "ai_fallback_by_kind": by_kind_delta,
+                "policy_decisions": int(state.get("policy_decisions") or 0),
                 "protocol": 2,
                 "label_version": 2,
                 "obs": _encode(state),

@@ -461,7 +461,9 @@ def evaluate_live(
                     if "timeout" in str(inf.get("error")):
                         timeouts += 1
                     break
-                if state.get("policy_action_applied") is True:
+                if state.get("play_failure"):
+                    rejected_legal += 1
+                elif state.get("policy_action_applied") is True:
                     applied += 1
                 elif state.get("policy_action_applied") is False and not state.get("illegal_action"):
                     rejected_legal += 1

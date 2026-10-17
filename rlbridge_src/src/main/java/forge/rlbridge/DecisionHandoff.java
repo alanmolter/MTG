@@ -21,6 +21,11 @@ public final class DecisionHandoff {
         public final String stateJson;
         public final int[] mask;
         public final boolean terminal;
+        /**
+         * Null until the previous action has finished executing. False means
+         * the cast was accepted and then failed (for example the mana was not paid).
+         */
+        public Boolean executionApplied;
         int decisionId = -1;
         long boundRequest = -1;
         String stateHash = "";
@@ -289,7 +294,8 @@ public final class DecisionHandoff {
                 return error(requestId, "STALE_DECISION", "stale state reused for a new request",
                     decisionId, actedId, true);
             }
-            return render(pending, requestId, Boolean.TRUE, false);
+            boolean failed = pending.executionApplied != null && !pending.executionApplied;
+            return render(pending, requestId, failed ? Boolean.FALSE : Boolean.TRUE, failed);
         }
     }
 

@@ -1,6 +1,8 @@
 package forge.rlbridge;
 
 import forge.LobbyPlayer;
+import forge.ai.ComputerUtil;
+import forge.ai.ComputerUtilCost;
 import forge.ai.LobbyPlayerAi;
 import forge.ai.PlayerControllerAi;
 import forge.game.Game;
@@ -79,18 +81,31 @@ import java.util.function.Supplier;
 public final class ExternalPlayerController extends PlayerControllerAi {
 
     public interface Host {
-        int decide(String decisionKind, ProtocolV2.Layout layout, int aiChosenSlot);
+        /** Epoch of the match that is open while this controller is constructed. */
+        int epoch();
+        int decide(String decisionKind, ProtocolV2.Layout layout, int aiChosenSlot, int epoch);
         void noteFallback(String decisionKind, String why);
-        void noteBridgeError(String decisionKind, Throwable error);
+        void noteBridgeError(String decisionKind, Throwable error, int epoch);
+        /** Result of the spell or land the previous priority action tried to play. */
+        void noteSpellPlayed(boolean applied, String failure);
         boolean discarded();
         int visibleIndex(Card card);
     }
 
     private final Host host;
+    /** Captured at construction. Later matches must not reuse this controller's epoch. */
+    private final int epoch;
+    /**
+     * Greater than zero while the legal mask is asking whether a spell can be
+     * paid. Cost reduction then calls back into this controller. That is a
+     * probe, not a decision the policy missed, so it is not an ai_fallback.
+     */
+    private int maskProbe;
 
     public ExternalPlayerController(Game game, Player player, LobbyPlayer lobby, Host host) {
         super(game, player, lobby);
         this.host = host;
+        this.epoch = host.epoch();
     }
 
     @Override
@@ -110,7 +125,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
             if (slot < 0 || slot == 0) return true;
             return false;
         } catch (RuntimeException ex) {
-            host.noteBridgeError("mulligan", ex);
+            host.noteBridgeError("mulligan", ex, epoch);
             return true;
         }
     }
@@ -143,7 +158,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
             }
             return CardCollection.getView(toReturn);
         } catch (RuntimeException ex) {
-            host.noteBridgeError("choose_cards", ex);
+            host.noteBridgeError("choose_cards", ex, epoch);
             return CardCollection.getView(new CardCollection());
         }
     }
@@ -161,7 +176,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
             }
             return java.util.Collections.singletonList(abilities.get(lastOptionIndex));
         } catch (RuntimeException ex) {
-            host.noteBridgeError("priority", ex);
+            host.noteBridgeError("priority", ex, epoch);
             return null;
         }
     }
@@ -217,7 +232,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
             }
             return chosen >= min;
         } catch (RuntimeException ex) {
-            host.noteBridgeError("choose_targets", ex);
+            host.noteBridgeError("choose_targets", ex, epoch);
             return false;
         }
     }
@@ -256,7 +271,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
                 combat.addAttacker(card, defenders.get(lastOptionIndex));
             }
         } catch (RuntimeException ex) {
-            host.noteBridgeError("declare_attackers", ex);
+            host.noteBridgeError("declare_attackers", ex, epoch);
         }
     }
 
@@ -295,7 +310,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
                 combat.addBlocker(attackers.get(lastOptionIndex), blocker);
             }
         } catch (RuntimeException ex) {
-            host.noteBridgeError("declare_blockers", ex);
+            host.noteBridgeError("declare_blockers", ex, epoch);
         }
     }
 
@@ -326,7 +341,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
             }
             return discarded;
         } catch (RuntimeException ex) {
-            host.noteBridgeError("choose_cards", ex);
+            host.noteBridgeError("choose_cards", ex, epoch);
             return new CardCollection();
         }
     }
@@ -346,7 +361,7 @@ public final class ExternalPlayerController extends PlayerControllerAi {
                     && hinted != ProtocolV2.PAGE_PREV && hinted != ProtocolV2.PAGE_NEXT) {
                 hinted = -1;
             }
-            int slot = host.decide(kind, layout, hinted);
+            int slot = host.decide(kind, layout, hinted, epoch);
             if (slot < 0) return -1;
             if (slot == ProtocolV2.PAGE_PREV) {
                 page = Math.max(0, page - 1);
@@ -371,8 +386,16 @@ public final class ExternalPlayerController extends PlayerControllerAi {
                 if (source < 0) continue;
                 for (SpellAbility ability : card.getAllPossibleAbilities(player, true)) {
                     if (ability == null) continue;
+                    clearChainTargets(ability);
                     if (ability.isManaAbility() && !ability.isLandAbility()) continue;
-                    if (!ability.canPlay()) continue;
+                    maskProbe++;
+                    boolean offered;
+                    try {
+                        offered = ability.canPlay() && payable(ability);
+                    } finally {
+                        maskProbe--;
+                    }
+                    if (!offered) continue;
                     int kind = ability.isLandAbility() || ability.isSpell() ? 1 : 5;
                     String name = ability.toString();
                     if (name.length() > 180) name = name.substring(0, 180);
@@ -403,6 +426,9 @@ public final class ExternalPlayerController extends PlayerControllerAi {
             return -1;
         } finally {
             player.dangerouslySetController(previous);
+            // The probe chooses targets on the same SpellAbility objects the
+            // policy will cast. Drop them so play goes through choose_targets.
+            clearPresetTargets();
         }
         return -1;
     }
@@ -422,24 +448,107 @@ public final class ExternalPlayerController extends PlayerControllerAi {
 
     @Override
     public boolean playChosenSpellAbility(SpellAbility sa) {
-        // Playing the chosen spell is execution, not a new decision, so it is
-        // not an ai_fallback. A Forge stack bug must not kill the game thread.
+        // Execution, not an ai_fallback. Targets are a separate policy decision:
+        // the AI hint must not arrive already written onto this SpellAbility.
         try {
-            return super.playChosenSpellAbility(sa);
+            if (sa.isLandAbility()) {
+                boolean played = super.playChosenSpellAbility(sa);
+                host.noteSpellPlayed(played, played ? null : "land not played");
+                return played;
+            }
+            clearChainTargets(sa);
+            final boolean[] targetsOk = {true};
+            boolean played = ComputerUtil.handlePlayingSpellAbility(player, sa, () -> {
+                targetsOk[0] = chooseChainTargets(sa);
+            });
+            played = played && targetsOk[0];
+            String failure = played ? null : "AI failed to play " + sa.getHostCard();
+            if (!played) System.err.println("[forge-rlbridge] spell failed " + failure);
+            host.noteSpellPlayed(played, failure);
+            return played;
         } catch (RuntimeException ex) {
-            System.err.println("[forge-rlbridge] spell failed " + sa + " " + ex);
+            String failure = "spell failed " + sa + " " + ex;
+            System.err.println("[forge-rlbridge] " + failure);
             ex.printStackTrace(System.err);
+            host.noteSpellPlayed(false, failure);
             return false;
         }
     }
 
+    /**
+     * Policy targets for this spell and its sub-abilities. Returns false when
+     * a required target was not chosen, so the cast is not reported as applied.
+     */
+    private boolean chooseChainTargets(SpellAbility sa) {
+        boolean ok = true;
+        SpellAbility cur = sa;
+        while (cur != null) {
+            if (cur.usesTargeting()) {
+                cur.clearTargets();
+                if (!chooseTargetsFor(cur)) {
+                    cur.resetTargets();
+                    ok = false;
+                }
+            }
+            cur = cur.getSubAbility();
+        }
+        if (!ok && sa != null) {
+            if (sa.usesTargeting()) sa.resetTargets();
+            else if (sa.getTargets() != null) sa.getTargets().add(player);
+        }
+        return ok;
+    }
+
+    private boolean payable(SpellAbility ability) {
+        if (ability.isLandAbility()) return true;
+        try {
+            if (ability.getPayCosts() == null) return true;
+            return ComputerUtilCost.canPayCost(ability, player, false);
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private void clearPresetTargets() {
+        ZoneType[] zones = {
+            ZoneType.Hand, ZoneType.Battlefield, ZoneType.Graveyard,
+            ZoneType.Exile, ZoneType.Command, ZoneType.Stack
+        };
+        for (ZoneType zone : zones) {
+            CardCollectionView cards;
+            try {
+                cards = player.getCardsIn(zone);
+            } catch (RuntimeException ex) {
+                continue;
+            }
+            if (cards == null) continue;
+            for (Card card : cards) {
+                try {
+                    for (SpellAbility ability : card.getAllPossibleAbilities(player, true)) {
+                        if (ability != null) clearChainTargets(ability);
+                    }
+                } catch (RuntimeException ignored) { }
+            }
+        }
+    }
+
+    private static void clearChainTargets(SpellAbility sa) {
+        SpellAbility cur = sa;
+        while (cur != null) {
+            try {
+                cur.clearTargets();
+            } catch (RuntimeException ignored) { }
+            cur = cur.getSubAbility();
+        }
+    }
+
     private <T> T delegated(String kind, Supplier<T> call) {
-        if (!host.discarded()) host.noteFallback(kind, "delegated");
+        if (maskProbe == 0 && !host.discarded()) host.noteFallback(kind, "delegated");
         return call.get();
     }
 
     private void delegatedVoid(String kind, Runnable call) {
-        if (!host.discarded()) host.noteFallback(kind, "delegated");
+        if (maskProbe == 0 && !host.discarded()) host.noteFallback(kind, "delegated");
         call.run();
     }
 
@@ -580,18 +689,30 @@ public final class ExternalPlayerController extends PlayerControllerAi {
     }
 
     @Override
-    public List<SpellAbility> orderSimultaneousSa(List<SpellAbility> activePlayerSAs) {
-        return delegated("orderSimultaneousSa", () -> super.orderSimultaneousSa(activePlayerSAs));
-    }
-
-    @Override
     public void orderAndPlaySimultaneousSa(List<SpellAbility> activePlayerSAs) {
+        // orderSimultaneousSa is only reached from here, so counting both
+        // records one stack event twice. Count the play, not the sort.
         delegatedVoid("orderAndPlaySimultaneousSa", () -> super.orderAndPlaySimultaneousSa(activePlayerSAs));
     }
 
     @Override
-    public boolean playTrigger(Card host, WrappedAbility wrapperAbility, boolean isMandatory) {
-        return delegated("playTrigger", () -> super.playTrigger(host, wrapperAbility, isMandatory));
+    public boolean playTrigger(Card card, WrappedAbility wrapperAbility, boolean isMandatory) {
+        if (host.discarded()) return false;
+        if (isMandatory) {
+            return super.playTrigger(card, wrapperAbility, true);
+        }
+        try {
+            int source = host.visibleIndex(card);
+            if (source < 0) source = 0;
+            List<ProtocolV2.Option> options = new ArrayList<>();
+            options.add(new ProtocolV2.Option(5, source, -1, "play trigger"));
+            int slot = ask("play_trigger", options, true, -1);
+            if (slot <= 0) return false;
+            return super.playTrigger(card, wrapperAbility, true);
+        } catch (RuntimeException ex) {
+            host.noteBridgeError("play_trigger", ex, epoch);
+            return false;
+        }
     }
 
     @Override
@@ -836,7 +957,64 @@ public final class ExternalPlayerController extends PlayerControllerAi {
 
     @Override
     public List<AbilitySub> chooseModeForAbility(SpellAbility sa, List<AbilitySub> possible, int min, int num, boolean allowRepeat) {
-        return delegated("chooseModeForAbility", () -> super.chooseModeForAbility(sa, possible, min, num, allowRepeat));
+        if (host.discarded() || possible == null || possible.isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            List<AbilitySub> planned = aiModes(sa, possible, min, num, allowRepeat);
+            List<AbilitySub> pool = new ArrayList<>(possible);
+            List<AbilitySub> chosen = new ArrayList<>();
+            int cursor = 0;
+            int limit = Math.max(0, num);
+            while (chosen.size() < limit && !pool.isEmpty()) {
+                List<ProtocolV2.Option> options = new ArrayList<>();
+                List<AbilitySub> encoded = new ArrayList<>();
+                int source = sa == null ? 0 : host.visibleIndex(sa.getHostCard());
+                if (source < 0) source = 0;
+                for (AbilitySub mode : pool) {
+                    encoded.add(mode);
+                    String name = String.valueOf(mode);
+                    if (name.length() > 180) name = name.substring(0, 180);
+                    options.add(new ProtocolV2.Option(5, source, -1, name));
+                }
+                boolean canFinish = chosen.size() >= min;
+                int hint = -1;
+                if (cursor < planned.size()) {
+                    int want = pool.indexOf(planned.get(cursor));
+                    if (want >= 0) {
+                        ProtocolV2.Layout layout = ProtocolV2.layout(options, 0, canFinish);
+                        for (int slot = 0; slot < layout.optionIndex.length; slot++) {
+                            if (layout.optionIndex[slot] == want) hint = slot;
+                        }
+                    }
+                }
+                int slot = ask("choose_mode", options, canFinish, hint);
+                cursor++;
+                if (slot < 0 || slot == 0 || lastOptionIndex < 0 || lastOptionIndex >= encoded.size()) break;
+                AbilitySub picked = encoded.get(lastOptionIndex);
+                chosen.add(picked);
+                if (!allowRepeat) pool.remove(picked);
+            }
+            return chosen;
+        } catch (RuntimeException ex) {
+            host.noteBridgeError("choose_mode", ex, epoch);
+            return new ArrayList<>();
+        }
+    }
+
+    private List<AbilitySub> aiModes(SpellAbility sa, List<AbilitySub> possible, int min, int num, boolean allowRepeat) {
+        PlayerController previous = player.getController();
+        PlayerControllerAi ai = new PlayerControllerAi(getGame(), player, getLobbyPlayer());
+        try {
+            player.dangerouslySetController(ai);
+            List<AbilitySub> chosen = ai.chooseModeForAbility(sa, possible, min, num, allowRepeat);
+            return chosen == null ? new ArrayList<>() : new ArrayList<>(chosen);
+        } catch (RuntimeException ex) {
+            System.err.println("[forge-rlbridge] ai label choose_mode " + ex);
+            return new ArrayList<>();
+        } finally {
+            player.dangerouslySetController(previous);
+        }
     }
 
     @Override

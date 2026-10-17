@@ -62,6 +62,20 @@ def test_custom_metrics_copy_forge_match_counters():
     assert copied["forge_matches_dropped"] == 1.0
 
 
+def test_custom_metrics_copy_fallback_counters():
+    copied = numeric_custom_metrics({
+        "episode_metrics": {
+            "win": 0,
+            "ai_fallback_decisions": 3,
+            "policy_decisions": 40,
+            "ai_fallback_by_kind": {"assignCombatDamage": 3},
+        }
+    })
+    assert copied["ai_fallback_decisions"] == 3.0
+    assert copied["policy_decisions"] == 40.0
+    assert copied["ai_fallback_assignCombatDamage"] == 3.0
+
+
 def test_custom_metrics_keep_a_decisive_loss():
     copied = numeric_custom_metrics({"episode_metrics": {"win": 0, "truncated": 0, "steps": 1}})
     assert copied["win"] == 0.0

@@ -51,7 +51,7 @@ Schema: `state.schema.json`. A lista abaixo destaca só os campos obrigatórios;
 |---|---|---|
 | `type` | `"state"` | |
 | `request_id`, `protocol`, `bridge_version` | | |
-| `decision_id`, `decision_kind` | int; `priority`, `mulligan`, `declare_attackers`, `declare_blockers`, `choose_targets`, `choose_cards` ou `none` | `none` quando `terminal` |
+| `decision_id`, `decision_kind` | int; `priority`, `mulligan`, `declare_attackers`, `declare_blockers`, `choose_targets`, `choose_cards`, `choose_mode`, `play_trigger` ou `none` | `none` quando `terminal` |
 | `policy_controlled` | bool | `true` ⇔ o lado `agent_side` usa o `ExternalPlayerController`. O `env.py:475` e o `env.py:531` exigem `true`. |
 | `policy_action_applied` | bool ou null | `null` só na resposta ao `new_game` |
 | `ai_fallback_decisions` | int | decisões do lado do agente que caíram na IA, acumuladas na partida |

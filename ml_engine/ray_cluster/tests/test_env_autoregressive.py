@@ -191,6 +191,26 @@ def test_policy_control_loss_truncates_without_a_loss_penalty():
     assert info["episode_metrics"]["win"] is None
 
 
+def test_repeated_illegal_action_ends_the_episode():
+    env = _make_env()
+    stuck = _minimal_state(
+        decision_id=0,
+        illegal_action=True,
+        policy_action_applied=False,
+    )
+    env._proc = _FakeProc([stuck] * 8)
+    terminated = False
+    for _ in range(8):
+        _, _, terminated, _, info = env.step(0)
+    assert terminated is True
+    assert info["state"]["_illegal_cap"] is True
+    written = len(env._proc.stdin.written)
+    _, _, terminated_again, _, info_again = env.step(0)
+    assert terminated_again is True
+    assert info_again["error"] == "illegal_action_cap"
+    assert len(env._proc.stdin.written) == written
+
+
 def test_unapplied_policy_action_is_penalized():
     env = _make_env()
     env._proc = _FakeProc([_minimal_state(turn=2, policy_action_applied=False)])

@@ -25,6 +25,7 @@ public class ForgeRLBridgeProtocolTest {
         testMissingBindingDropsPlantedState();
         testTimeoutDropsLatePublish();
         testOldEpochAfterResetIsDropped();
+        testFailedCastIsNotApplied();
         testDeterministicTrajectory();
         System.out.println("[rlbridge-protocol] passed=" + passed + " failed=" + failed);
         if (failed > 0) System.exit(1);
@@ -226,6 +227,36 @@ public class ForgeRLBridgeProtocolTest {
         }
         game.join(2000);
         return handoff.trajectoryHash();
+    }
+
+    private static void testFailedCastIsNotApplied() throws Exception {
+        DecisionHandoff handoff = new DecisionHandoff();
+        Thread game = new Thread(() -> {
+            try {
+                int action = handoff.publishAndAwaitAction(offer("priority", 1, 1));
+                if (action < 0) return;
+                int[] mask = new int[ProtocolV2.NUM_ACTIONS];
+                mask[0] = 1;
+                mask[1] = 1;
+                String json = "{\"type\":\"state\",\"decision_id\":-1,\"state_hash\":\"PENDING\""
+                    + ",\"protocol\":2,\"policy_action_applied\":null,\"illegal_action\":false"
+                    + ",\"play_failure\":\"AI failed to play Lightning Strike\""
+                    + ",\"decision_kind\":\"priority\",\"marker\":2,\"draw\":2}";
+                DecisionHandoff.Offer next = new DecisionHandoff.Offer("priority", json, mask, false);
+                next.executionApplied = Boolean.FALSE;
+                handoff.publishTerminal(next);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        game.start();
+        DecisionHandoff.Reply first = handoff.awaitFirst(1, 2000);
+        int decision = jsonInt(first.json, "decision_id");
+        DecisionHandoff.Reply after = handoff.step(2, decision, 1, 2000);
+        game.join(2000);
+        assertTrue("failed cast is not applied", !after.applied);
+        assertTrue("failed cast is illegal", after.illegal);
+        assertTrue("failure text", after.json.contains("AI failed to play Lightning Strike"));
     }
 
     private static DecisionHandoff.Offer offer(String kind, int marker, int draw) {

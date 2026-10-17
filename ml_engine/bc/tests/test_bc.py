@@ -306,6 +306,9 @@ def test_record_match_executes_the_ai_slot_for_attacks():
         "action_source_indices": [-1, -1, -1, 0] + [-1] * 508,
         "action_target_indices": [-1, -1, -1, -3] + [-1] * 508,
         "action_kinds": [0, 0, 0, 2] + [0] * 508,
+        "ai_fallback_decisions": 2,
+        "ai_fallback_by_kind": {"assignCombatDamage": 2},
+        "policy_decisions": 4,
     }
     done = dict(attack)
     done.update(terminal=True, outcome=1, decision_kind="none", chosen_action=-1,
@@ -326,3 +329,6 @@ def test_record_match_executes_the_ai_slot_for_attacks():
     assert rows[0]["decision_kind"] == "declare_attackers"
     assert rows[0]["action"] == 3
     assert rows[0]["label_version"] == 2
+    assert rows[0]["ai_fallback_decisions"] == 2
+    assert rows[0]["ai_fallback_by_kind"] == {"assignCombatDamage": 2}
+    assert rows[0]["policy_decisions"] == 4

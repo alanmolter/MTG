@@ -379,6 +379,12 @@ export const forgeMatches = pgTable("forge_matches", {
   policyControlled: boolean("policy_controlled"),
   /** Bridge protocol. Phase 1 writes 2. */
   protocolVersion: integer("protocol_version"),
+  /** Uncovered controller decisions delegated to the Forge AI during the match. */
+  aiFallbackDecisions: integer("ai_fallback_decisions"),
+  /** Decisions the external policy answered. */
+  policyDecisions: integer("policy_decisions"),
+  /** Same fallback total, split by controller method. */
+  aiFallbackByKind: jsonb("ai_fallback_by_kind"),
 });
 
 export type ForgeMatch = typeof forgeMatches.$inferSelect;

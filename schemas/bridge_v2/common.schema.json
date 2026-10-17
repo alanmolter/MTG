@@ -72,6 +72,8 @@
         "declare_blockers",
         "choose_targets",
         "choose_cards",
+        "choose_mode",
+        "play_trigger",
         "none"
       ]
     },

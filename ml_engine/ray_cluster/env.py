@@ -219,6 +219,28 @@ def _scale_features(values, scales) -> list:
     return scaled
 
 
+def _state_int(state: Optional[Dict[str, Any]], key: str) -> int:
+    if not isinstance(state, dict):
+        return 0
+    try:
+        return int(state.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _fallback_by_kind(state: Optional[Dict[str, Any]]) -> Dict[str, int]:
+    raw = state.get("ai_fallback_by_kind") if isinstance(state, dict) else None
+    if not isinstance(raw, dict):
+        return {}
+    counts: Dict[str, int] = {}
+    for key, value in raw.items():
+        try:
+            counts[str(key)] = int(value)
+        except (TypeError, ValueError):
+            continue
+    return counts
+
+
 def _sha256_text(text: Optional[str]) -> str:
     if not text:
         return ""
@@ -358,6 +380,8 @@ class MtgForgeEnv(gym.Env):
         self.seed_python_rngs: bool = bool(config.get("seed_python_rngs", False))
         self._decision_id: int = 0
         self._last_state: Optional[Dict[str, Any]] = None
+        self._illegal_repeats: int = 0
+        self._illegal_capped: bool = False
         # Never train against an observational bridge. The first snapshot must
         # prove that the agent-side PlayerController was installed in Forge.
         self.require_policy_control: bool = bool(config.get("require_policy_control", True))
@@ -560,7 +584,14 @@ class MtgForgeEnv(gym.Env):
             # not a loss the policy should learn from.
             return self._infra_stop("forge_subprocess_dead")
 
+        if self._illegal_capped:
+            return self._dummy_obs(), 0.0, True, False, {
+                "error": "illegal_action_cap",
+                "state": self._last_state or {},
+            }
+
         flat_action = int(action)
+        sent_decision = int(self._decision_id)
         self._episode_steps += 1
         if flat_action == 0:
             self._episode_passes += 1
@@ -623,6 +654,22 @@ class MtgForgeEnv(gym.Env):
             illegal = True
             state["illegal_action"] = True
 
+        # A policy that repeats a masked-illegal action never advances the
+        # decision and would hang the episode. Stop after a few repeats.
+        try:
+            same_decision = int(state.get("decision_id")) == sent_decision
+        except (TypeError, ValueError):
+            same_decision = False
+        if illegal and same_decision and not is_terminal:
+            self._illegal_repeats += 1
+        else:
+            self._illegal_repeats = 0
+        if self._illegal_repeats >= 8:
+            self._illegal_capped = True
+            is_terminal = True
+            outcome = -1
+            state["_illegal_cap"] = True
+
         # Loop detection — may force terminate with toxic penalty
         looped, toxic = self.loop_guard.observe(state)
         if looped:
@@ -678,6 +725,8 @@ class MtgForgeEnv(gym.Env):
         self._episode_seed = int(seed)
         self._episode_steps = 0
         self._episode_passes = 0
+        self._illegal_repeats = 0
+        self._illegal_capped = False
         self._lands_played = 0
         self._lands_you_seen = None
         self._episode_started = time.monotonic()
@@ -722,6 +771,9 @@ class MtgForgeEnv(gym.Env):
             "agent_deck_sha256": self._agent_deck_sha256,
             "opponent_deck_sha256": self._opponent_deck_sha256,
             **match_record_counters(),
+            "ai_fallback_decisions": float(_state_int(self._last_state, "ai_fallback_decisions")),
+            "policy_decisions": float(_state_int(self._last_state, "policy_decisions")),
+            "ai_fallback_by_kind": _fallback_by_kind(self._last_state),
         }
         if infra_error:
             metrics["infra_error"] = infra_error
@@ -779,6 +831,9 @@ class MtgForgeEnv(gym.Env):
                 turns=turns,
                 policy_controlled=bool((self._last_state or {}).get("policy_controlled")),
                 protocol_version=(self._last_state or {}).get("protocol", PROTOCOL_VERSION),
+                ai_fallback_decisions=_state_int(self._last_state, "ai_fallback_decisions"),
+                policy_decisions=_state_int(self._last_state, "policy_decisions"),
+                ai_fallback_by_kind=_fallback_by_kind(self._last_state),
             )
         except Exception:
             logger.exception("forge_matches write failed")
