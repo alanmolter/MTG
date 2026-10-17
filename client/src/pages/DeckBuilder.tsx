@@ -85,7 +85,6 @@ export default function DeckBuilder() {
   const [isCreating, setIsCreating] = useState(false);
   const [, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<CardRow[]>([]);
   const [newDeck, setNewDeck] = useState({
     name: "",
     format: "standard" as "standard" | "modern" | "commander" | "legacy",
@@ -102,19 +101,33 @@ export default function DeckBuilder() {
       enabled: !!selectedDeck,
     });
 
-  // Busca de cartas (é uma query, não mutation)
-  const [searchEnabled, setSearchEnabled] = useState(false);
-  const { data: cardSearchData, isFetching: isSearching } =
-    trpc.cards.search.useQuery(
-      { name: searchQuery },
-      { enabled: searchEnabled && !!searchQuery.trim() }
-    );
+  // Busca de cartas (é uma query, não mutation). O termo só é "submetido" no
+  // handleSearch; os resultados derivam direto do cache do React Query, então
+  // um refetch em background de uma query stale atualiza a lista.
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const {
+    data: cardSearchData,
+    isFetching: isSearching,
+    isError: isSearchError,
+    error: searchError,
+    refetch: refetchSearch,
+  } = trpc.cards.search.useQuery(
+    { name: submittedQuery },
+    { enabled: !!submittedQuery }
+  );
+  const searchResults: CardRow[] = submittedQuery ? (cardSearchData ?? []) : [];
+  const showNoResults =
+    !!submittedQuery &&
+    !isSearching &&
+    !isSearchError &&
+    cardSearchData !== undefined &&
+    searchResults.length === 0;
 
   useEffect(() => {
-    if (!searchEnabled || !cardSearchData) return;
-    setSearchResults(cardSearchData);
-    setSearchEnabled(false);
-  }, [cardSearchData, searchEnabled]);
+    if (searchError) {
+      toast.error(`Erro ao buscar cartas: ${searchError.message}`);
+    }
+  }, [searchError]);
 
   // Mutations
   const createDeckMutation = trpc.decks.create.useMutation({
@@ -194,8 +207,12 @@ export default function DeckBuilder() {
   };
 
   const handleSearch = () => {
-    if (searchQuery.trim()) {
-      setSearchEnabled(true);
+    const q = searchQuery.trim();
+    if (!q) return;
+    if (q === submittedQuery) {
+      void refetchSearch();
+    } else {
+      setSubmittedQuery(q);
     }
   };
 
@@ -394,9 +411,24 @@ export default function DeckBuilder() {
                       onKeyDown={e => e.key === "Enter" && handleSearch()}
                     />
                     <Button onClick={handleSearch} disabled={isSearching}>
-                      Buscar
+                      {isSearching ? "Buscando..." : "Buscar"}
                     </Button>
                   </div>
+                  {isSearching && (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      Buscando cartas...
+                    </p>
+                  )}
+                  {isSearchError && !isSearching && (
+                    <p className="mt-4 text-sm text-destructive">
+                      Erro ao buscar cartas. Tente novamente.
+                    </p>
+                  )}
+                  {showNoResults && (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      Nenhuma carta encontrada
+                    </p>
+                  )}
                   {searchResults.length > 0 && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
                       {searchResults.map(card => (
