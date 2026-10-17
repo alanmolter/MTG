@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -16,6 +17,8 @@ import {
   varchar,
   real,
   uniqueIndex,
+  check,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -276,6 +279,34 @@ export const competitiveDeckCards = pgTable(
 export type CompetitiveDeckCard = typeof competitiveDeckCards.$inferSelect;
 export type InsertCompetitiveDeckCard =
   typeof competitiveDeckCards.$inferInsert;
+
+/** Pool v3+ membership, generated from data/pools/v<N>/manifest.json
+ *  (server/scripts/populatePoolMemberships.ts). One row per (deck, split);
+ *  a holdout_near deck also has its train row. */
+export const poolMemberships = pgTable(
+  "pool_memberships",
+  {
+    poolVersion: integer("pool_version").notNull(),
+    deckId: integer("deck_id")
+      .notNull()
+      .references(() => competitiveDecks.id),
+    split: varchar("split", { length: 16 }).notNull(),
+    groupId: varchar("group_id", { length: 32 }).notNull(),
+    deckHash: varchar("deck_hash", { length: 64 }).notNull(),
+    manifestHash: varchar("manifest_hash", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.poolVersion, table.deckId, table.split] }),
+    splitIdx: index("pool_memberships_version_split_idx").on(table.poolVersion, table.split),
+    splitCheck: check(
+      "pool_memberships_split_check",
+      sql`${table.split} IN ('train', 'holdout', 'benchmark', 'holdout_near')`
+    ),
+  })
+);
+
+export type PoolMembership = typeof poolMemberships.$inferSelect;
 
 // Log de jobs de treinamento de embeddings
 export const statusEnum = pgEnum("job_status", [
